@@ -884,6 +884,7 @@ typedef struct _NDIS_802_11_CAPABILITY {
 #define OID_MH_802_1X_SUPPORTED               0xFFEDC100
 
 /* MIMO Tx parameter, ShortGI, MCS, STBC, etc.  these are fields in TXWI. Don't change this definition!!! */
+#ifdef RT65xx
 typedef union _HTTRANSMIT_SETTING {
 #ifdef RT_BIG_ENDIAN
 	struct {
@@ -908,6 +909,34 @@ typedef union _HTTRANSMIT_SETTING {
 #endif
 	USHORT word;
 } HTTRANSMIT_SETTING, *PHTTRANSMIT_SETTING;
+#else
+typedef union _HTTRANSMIT_SETTING {
+#ifdef RT_BIG_ENDIAN
+	struct {
+		USHORT MODE:2;	/* Use definition MODE_xxx. */
+		USHORT iTxBF:1;
+		USHORT rsv:1;
+		USHORT eTxBF:1;
+		USHORT STBC:2;	/*SPACE */
+		USHORT ShortGI:1;
+		USHORT BW:1;	/*channel bandwidth 20MHz or 40 MHz */
+		USHORT MCS:7;	/* MCS */
+	} field;
+#else
+	struct {
+		USHORT MCS:7;	/* MCS */
+		USHORT BW:1;	/*channel bandwidth 20MHz or 40 MHz */
+		USHORT ShortGI:1;
+		USHORT STBC:2;	/*SPACE */
+		USHORT eTxBF:1;
+		USHORT rsv:1;
+		USHORT iTxBF:1;
+		USHORT MODE:2;	/* Use definition MODE_xxx. */
+	} field;
+#endif
+	USHORT word;
+} HTTRANSMIT_SETTING, *PHTTRANSMIT_SETTING;
+#endif /* RT65xx */
 
 typedef enum _RT_802_11_PREAMBLE {
 	Rt802_11PreambleLong,
@@ -1282,74 +1311,13 @@ typedef struct _WSC_PROFILE {
 
 
 
-enum {
-	OID_WIFI_TEST_BBP = 0x1000,
-	OID_WIFI_TEST_RF = 0x1001,
-	OID_WIFI_TEST_RF_BANK = 0x1002,
-	OID_WIFI_TEST_MEM_MAP_INFO = 0x1003,
-	OID_WIFI_TEST_BBP_NUM = 0x1004,
-	OID_WIFI_TEST_RF_NUM = 0x1005,
-	OID_WIFI_TEST_RF_BANK_OFFSET = 0x1006,
-	OID_WIFI_TEST_MEM_MAP_NUM = 0x1007,
-	OID_WIFI_TEST_BBP32 = 0x1008,
-	OID_WIFI_TEST_MAC = 0x1009,
-	OID_WIFI_TEST_MAC_NUM = 0x1010,
-	OID_WIFI_TEST_E2P = 0x1011,
-	OID_WIFI_TEST_E2P_NUM = 0x1012,
-	OID_WIFI_TEST_PHY_MODE = 0x1013,
-};
+#ifdef RTMP_MAC_USB
+#define RT_OID_USB_WOW_SUSPEND				0x0920
+#define RT_OID_USB_WOW_RESUME				0x0921
+#endif /* RTMP_MAC_USB */
 
-struct bbp_info {
-	UINT32 bbp_start;
-	UINT32 bbp_end;
-	UINT8 bbp_value[0];
-};
-
-struct bbp32_info {
-	UINT32 bbp_start;
-	UINT32 bbp_end;
-	UINT32 bbp_value[0];
-};
-
-struct rf_info {
-	UINT16 rf_start;
-	UINT16 rf_end;
-	UINT8 rf_value[0];
-};
-
-struct rf_bank_info {
-	UINT8 rf_bank;
-	UINT16 rf_start;
-	UINT16 rf_end;
-	UINT8 rf_value[0];
-};
-
-struct mac_info {
-	UINT32 mac_start;
-	UINT32 mac_end;
-	UINT32 mac_value[0];
-};
-
-struct mem_map_info {
-	u32 base;
-	UINT16 mem_map_start;
-	UINT16 mem_map_end;
-	UINT32 mem_map_value[0];
-};
-
-struct e2p_info {
-	UINT16 e2p_start;
-	UINT16 e2p_end;
-	UINT16 e2p_value[0];
-};
-
-struct phy_mode_info {
-	int data_phy;
-	u8 data_bw;
-	u8 data_ldpc;
-	u8 data_mcs;
-	u8 data_gi;
-	u8 data_stbc;
-};
+#ifdef CONFIG_MULTI_CHANNEL
+#define RT_OID_MULTI_CHANNEL_ENABLE			0x0930
+#endif /*CONFIG_MULTI_CHANNEL*/
 
 #endif /* _OID_H_ */

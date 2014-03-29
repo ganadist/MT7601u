@@ -45,7 +45,11 @@
 #define USB_CYC_CFG				0x02a4
 
 /*#define BEACON_RING_SIZE		2 */
+#ifdef CONFIG_MULTI_CHANNEL
+#define MGMTPIPEIDX				5	/* EP6 is highest priority */
+#else
 #define MGMTPIPEIDX				0	/* EP6 is highest priority */
+#endif /* CONFIG_MULTI_CHANNEL */
 
 /* os abl move */
 /*#define RTMP_PKT_TAIL_PADDING 	11 // 3(max 4 byte padding) + 4 (last packet padding) + 4 (MaxBulkOutsize align padding) */
@@ -156,7 +160,6 @@ typedef struct __HTTX_BUFFER{
 	UCHAR			Aggregation[4];  /*Buffer for save Aggregation size. */
 } HTTX_BUFFER, *PHTTX_BUFFER;
 
-
 #define EDCA_AC0_PIPE	0	/* Bulk EP1 OUT */
 #define EDCA_AC1_PIPE	1	/* Bulk EP2 OUT */
 #define EDCA_AC2_PIPE	2	/* Bulk EP3	OUT */
@@ -235,7 +238,7 @@ typedef struct _CMD_CONTEXT
 /* */
 typedef struct _RX_CONTEXT
 {
-	PUCHAR				TransferBuffer;
+	PUCHAR				TransferBuffer; 
 	PVOID				pAd;
 	PIRP				pIrp;/*used to cancel pending bulk in. */
 	PURB				pUrb;
@@ -316,9 +319,9 @@ typedef struct _CMD_RSP_CONTEXT
 
 #define HAL_WriteSubTxResource(pAd, pTxBlk, bIsLast, pFreeNumber)	\
 			RtmpUSB_WriteSubTxResource(pAd, pTxBlk, bIsLast, pFreeNumber)
-	
+			
 #define HAL_WriteTxResource(pAd, pTxBlk,bIsLast, pFreeNumber)	\
-			RtmpUSB_WriteSingleTxResource(pAd, pTxBlk, bIsLast, pFreeNumber)
+			RtmpUSB_WriteSingleTxResource(pAd, pTxBlk,bIsLast, pFreeNumber)
 
 #define HAL_WriteFragTxResource(pAd, pTxBlk, fragNum, pFreeNumber) \
 			RtmpUSB_WriteFragTxResource(pAd, pTxBlk, fragNum, pFreeNumber)

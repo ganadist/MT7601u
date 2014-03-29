@@ -67,18 +67,12 @@ VOID dump_rxinfo(RTMP_ADAPTER *pAd, RXINFO_STRUC *pRxInfo)
 	DBGPRINT(RT_DEBUG_OFF, ("\tBssIdx3=%d\n", pRxInfo->BssIdx3));
 	DBGPRINT(RT_DEBUG_OFF, ("\twapi_kidx=%d\n", pRxInfo->wapi_kidx));
 	DBGPRINT(RT_DEBUG_OFF, ("\tpn_len=%d\n", pRxInfo->pn_len));
-	DBGPRINT(RT_DEBUG_OFF, ("\tsw_fc_type0=%d\n", pRxInfo->action_wanted));
-	DBGPRINT(RT_DEBUG_OFF, ("\tsw_fc_type1=%d\n", pRxInfo->sw_fc_type1));
-	DBGPRINT(RT_DEBUG_OFF, ("\tprobe_rsp=%d\n", pRxInfo->probe_rsp));
-	DBGPRINT(RT_DEBUG_OFF, ("\tbeacon=%d\n", pRxInfo->beacon));
-	DBGPRINT(RT_DEBUG_OFF, ("\tdisasso=%d\n", pRxInfo->disasso));
-	DBGPRINT(RT_DEBUG_OFF, ("\tdeauth=%d\n", pRxInfo->deauth));
-	DBGPRINT(RT_DEBUG_OFF, ("\taction_wanted=%d\n", pRxInfo->action_wanted));
-	DBGPRINT(RT_DEBUG_OFF, ("\trsv=%d\n", pRxInfo->rsv));	
+	DBGPRINT(RT_DEBUG_OFF, ("\ttcp_sum_bypass=%d\n", pRxInfo->tcp_sum_bypass));
+	DBGPRINT(RT_DEBUG_OFF, ("\tip_sum_bypass=%d\n", pRxInfo->ip_sum_bypass));	
 #endif /* RLT_MAC */
 
 #ifdef RTMP_MAC
-	DBGPRINT(RT_DEBUG_OFF, ("\t", ));
+	DBGPRINT(RT_DEBUG_OFF, ("\t" ));
 #endif /* RTMP_MAC */
 }
 
@@ -117,7 +111,6 @@ VOID dumpTxWI(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI)
 	DBGPRINT(RT_DEBUG_OFF, ("\tSTBC=%d\n", pTxWI->TxWISTBC));
 	DBGPRINT(RT_DEBUG_OFF, ("\tShortGI=%d\n", pTxWI->TxWIShortGI));
 	DBGPRINT(RT_DEBUG_OFF, ("\tBW=%d(%sMHz)\n", pTxWI->TxWIBW, get_bw_str(pTxWI->TxWIBW)));
-	DBGPRINT(RT_DEBUG_OFF, ("\tLDPC=%d\n",pTxWI->TxWILDPC));
 	DBGPRINT(RT_DEBUG_OFF, ("\tMCS=%d\n", pTxWI->TxWIMCS));
 	DBGPRINT(RT_DEBUG_OFF, ("\tTxOP=%d(%s)\n", pTxWI->TxWITXOP, TXWI_TXOP_STR(pTxWI->TxWITXOP)));
 	DBGPRINT(RT_DEBUG_OFF, ("\tMpduDensity=%d\n", pTxWI->TxWIMpduDensity));	
@@ -131,9 +124,9 @@ VOID dumpTxWI(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI)
 	DBGPRINT(RT_DEBUG_OFF, ("\tWCID=%d\n", pTxWI->TxWIWirelessCliID));
 	DBGPRINT(RT_DEBUG_OFF, ("\tBAWinSize=%d\n", pTxWI->TxWIBAWinSize));
 	DBGPRINT(RT_DEBUG_OFF, ("\tMPDUtotalByteCnt=%d\n", pTxWI->TxWIMPDUByteCnt));	
-	DBGPRINT(RT_DEBUG_OFF, ("\tTXBF_PT_SCA=%d\n", pTxWI->TxWITxBfPTSca));
-	DBGPRINT(RT_DEBUG_OFF, ("\tTIM=%d\n", pTxWI->TxWITIM));
+#ifdef RLT_MAC
 	DBGPRINT(RT_DEBUG_OFF, ("\tPID=%d\n", pTxWI->TxWIPacketId));	
+#endif /* RLT_MAC */
 }
 
 
@@ -150,7 +143,6 @@ VOID dump_rxwi(RTMP_ADAPTER *pAd, RXWI_STRUC *pRxWI)
 	else
 #endif /* RT65xx */
 		DBGPRINT(RT_DEBUG_OFF, ("\tMCS=%d\n", pRxWI->RxWIMCS));
-	DBGPRINT(RT_DEBUG_OFF, ("\tLDPC=%d\n", pRxWI->RxWILDPC));
 	DBGPRINT(RT_DEBUG_OFF, ("\tBW=%d\n", pRxWI->RxWIBW));
 	DBGPRINT(RT_DEBUG_OFF, ("\tSGI=%d\n", pRxWI->RxWISGI));
 	DBGPRINT(RT_DEBUG_OFF, ("\tMPDUtotalByteCnt=%d\n", pRxWI->RxWIMPDUByteCnt));
@@ -287,11 +279,11 @@ NDIS_STATUS MiniportMMRequest(
 		QueIdx &= (~MGMT_USE_QUEUE_FLAG);
 	}
 
-#ifdef CONFIG_FPGA_MODE
-	if (pAd->fpga_ctl.fpga_on & 0x1) {
-		if (pAd->fpga_ctl.tx_kick_cnt > 0) {
-			if (pAd->fpga_ctl.tx_kick_cnt < 0xffff) 
-				pAd->fpga_ctl.tx_kick_cnt--;
+#ifdef FPGA_MODE
+	if (pAd->fpga_on & 0x1) {
+		if (pAd->tx_kick_cnt > 0) {
+			if (pAd->tx_kick_cnt < 0xffff) 
+				pAd->tx_kick_cnt--;
 		}
 		else
 			return NDIS_STATUS_FAILURE;
@@ -299,7 +291,7 @@ NDIS_STATUS MiniportMMRequest(
 		QueIdx = 0;
 		bUseDataQ = TRUE;
 	}
-#endif /* CONFIG_FPGA_MODE */
+#endif /* FPGA_MODE */
 
 
 	do
@@ -307,8 +299,7 @@ NDIS_STATUS MiniportMMRequest(
 		/* Reset is in progress, stop immediately*/
 		if (RTMP_TEST_FLAG(pAd, (fRTMP_ADAPTER_RESET_IN_PROGRESS |
 								fRTMP_ADAPTER_HALT_IN_PROGRESS |
-								fRTMP_ADAPTER_NIC_NOT_EXIST |
-								fRTMP_ADAPTER_RADIO_OFF)) ||
+								fRTMP_ADAPTER_NIC_NOT_EXIST)) ||
 			 !RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP)
 			)
 		{
@@ -319,7 +310,12 @@ NDIS_STATUS MiniportMMRequest(
 #ifdef CONFIG_STA_SUPPORT
 #ifdef RTMP_MAC_USB
 		if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF))
-				ASIC_RADIO_ON(pAd, MLME_RADIO_ON);
+		{
+			if ( IS_MT7601(pAd) )
+				ASIC_RADIO_ON(pAd, DOT11_RADIO_ON);
+			else
+				RT28xxUsbAsicRadioOn(pAd);
+		}
 #endif /* RTMP_MAC_USB */
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -769,13 +765,17 @@ static UCHAR TxPktClassification(
 		else if (RTMP_GET_PACKET_EOSP(pPacket))
 			TxFrameType = TX_LEGACY_FRAME;
 #endif /* UAPSD_SUPPORT */
+		else if(((pMacEntry->TXBAbitmap & (1<<(RTMP_GET_PACKET_UP(pPacket)))) != 0)
 #ifdef WFA_VHT_PF
-		else if (pAd->force_amsdu == TRUE)
-			return TX_AMSDU_FRAME;
+				&& (pAd->force_amsdu == FALSE)
 #endif /* WFA_VHT_PF */
-		else if ((pMacEntry->TXBAbitmap & (1<<(RTMP_GET_PACKET_UP(pPacket)))) != 0)
+			)
 			return TX_AMPDU_FRAME;
-		else if(CLIENT_STATUS_TEST_FLAG(pMacEntry, fCLIENT_STATUS_AMSDU_INUSED)
+		else if((CLIENT_STATUS_TEST_FLAG(pMacEntry, fCLIENT_STATUS_AMSDU_INUSED)
+#ifdef WFA_VHT_PF
+				|| (pAd->force_amsdu == TRUE)
+#endif /* WFA_VHT_PF */
+				)
 		)
 			return TX_AMSDU_FRAME;
 		else
@@ -915,7 +915,7 @@ BOOLEAN RTMP_FillTxBlkInfo(RTMP_ADAPTER *pAd, TX_BLK *pTxBlk)
 				}
 #endif /* DOT11_N_SUPPORT */
 			}
-
+			
 #ifdef DOT11_N_SUPPORT
 			if ( (IS_HT_RATE(pMacEntry) == FALSE) &&
 				(CLIENT_STATUS_TEST_FLAG(pMacEntry, fCLIENT_STATUS_PIGGYBACK_CAPABLE)))
@@ -1046,7 +1046,12 @@ VOID RTMPDeQueuePacket(
 	if (QIdx == NUM_OF_TX_RING)
 	{
 		sQIdx = 0;
-		eQIdx = 3;	/* 4 ACs, start from 0.*/
+#ifdef CONFIG_MULTI_CHANNEL
+		eQIdx = QID_HCCA;	/* 5 ACs, start from 0.*/
+#else
+		eQIdx = QID_AC_VO;	/* 4 ACs, start from 0.*/
+#endif /* CONFIG_MULTI_CHANNEL */
+
 	}
 	else
 	{
@@ -1069,12 +1074,24 @@ VOID RTMPDeQueuePacket(
 										fRTMP_ADAPTER_RADIO_OFF |
 										fRTMP_ADAPTER_RESET_IN_PROGRESS |
 										fRTMP_ADAPTER_HALT_IN_PROGRESS |
-										fRTMP_ADAPTER_NIC_NOT_EXIST)))
+#ifdef CONFIG_MULTI_CHANNEL
+										fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET |  
+#endif /* CONFIG_MULTI_CHANNEL */
+										fRTMP_ADAPTER_NIC_NOT_EXIST
+			)))
+
 				)
 			{
 				RTMP_STOP_DEQUEUE(pAd, QueIdx, IrqFlags);
 				return;
 			}
+#ifdef CONFIG_MULTI_CHANNEL
+			if ((pAd->MultiChannelFlowCtl & (1 << QueIdx)) == (1 << QueIdx))
+			{
+				break;
+			}
+#endif /* CONFIG_MULTI_CHANNEL */
+
 			
 			if (Count >= Max_Tx_Packets)
 				break;
@@ -1200,6 +1217,9 @@ VOID RTMPDeQueuePacket(
 
 #ifdef RTMP_MAC_USB
 		if (!hasTxDesc)
+#ifdef CONFIG_MULTI_CHANNEL
+			if ((pAd->MultiChannelFlowCtl & (1 << QueIdx)) != (1 << QueIdx))
+#endif /* CONFIG_MULTI_CHANNEL */
 			RTUSBKickBulkOut(pAd);
 #endif /* RTMP_MAC_USB */
 		
@@ -1300,7 +1320,6 @@ VOID RTMPSuspendMsduTransmission(
 	*/
 	rtmp_bbp_get_agc(pAd, &pAd->BbpTuning.R66CurrentValue, RX_CHAIN_0);
 
-	//printk("pAd->CommonCfg.BBPCurrentBW = %d\n", pAd->CommonCfg.BBPCurrentBW);
 	pAd->hw_cfg.bbp_bw = pAd->CommonCfg.BBPCurrentBW;
 
 	RTMPSetAGCInitValue(pAd, BW_20);
@@ -1419,7 +1438,7 @@ UINT deaggregate_AMSDU_announce(
 				memmove(Elem->Msg+(LENGTH_802_11 + LENGTH_802_1_H), pPayload, PayloadSize);
 				Elem->MsgLen = LENGTH_802_11 + LENGTH_802_1_H + PayloadSize;
 				/*WpaEAPOLKeyAction(pAd, Elem);*/
-				REPORT_MGMT_FRAME_TO_MLME(pAd, BSSID_WCID, Elem->Msg, Elem->MsgLen, 0, 0, 0, 0, OPMODE_STA);
+				REPORT_MGMT_FRAME_TO_MLME(pAd, BSSID_WCID, Elem->Msg, Elem->MsgLen, 0, 0, 0, 0, 0, OPMODE_STA);
 /*				kfree(Elem);*/
 				os_free_mem(NULL, Elem);
 			}
@@ -1755,13 +1774,15 @@ VOID Update_Rssi_Sample(
 
  
 	if (!(pRssi->AvgRssi0 | pRssi->AvgRssi0X8 | pRssi->LastRssi0))
+	{
 		bInitial = TRUE;
+	}
 
-	get_pkt_rssi_by_rxwi(pRxWI, 3, &rssi[0]);
-	get_pkt_snr_by_rxwi(pRxWI, 3, &snr[0]);
+	get_pkt_rssi_by_rxwi(pAd, pRxWI, 3, &rssi[0]);
+	get_pkt_snr_by_rxwi(pAd, pRxWI, 3, &snr[0]);
 	if (rssi[0] != 0)
 	{
-		pRssi->LastRssi0 = ConvertToRssi(pAd, (CHAR)rssi[0], RSSI_0);
+		pRssi->LastRssi0 = ConvertToRssi(pAd, (CHAR)rssi[0], RSSI_0, pRxWI->RxWISNR1, pRxWI->RxWIBW);
 		if (bInitial)
 		{
 			pRssi->AvgRssi0X8 = pRssi->LastRssi0 << 3;
@@ -1789,7 +1810,7 @@ VOID Update_Rssi_Sample(
  
 	if (rssi[1] != 0)
 	{   
-		pRssi->LastRssi1 = ConvertToRssi(pAd, (CHAR)rssi[1], RSSI_1);
+		pRssi->LastRssi1 = ConvertToRssi(pAd, (CHAR)rssi[1], RSSI_1, pRxWI->RxWISNR1, pRxWI->RxWIBW);
 		if (bInitial)
 		{
 			pRssi->AvgRssi1X8 = pRssi->LastRssi1 << 3;
@@ -1817,7 +1838,7 @@ VOID Update_Rssi_Sample(
 
 	if (rssi[2] != 0)
 	{
-		pRssi->LastRssi2 = ConvertToRssi(pAd, (CHAR)rssi[2], RSSI_2);
+		pRssi->LastRssi2 = ConvertToRssi(pAd, (CHAR)rssi[2], RSSI_2, pRxWI->RxWISNR1, pRxWI->RxWIBW);
 
 		if (bInitial)
 		{
@@ -2017,16 +2038,8 @@ if (0) {
 
 
 
-	{
-		pOSPkt = RTPKT_TO_OSPKT(pRxPacket);
 
-		/*get_netdev_from_bssid(pAd, FromWhichBSSID); */
-		pOSPkt->dev = get_netdev_from_bssid(pAd, FromWhichBSSID);
-		pOSPkt->data = pRxBlk->pTransData;
-		pOSPkt->len = pRxBlk->TransDataSize;
-		pOSPkt->tail = pOSPkt->data + pOSPkt->len;
-		//printk("\x1b[31m%s: rx trans ...%d\x1b[m\n", __FUNCTION__, __LINE__);
-	}
+	RtmpOsSetPacket(get_netdev_from_bssid(pAd, FromWhichBSSID), pRxPacket, pRxBlk->pTransData, pRxBlk->TransDataSize);
 
 
 //+++Add by shiang for debug
@@ -2076,7 +2089,6 @@ VOID CmmRxnonRalinkFrameIndicate(
 }
 
 
-/* Normal, AMPDU or AMSDU*/
 #ifdef HDR_TRANS_SUPPORT
 VOID CmmRxnonRalinkFrameIndicate_Hdr_Trns(
 	IN	PRTMP_ADAPTER	pAd,
@@ -2490,261 +2502,98 @@ VOID RtmpEnqueueNullFrame(
 
 
 
-#ifdef WFA_VHT_PF
-#ifdef IP_ASSEMBLY
-typedef union ip_flags_frag_offset {
-	struct {
-#ifdef RT_BIG_ENDIAN
-		USHORT flags_reserved:1;
-		USHORT flags_may_frag:1;
-		USHORT flags_more_frag:1;
-		USHORT frag_offset:13;
-#else
-		USHORT frag_offset:13;
-		USHORT flags_more_frag:1;
-		USHORT flags_may_frag:1;
-		USHORT flags_reserved:1;
-#endif
-	} field;
-	USHORT word;
-} IP_FLAGS_FRAG_OFFSET;
-
-typedef struct ip_v4_hdr {
-#ifdef RT_BIG_ENDIAN
-	UCHAR version:4, ihl:4;
-#else
-	UCHAR ihl:4, version:4;
-#endif
-	UCHAR tos;
-	USHORT tot_len;
-	USHORT identifier;
-} IP_V4_HDR;
-
-
-INT ip_assembly_timeout(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry, ULONG Now, UCHAR QueIdx)
+#ifdef RLT_MAC
+BOOLEAN CmdRspEventCallbackHandle(PRTMP_ADAPTER pAd, PUCHAR pRspBuffer)
 {
-	QUEUE_HEADER *queue;
-	ULONG *ip_pkt_jiffies;
-	INT i;
-	struct ip_frag_q *fragQ;
+
+	INT32 Ret;
+	struct MCU_CTRL *MCtrl = &pAd->MCUCtrl;
+	struct CMD_RSP_EVENT *CmdRspEvent, *CmdRspEventTmp;
+	RXFCE_INFO_CMD *pFceInfo = (RXFCE_INFO_CMD *)pRspBuffer;
+
+#ifdef MT7601U
+#ifdef RT_BIG_ENDIAN
+	RTMPDescriptorEndianChange((PUCHAR)pFceInfo, TYPE_RXINFO);
+#endif
+#endif
+
+
+	if ((pFceInfo->info_type != CMD_PACKET))
+	{
+		DBGPRINT(RT_DEBUG_ERROR, ("Packet is not command response/event\n"));
+		return NDIS_STATUS_FAILURE;
+	} 
+
+	if (pFceInfo->self_gen)
+	{
+		/* if have callback function */
+		RTEnqueueInternalCmd(pAd, CMDTHREAD_RESPONSE_EVENT_CALLBACK, 
+									pRspBuffer, 
+									sizeof(*pFceInfo) + pFceInfo->pkt_len);
+	}
+	else
+	{
+		unsigned long IrqFlags;
+		RTMP_IRQ_LOCK(&MCtrl->CmdRspEventListLock, IrqFlags);
+		DlListForEachSafe(CmdRspEvent, CmdRspEventTmp, &MCtrl->CmdRspEventList, struct CMD_RSP_EVENT, List)
+		{
+			if (CmdRspEvent->CmdSeq == pFceInfo->cmd_seq)
+			{
+				
+				if ((*CmdRspEvent->RspPayloadLen == pFceInfo->pkt_len) && (*CmdRspEvent->RspPayloadLen != 0))
+				{
+						NdisMoveMemory(*CmdRspEvent->RspPayload, pRspBuffer + sizeof(*pFceInfo),
+												pFceInfo->pkt_len);
+				}
+				else if ((*CmdRspEvent->RspPayloadLen == 0) && (pFceInfo->pkt_len == 8))
+				{
+					DBGPRINT(RT_DEBUG_INFO, ("Command response(ack) success\n"));
+				}
+				else
+				{
+					DBGPRINT(RT_DEBUG_ERROR, ("Expect response len(%d), Command response len(%d) invalid\n", *CmdRspEvent->RspPayloadLen, pFceInfo->pkt_len));
+					*CmdRspEvent->RspPayloadLen = pFceInfo->pkt_len;
+				}
+
+				if (CmdRspEvent->NeedWait)
+				{
+#ifdef RTMP_USB_SUPPORT
+					RtmpComplete(CmdRspEvent->AckDone);
+#endif /* RTMP_USB_SUPPORT */
+				}
+				else
+				{
+					DlListDel(&CmdRspEvent->List);
+					os_free_mem(NULL, CmdRspEvent);
+				}
+
+				break;
+			}
+		}
+		RTMP_IRQ_UNLOCK(&MCtrl->CmdRspEventListLock, IrqFlags);
+	}
 	
-	if ((pEntry->ip_queue1[QueIdx].Number != 0)
-		&& (RTMP_TIME_AFTER(Now, (pEntry->ip_pkt1_jiffies[QueIdx]) + (1000 * OS_HZ))))
-	{
-		PQUEUE_ENTRY pBackupPktEntry;
-		PNDIS_PACKET pBackupPkt;
-
-		while (1) {
-			pBackupPktEntry = RemoveHeadQueue(&pEntry->ip_queue1[QueIdx]);
-			if (pBackupPktEntry == NULL)
-				break;
-			pBackupPkt = QUEUE_ENTRY_TO_PACKET(pBackupPktEntry);
-			RELEASE_NDIS_PACKET(pAd, pBackupPkt, NDIS_STATUS_FAILURE);
-		}
-		pEntry->ip_id1[QueIdx] = -1;
-		pEntry->ip_id1_FragSize[QueIdx] - -1;
-		pEntry->ip_pkt1_jiffies[QueIdx] = 0;
-	}
+	return NDIS_STATUS_SUCCESS;
+}
 
 
-	NdisGetSystemUpTime(&Now);
-	if ((pEntry->ip_queue2[QueIdx].Number != 0)
-		&& (RTMP_TIME_AFTER(Now, (pEntry->ip_pkt2_jiffies[QueIdx]) + (1000 * OS_HZ))))
-	{
-		PQUEUE_ENTRY pBackupPktEntry;
-		PNDIS_PACKET pBackupPkt;
+#ifdef RTMP_USB_SUPPORT
+BOOLEAN CmdRspEventHandle(RTMP_ADAPTER *pAd)
+{
+	PCMD_RSP_CONTEXT pCmdRspEventContext = &pAd->CmdRspEventContext;
 
-		while (1) {
-			pBackupPktEntry = RemoveHeadQueue(&pEntry->ip_queue2[QueIdx]);
-			if (pBackupPktEntry == NULL)
-				break;
-			pBackupPkt = QUEUE_ENTRY_TO_PACKET(pBackupPktEntry);
-			RELEASE_NDIS_PACKET(pAd, pBackupPkt, NDIS_STATUS_FAILURE);
-		}
-
-		pEntry->ip_id2[QueIdx] = -1;
-		pEntry->ip_id2_FragSize[QueIdx] - -1;
-		pEntry->ip_pkt2_jiffies[QueIdx] = 0;
-	}
+	CmdRspEventCallbackHandle(pAd, pCmdRspEventContext->CmdRspBuffer);
 
 	return TRUE;
+
 }
+#endif /* RTMP_USB_SUPPORT */
+#endif /* RLT_MAC */
 
 
-INT ip_assembly(
-	RTMP_ADAPTER *pAd,
-	UCHAR QueIdx, 
-	PNDIS_PACKET pPacket,
-	PACKET_INFO PacketInfo,
-	MAC_TABLE_ENTRY *pEntry)
-{
-	QUEUE_HEADER *pAC_Queue1, *pAC_Queue2;
-	INT32 *pAC_ID1, *pAC_ID2, *pAC_ID1_FragSize, *pAC_ID2_FragSize;
-	ULONG *pAC_Jiffies1, *pAC_Jiffies2;
-	IP_V4_HDR *pIpv4Hdr, Ipv4Hdr;
-	IP_FLAGS_FRAG_OFFSET *pFlags_frag_offset, Flags_frag_offset;
-	ULONG Now;
-	UINT32 i;
-	QUEUE_HEADER *pTempqueue;
-	PQUEUE_ENTRY pBackupPktEntry;
-	PNDIS_PACKET pBackupPkt;
 
 
-	pAC_Queue1 = &pEntry->ip_queue1[QueIdx];
-	pAC_Queue2 = &pEntry->ip_queue2[QueIdx];
-	pAC_ID1 = &pEntry->ip_id1[QueIdx];
-	pAC_ID2 = &pEntry->ip_id2[QueIdx];
-	pAC_ID1_FragSize = &pEntry->ip_id1_FragSize[QueIdx];
-	pAC_ID2_FragSize = &pEntry->ip_id2_FragSize[QueIdx];
-	pAC_Jiffies1 = &pEntry->ip_pkt1_jiffies[QueIdx];
-	pAC_Jiffies2 = &pEntry->ip_pkt2_jiffies[QueIdx];
-
-	NdisGetSystemUpTime(&Now);
-	ip_assembly_timeout(pAd, pEntry, Now, QueIdx);
-
-	if (RTMP_GET_PACKET_IPV4(pPacket) &&
-	    ((pAd->TxSwQueue[QueIdx].Number >= (pAd->TxSwQMaxLen >> 1)) ||
-	    	((pAC_Queue1->Number) || (pAC_Queue2->Number)))
-	)
-	{
-		pIpv4Hdr = (IP_V4_HDR *)(PacketInfo.pFirstBuffer + LENGTH_802_3);
-		pFlags_frag_offset = (IP_FLAGS_FRAG_OFFSET *) (PacketInfo.pFirstBuffer + LENGTH_802_3 + 6);
-		Flags_frag_offset.word = ntohs(pFlags_frag_offset->word);
-		Ipv4Hdr.identifier = ntohs(pIpv4Hdr->identifier);
-		Ipv4Hdr.tot_len = ntohs(pIpv4Hdr->tot_len);
-		Ipv4Hdr.ihl = pIpv4Hdr->ihl;
-
-		/* check if 1st fragment */
-		if ((Flags_frag_offset.field.flags_more_frag == 1) &&
-		    (Flags_frag_offset.field.frag_offset == 0))
-		{
-			NdisGetSystemUpTime(&Now);
-			if ((*pAC_ID1) == -1) {
-				*pAC_ID1 = Ipv4Hdr.identifier;
-				*pAC_Jiffies1 = Now;
-				*pAC_ID1_FragSize = Ipv4Hdr.tot_len - (Ipv4Hdr.ihl * 4);
-				InsertTailQueue(pAC_Queue1, PACKET_TO_QUEUE_ENTRY(pPacket));
-				return 0;
-			} else if ((*pAC_ID2) == -1) {
-				*pAC_ID2 = Ipv4Hdr.identifier;
-				*pAC_Jiffies2 = Now;
-				*pAC_ID2_FragSize = Ipv4Hdr.tot_len - (Ipv4Hdr.ihl * 4);
-				InsertTailQueue(pAC_Queue2, PACKET_TO_QUEUE_ENTRY(pPacket));
-				return 0;
-			}
-
-			/* free backup fragments */
-			if ((*pAC_Jiffies1) > (*pAC_Jiffies2)) {
-				pTempqueue = pAC_Queue2;
-				*pAC_ID2 = Ipv4Hdr.identifier;
-			} else {
-				pTempqueue = pAC_Queue1;
-				*pAC_ID1 = Ipv4Hdr.identifier;
-			}
-
-			if (pTempqueue->Number != 0) {
-				while (1) {
-					pBackupPktEntry = RemoveHeadQueue(pTempqueue);
-					if (pBackupPktEntry == NULL)
-						break;
-					pBackupPkt = QUEUE_ENTRY_TO_PACKET(pBackupPktEntry);
-					RELEASE_NDIS_PACKET(pAd, pBackupPkt, NDIS_STATUS_FAILURE);
-				}
-			}
-			goto go_original_path;
-		}
-		else
-		{
-			/* check if last fragment */
-			if ((Ipv4Hdr.identifier == (*pAC_ID1)) || (Ipv4Hdr.identifier == (*pAC_ID2)))
-			{
-				if (Ipv4Hdr.identifier == (*pAC_ID1)) {
-					InsertTailQueue(pAC_Queue1, PACKET_TO_QUEUE_ENTRY(pPacket));
-					pTempqueue = pAC_Queue1;
-				} else {
-					InsertTailQueue(pAC_Queue2, PACKET_TO_QUEUE_ENTRY(pPacket));
-					pTempqueue = pAC_Queue2;
-				}
-
-				/* the last fragment */
-				if ((Flags_frag_offset.field.flags_more_frag == 0)
-				    && (Flags_frag_offset.field.frag_offset != 0))
-				{
-					UINT32 fragment_count = 0;
-					BOOLEAN bDrop = FALSE;
-					if (Ipv4Hdr.identifier == (*pAC_ID1)) {
-						fragment_count = ((Flags_frag_offset.field.frag_offset * 8) / (*pAC_ID1_FragSize)) + 1;
-						if (pTempqueue->Number != fragment_count)
-							bDrop = TRUE;
-						*pAC_ID1 = -1;
-					}
-
-					if (Ipv4Hdr.identifier == (*pAC_ID2)) {
-						fragment_count = ((Flags_frag_offset.field.frag_offset * 8) / (*pAC_ID2_FragSize)) + 1;
-						if (pTempqueue->Number != fragment_count)
-							bDrop = TRUE;
-						*pAC_ID2 = -1;
-					}
-
-					/*
-						if number does not equal coreect fragment count or no enough space,
-						free backup fragments to SwTxQueue[]
-					*/
-					if ((bDrop == TRUE) ||
-					    (pAd->TxSwQueue[QueIdx].Number > (pAd->TxSwQMaxLen - pTempqueue->Number)))
-					{
-						while (1) {
-							pBackupPktEntry = RemoveHeadQueue(pTempqueue);
-							if (pBackupPktEntry == NULL)
-								break;
-							pBackupPkt = QUEUE_ENTRY_TO_PACKET(pBackupPktEntry);
-							RELEASE_NDIS_PACKET(pAd, pBackupPkt, NDIS_STATUS_FAILURE);
-						}
-						return 0;
-					}
-
-					/* move backup fragments to SwTxQueue[] */
-					NdisAcquireSpinLock(&pAd->TxSwQueueLock[QueIdx]);
-					while (1) {
-						pBackupPktEntry = RemoveHeadQueue(pTempqueue);
-						if (pBackupPktEntry == NULL)
-							break;
-						InsertTailQueueAc(pAd, pEntry, &pAd->TxSwQueue[QueIdx], pBackupPktEntry);
-					}
-					NdisReleaseSpinLock(&pAd->TxSwQueueLock[QueIdx]);
-
-					return 0;
-				}
-			}
-			else
-			{
-				/*
-				   bypass none-fist fragmented packets (we should not drop this packet) when 
-				   1. (pAd->TxSwQueue[QueIdx].Number >= (pAd->TxSwQMaxLen[QueIdx] >> 1) and 
-				   2. two fragmented buffer are empty 
-				 */
-				if (((*pAC_ID1) == -1) && ((*pAC_ID2) == -1))
-					goto go_original_path;
-
-				if ((Flags_frag_offset.field.flags_more_frag != 0)
-				    && (Flags_frag_offset.field.frag_offset != 0))
-				{
-					RELEASE_NDIS_PACKET(pAd, pPacket, NDIS_STATUS_FAILURE);
-					return 0;
-				}
-				goto go_original_path;
-			}
-		}
-	}
-
-go_original_path:
-	return -1;
-}
-
-#endif /* IP_ASSEMBLY */
-#endif /* WFA_VHT_PF */
-
-VOID StopDmaRx(
+NTSTATUS StopDmaRx(
 	IN RTMP_ADAPTER *pAd,
 	IN UCHAR Level)
 {
@@ -2752,10 +2601,14 @@ VOID StopDmaRx(
 	RX_BLK			RxBlk, *pRxBlk;
 	UINT32 RxPending = 0, MacReg = 0, MTxCycle = 0;
 	BOOLEAN bReschedule = FALSE;
-	BOOLEAN bCmdRspPacket = FALSE;
-	UINT8 IdleNums = 0;
+	UINT32 MaxRetry;
 
-	DBGPRINT(RT_DEBUG_TRACE, ("====> %s\n", __FUNCTION__));
+	//DBGPRINT(RT_DEBUG_TRACE, ("====> %s\n", __FUNCTION__));
+
+	if ( Level == DOT11POWERSAVE )
+		MaxRetry = 20;
+	else
+		MaxRetry = 2000;
 
 	/*
 		process whole rx ring
@@ -2763,9 +2616,9 @@ VOID StopDmaRx(
 	while (1)
 	{
 		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
-			return;
+			return STATUS_UNSUCCESSFUL;
 		pRxBlk = &RxBlk;
-		pRxPacket = GetPacketFromRxRing(pAd, pRxBlk, &bReschedule, &RxPending, &bCmdRspPacket);
+		pRxPacket = GetPacketFromRxRing(pAd, pRxBlk, &bReschedule, &RxPending);
 		if ((RxPending == 0) && (bReschedule == FALSE))
 			break;
 		else
@@ -2775,33 +2628,36 @@ VOID StopDmaRx(
 	/*
 		Check DMA Rx idle
 	*/
-	for (MTxCycle = 0; MTxCycle < 2000; MTxCycle++)
+	for (MTxCycle = 0; MTxCycle < MaxRetry ; MTxCycle++)
 	{
 
-#ifdef  RTMP_MAC_USB
-		USB_CFG_READ(pAd, &MacReg);
-		//RTMP_IO_READ32(pAd, USB_DMA_CFG, &MacReg);
-		if ((MacReg & 0x40000000) && (IdleNums < 10))
+#ifdef RTMP_MAC_USB
+		RTMP_IO_READ32(pAd, USB_DMA_CFG, &MacReg);
+
+		if (MacReg & 0x40000000)
 		{
-			IdleNums++;
 			RTMPusecDelay(50);
 		}
 		else
 		{
+			DBGPRINT(RT_DEBUG_INFO, ("==>  DMA Rx Idle, MacReg=0x%x\n", MacReg));
 			break;
 		}
-#endif
+#endif /* RTMP_MAC_USB */
 		
 		if (MacReg == 0xFFFFFFFF)
 		{
 			RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST);
-			return;
+			return STATUS_UNSUCCESSFUL;
 		}
 	}
 
-	if (MTxCycle >= 2000)
+	if (MTxCycle >= MaxRetry)
 	{
 		DBGPRINT(RT_DEBUG_ERROR, ("%s:RX DMA busy!! DMA_CFG = 0x%08x\n", __FUNCTION__, MacReg));
+
+		if ( Level == GUIRADIO_OFF )
+			return STATUS_UNSUCCESSFUL;
 	}
 
 	if (Level == RTMP_HALT)
@@ -2810,56 +2666,70 @@ VOID StopDmaRx(
 			Disable DMA RX
 		*/
 
-	
 	}
-	
-	DBGPRINT(RT_DEBUG_TRACE, ("<==== %s\n", __FUNCTION__));
+
+	//DBGPRINT(RT_DEBUG_TRACE, ("<==== %s\n", __FUNCTION__));
+	return STATUS_SUCCESS;
 }
 
-VOID StopDmaTx(
+
+NTSTATUS StopDmaTx(
 	IN RTMP_ADAPTER *pAd,
 	IN UCHAR Level)
 {
 	UINT32 MacReg = 0, MTxCycle = 0;
+#ifdef RTMP_MAC_USB
+	USB_DMA_CFG_STRUC UsbCfg;
+#endif /* RTMP_MAC_USB */
 	UINT8 IdleNums = 0;
+	UINT32 MaxRetry;
 
-	DBGPRINT(RT_DEBUG_TRACE, ("====> %s\n", __FUNCTION__));
+	//DBGPRINT(RT_DEBUG_TRACE, ("====> %s\n", __FUNCTION__));
 
+	if ( Level == DOT11POWERSAVE )
+		MaxRetry = 20;
+	else
+		MaxRetry = 2000;
 
-	for (MTxCycle = 0; MTxCycle < 2000; MTxCycle++)
+	for (MTxCycle = 0; MTxCycle < MaxRetry; MTxCycle++)
 	{
 
 #ifdef RTMP_MAC_USB
-		USB_CFG_READ(pAd, &MacReg);
-		//RTMP_IO_READ32(pAd, USB_DMA_CFG, &MacReg);
-		if (((MacReg & 0x80000000) == 0) && IdleNums > 10)
+		RTMP_IO_READ32(pAd, USB_DMA_CFG, &MacReg);
+
+		if (MacReg & 0x80000000 )
 		{
-			break;
+			RTMPusecDelay(50);
 		}
 		else
 		{
-			IdleNums++;
-			RTMPusecDelay(50);
-		}
-#endif
+			DBGPRINT(RT_DEBUG_INFO, ("==>  DMA Tx Idle, MacReg=0x%x\n", MacReg));
+			break;
+		}	
+#endif /* RTMP_MAC_USB */
 		
 		if (MacReg == 0xFFFFFFFF)
 		{
 			//RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST);
-			return;
+			return STATUS_UNSUCCESSFUL;
 		}
 	}
 	
-	if (MTxCycle >= 2000)
+	if (MTxCycle >= MaxRetry)
 	{
 		DBGPRINT(RT_DEBUG_ERROR, ("TX DMA busy!! DMA_CFG(%x)\n", MacReg));
+
+		if ( Level == GUIRADIO_OFF )
+			return STATUS_UNSUCCESSFUL;
 	}
 
 	if (Level == RTMP_HALT)
 	{
-
 	}
-	
-	DBGPRINT(RT_DEBUG_TRACE, ("<==== %s\n", __FUNCTION__));
+
+	//DBGPRINT(RT_DEBUG_TRACE, ("<==== %s\n", __FUNCTION__));
+	return STATUS_SUCCESS;
 }
+
+
 

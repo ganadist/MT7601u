@@ -459,14 +459,14 @@ typedef struct GNU_PACKED _OVERLAP_BSS_SCAN_IE{
 /*  7.3.2.56. 20/40 Coexistence element used in  Element ID = 72 = IE_2040_BSS_COEXIST */
 typedef union GNU_PACKED _BSS_2040_COEXIST_IE{
  struct GNU_PACKED {
-#ifdef RT_BIG_ENDIAN
+ #ifdef RT_BIG_ENDIAN
 	UCHAR	rsv:3;
  	UCHAR	ObssScanExempGrant:1;
 	UCHAR	ObssScanExempReq:1;
 	UCHAR	BSS20WidthReq:1;
 	UCHAR	Intolerant40:1;	
 	UCHAR	InfoReq:1; 
-#else
+ #else
 	UCHAR	InfoReq:1;
 	UCHAR	Intolerant40:1;			/* Inter-BSS. set 1 when prohibits a receiving BSS from operating as a 20/40 Mhz BSS. */
 	UCHAR	BSS20WidthReq:1;		/* Intra-BSS set 1 when prohibits a receiving AP from operating its BSS as a 20/40MHz BSS. */
@@ -1234,6 +1234,7 @@ typedef struct _MLME_QUEUE_ELEM {
     UCHAR             Rssi0;
     UCHAR             Rssi1;
     UCHAR             Rssi2;
+    UCHAR             AntSel;
     UCHAR             Signal;
     UCHAR             Channel;
     UCHAR             Wcid;
@@ -1477,7 +1478,6 @@ typedef struct _IE_lists {
 
 
 typedef struct _bcn_ie_list {
-	UCHAR Addr1[MAC_ADDR_LEN]; 
 	UCHAR Addr2[MAC_ADDR_LEN]; 
 	UCHAR Bssid[MAC_ADDR_LEN];
 	CHAR Ssid[MAX_LEN_OF_SSID];

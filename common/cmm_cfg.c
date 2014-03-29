@@ -27,7 +27,7 @@
 
 #include "rt_config.h"
 #ifdef DOT11_N_SUPPORT
-#ifdef RT65xx
+#if defined(RT65xx) || defined(MT7601)
 #define MAX_AGG_CNT	32
 #elif defined(RT2883) || defined(RT3883)
 #define MAX_AGG_CNT	16
@@ -246,6 +246,21 @@ UCHAR cfgmode_2_wmode(UCHAR cfg_mode)
 }
 
 
+UCHAR wmode_2_cfgmode(UCHAR wmode)
+{
+	INT index;
+	DBGPRINT(RT_DEBUG_OFF, ("wmode=%d\n", wmode));
+
+	for (index = 0; index < PHY_MODE_MAX; index++ )
+	{
+		if ( wmode == CFG_WMODE_MAP[index*2 + 1])
+			return CFG_WMODE_MAP[index*2];
+	}
+
+	return PHY_11ABGN_MIXED;
+}
+
+
 static BOOLEAN wmode_valid(RTMP_ADAPTER *pAd, enum WIFI_MODE wmode)
 {
 	if ((WMODE_CAP_5G(wmode) && (!PHY_CAP_5G(pAd->chipCap.phy_caps))) ||
@@ -255,6 +270,31 @@ static BOOLEAN wmode_valid(RTMP_ADAPTER *pAd, enum WIFI_MODE wmode)
 		return FALSE;
 	else
 		return TRUE;
+}
+
+
+static BOOLEAN wmode_valid_and_correct(RTMP_ADAPTER *pAd, UCHAR* wmode)
+{
+	BOOLEAN ret = TRUE;
+	UCHAR mode = *wmode;
+
+	if (WMODE_CAP_5G(*wmode) && (!PHY_CAP_5G(pAd->chipCap.phy_caps)))
+	{
+		*wmode = *wmode & ~(WMODE_A | WMODE_AN | WMODE_AC);
+	}
+	else if (WMODE_CAP_2G(*wmode) && (!PHY_CAP_2G(pAd->chipCap.phy_caps)))
+	{
+		*wmode = *wmode & ~(WMODE_B | WMODE_G | WMODE_GN);
+	}
+	else if (WMODE_CAP_N(*wmode) && RTMP_TEST_MORE_FLAG(pAd, fRTMP_ADAPTER_DISABLE_DOT_11N))
+	{
+		*wmode = *wmode & ~(WMODE_GN | WMODE_AN);
+	}
+
+	if ( *wmode == 0 )
+		ret = FALSE;
+
+	return ret;
 }
 
 
@@ -303,10 +343,10 @@ INT RT_CfgSetWirelessMode(RTMP_ADAPTER *pAd, PSTRING arg)
 
 	/* check if chip support 5G band when WirelessMode is 5G band */
 	wmode = cfgmode_2_wmode((UCHAR)cfg_mode);
-	if ((wmode == WMODE_INVALID) || (!wmode_valid(pAd, wmode))) {
+	if ((wmode == WMODE_INVALID) || (!wmode_valid_and_correct(pAd, &wmode))) {
 		DBGPRINT(RT_DEBUG_ERROR,
-				("%s(): Invalid wireless mode(%ld, wmode=0x%x), ChipCap(%s)\n",
-				__FUNCTION__, cfg_mode, wmode,
+				("%s(): Invalid wireless mode(%ld), ChipCap(%s)\n",
+				__FUNCTION__, cfg_mode,
 				BAND_STR[pAd->chipCap.phy_caps & 0x3]));
 		return FALSE;
 	}
@@ -689,8 +729,8 @@ INT RTMP_COM_IoctlHandle(
 #endif /* CONFIG_APSTA_MIXED_SUPPORT */
 #ifdef CONFIG_STA_SUPPORT
 //#ifdef CONFIG_PM
-#ifdef RTMP_USB_SUPPORT
 //#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
+#ifdef RTMP_USB_SUPPORT
                 case CMD_RTPRIV_IOCTL_USB_DEV_GET:
                 /* get USB DEV */
                 {
@@ -698,26 +738,7 @@ INT RTMP_COM_IoctlHandle(
                         *ppUsb_Dev = (VOID *)(pObj->pUsb_Dev);
                 }
                         break;
-
-                case CMD_RTPRIV_IOCTL_USB_INTF_GET:
-                /* get USB INTF */
-                {
-                        VOID **ppINTF = (VOID **)pData;
-                        //*ppINTF = (VOID *)(pObj->intf);
-                }
-                        break;
-
-		case CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_SET:
-		/* set driver state to fRTMP_ADAPTER_SUSPEND */
-			RTMP_SET_FLAG(pAd,fRTMP_ADAPTER_SUSPEND);
-			break;
-
-		case CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_CLEAR:
-		/* clear driver state to fRTMP_ADAPTER_SUSPEND */
-			RTMP_CLEAR_FLAG(pAd,fRTMP_ADAPTER_SUSPEND);
-			RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD);
-			RTMP_CLEAR_PSFLAG(pAd, fRTMP_PS_MCU_SLEEP);
-			break;
+#endif /* RTMP_USB_SUPPORT */
 
 		case CMD_RTPRIV_IOCTL_ADAPTER_SEND_DISSASSOCIATE:
 		/* clear driver state to fRTMP_ADAPTER_SUSPEND */
@@ -749,7 +770,7 @@ INT RTMP_COM_IoctlHandle(
 			
 		case CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_TEST:
 		/* test driver state to fRTMP_ADAPTER_SUSPEND */
-			//*(UCHAR *)pData = RTMP_TEST_FLAG(pAd,fRTMP_ADAPTER_SUSPEND);
+			*(UCHAR *)pData = RTMP_TEST_FLAG(pAd,fRTMP_ADAPTER_SUSPEND);
 			break;
 
 		case CMD_RTPRIV_IOCTL_ADAPTER_IDLE_RADIO_OFF_TEST:
@@ -757,32 +778,21 @@ INT RTMP_COM_IoctlHandle(
 			*(UCHAR *)pData = RTMP_TEST_FLAG(pAd,fRTMP_ADAPTER_IDLE_RADIO_OFF);
 			break;
 
-		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_OFF:
-			ASIC_RADIO_OFF(pAd, SUSPEND_RADIO_OFF);
-			break;
 
-		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_ON:
-			ASIC_RADIO_ON(pAd, RESUME_RADIO_ON);
-			break;
-
-#ifdef WOW_SUPPORT
-#ifdef RTMP_MAC_USB
-		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_STATUS:
+//#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_WOW_STATUS:
 			*(UCHAR *)pData = (UCHAR)pAd->WOW_Cfg.bEnable;
 			break;
 
-		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_ENABLE:
-			RT28xxUsbAsicWOWEnable(pAd);
+		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_WOW_ENABLE:
+			ASIC_WOW_ENABLE(pAd);
 			break;
 
-		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_DISABLE:
-			RT28xxUsbAsicWOWDisable(pAd);
+		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_WOW_DISABLE:
+			ASIC_WOW_DISABLE(pAd);
 			break;
-#endif /* RTMP_MAC_USB */
-#endif /* WOW_SUPPORT */
-
-//#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-#endif
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
 //#endif /* CONFIG_PM */	
 
 		case CMD_RTPRIV_IOCTL_AP_BSSID_GET:
@@ -792,6 +802,28 @@ INT RTMP_COM_IoctlHandle(
 				return NDIS_STATUS_FAILURE;
 			break;
 #endif /* CONFIG_STA_SUPPORT */
+
+		case CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_SET:
+		/* set driver state to fRTMP_ADAPTER_SUSPEND */
+			RTMP_SET_FLAG(pAd,fRTMP_ADAPTER_SUSPEND);
+			break;
+
+		case CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_CLEAR:
+		/* clear driver state to fRTMP_ADAPTER_SUSPEND */
+			RTMP_CLEAR_FLAG(pAd,fRTMP_ADAPTER_SUSPEND);
+			break;
+
+		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_OFF:
+		/* RT28xxUsbAsicRadioOff */
+			//RT28xxUsbAsicRadioOff(pAd);
+			ASIC_RADIO_OFF(pAd, SUSPEND_RADIO_OFF);
+			break;
+
+		case CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_ON:
+		/* RT28xxUsbAsicRadioOn */
+			//RT28xxUsbAsicRadioOn(pAd);
+			ASIC_RADIO_ON(pAd, RESUME_RADIO_ON);
+			break;
 
 		case CMD_RTPRIV_IOCTL_SANITY_CHECK:
 		/* sanity check before IOCTL */
@@ -905,7 +937,6 @@ INT RTMP_COM_IoctlHandle(
 			RT_CMD_USB_DEV_CONFIG *pConfig;
 			UINT32 i;
 			pConfig = (RT_CMD_USB_DEV_CONFIG *)pData;
-
 			pAd->NumberOfPipes = pConfig->NumberOfPipes;
 			pAd->BulkInMaxPacketSize = pConfig->BulkInMaxPacketSize;
 			pAd->BulkOutMaxPacketSize = pConfig->BulkOutMaxPacketSize;
@@ -913,6 +944,11 @@ INT RTMP_COM_IoctlHandle(
 			for (i = 0; i < 6; i++) 
 				pAd->BulkOutEpAddr[i] = pConfig->BulkOutEpAddr[i];
 
+			for (i = 0; i < 6; i++) {
+				DBGPRINT(RT_DEBUG_OFF, ("%s():pAd->BulkOutEpAddr=0x%x\n", __FUNCTION__, pAd->BulkOutEpAddr[i]));
+			}
+
+			
 			for (i = 0; i < 2; i++)
 				pAd->BulkInEpAddr[i] = pConfig->BulkInEpAddr[i];
 
@@ -1140,6 +1176,12 @@ INT RTMP_COM_IoctlHandle(
 			RtmpIoctl_rt_ioctl_giwname(pAd, pData, 0);
 			break;
 
+#if defined(CONFIG_CSO_SUPPORT) || defined(CONFIG_RX_CSO_SUPPORT)
+		case CMD_RTPRIV_IOCTL_ADAPTER_CSO_SUPPORT_TEST:
+			*(UCHAR *)pData = (pAd->MoreFlags & fASIC_CAP_CSO) ? 1:0;
+			break;
+#endif /* defined(CONFIG_CSO_SUPPORT) || defined(CONFIG_RX_CSO_SUPPORT) */
+
 	}
 
 #ifdef RT_CFG80211_SUPPORT
@@ -1259,26 +1301,27 @@ INT	Set_Antenna_Proc(
 	
 	return TRUE;
 }
-			
 
 
-#ifdef MT76x0
-INT set_temp_sensor_proc(
-	IN RTMP_ADAPTER		*pAd,
-	IN PSTRING			arg)
+
+#ifdef MICROWAVE_OVEN_SUPPORT
+INT Set_MO_FalseCCATh_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
 {
-	if (simple_strtol(arg, 0, 10) == 0) {
-		pAd->chipCap.bDoTemperatureSensor = FALSE;
-		pAd->chipCap.LastTemperatureforVCO = 0x7FFF;
-		pAd->chipCap.LastTemperatureforCal = 0x7FFF;
-		pAd->chipCap.NowTemperature = 0x7FFF;
-	} 
-	else
-		pAd->chipCap.bDoTemperatureSensor = TRUE;
+	ULONG th;
 
-	DBGPRINT(RT_DEBUG_OFF, ("%s:: bDoTemperatureSensor = %d \n", __FUNCTION__, pAd->chipCap.bDoTemperatureSensor));
+	th = simple_strtol(arg, 0, 10);
+	
+	if (th > 65535)
+		th = 65535;
+
+	pAd->CommonCfg.MO_Cfg.nFalseCCATh = th;
+
+	DBGPRINT(RT_DEBUG_OFF, ("%s: set falseCCA threshold %lu for microwave oven application!!\n", __FUNCTION__, th));
 
 	return TRUE;
 }
-#endif /* MT76x0 */
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
 

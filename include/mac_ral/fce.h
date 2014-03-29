@@ -31,7 +31,6 @@
 #include "rt_config.h"
 
 #define FCE_PSE_CTRL	0x0800
-#define FCE_PARAMETERS	0x0804
 #define FCE_CSO			0x0808
 #define FCE_L2_STUFF	0x080c
 #define TX_CPU_PORT_FROM_FCE_BASE_PTR		0x09A0
@@ -44,7 +43,7 @@
 #ifdef BIG_ENDIAN
 typedef	union _L2_STUFFING_STRUC
 {
-	struct {
+	struct	{
 	    UINT32  RSV:6;
 	    UINT32  OTHER_PORT:2;
 		UINT32  TS_LENGTH_EN:8;

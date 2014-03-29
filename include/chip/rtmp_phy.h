@@ -113,10 +113,6 @@
 #define	RF_R73			73
 #define	RF_R74			74
 #define	RF_R75			75
-#define	RF_R76			76
-#define	RF_R77			77
-#define	RF_R78			78
-#define	RF_R79			79
 #define	RF_R126			126
 #define	RF_R127			127
 
@@ -136,13 +132,7 @@
 #define RFIC_3322                   12      /* 2.4G 2T2R with PA (RT3352/RT3371/RT3372/RT3391/RT3392) */
 #define RFIC_3053                   13      /* 2.4G/5G 3T3R (RT3883/RT3563/RT3573/RT3593/RT3662) */
 #define RFIC_3853                   13      /* 2.4G/5G 3T3R (RT3883/RT3563/RT3573/RT3593/RT3662) */
-#define RFIC_5592					14		/* 2.4G/5G */
-#define RFIC_7650					15		/* 2.4G/5G 1x1 VHT with BT*/
-#define RFIC_7610E					16		/* 5G 1x1 VHT */
-#define RFIC_7610U					17
-#define RFIC_7630					18		/* 2.4G 1x1 HT with BT */
-#define RFIC_7662					19		/* 2.4G/5G 2T2R VHT with BT */
-#define RFIC_7612					20		/* 2.4G/5G 2T2R VHT */
+#define RFIC_5592			14	 /* 2.4G/5G */
 #define RFIC_UNKNOWN				0xff
 
 #define RFIC_IS_5G_BAND(__pAd)			\
@@ -153,11 +143,6 @@
 	(__pAd->RfIcType == RFIC_3053) ||	\
 	(__pAd->RfIcType == RFIC_3853) ||	\
 	(__pAd->RfIcType == RFIC_5592) ||	\
-	(__pAd->RfIcType == RFIC_7650) ||	\
-	(__pAd->RfIcType == RFIC_7610E) ||	\
-	(__pAd->RfIcType == RFIC_7610U) ||	\
-	(__pAd->RfIcType == RFIC_7662) ||	\
-	(__pAd->RfIcType == RFIC_7612) ||	\
 	(__pAd->RfIcType == RFIC_UNKNOWN))
 
 /*
@@ -194,6 +179,8 @@
 #define BBP_R55			55
 #define BBP_R60			60
 #define BBP_R57			57
+#define BBP_R58			58
+#define BBP_R61			61
 #define BBP_R62			62 /* Rx SQ0 Threshold HIGH */
 #define BBP_R63			63
 #define BBP_R64			64
@@ -215,13 +202,17 @@
 #define BBP_R82			82
 #define BBP_R83			83
 #define BBP_R84			84
+#define BBP_R85			85
 #define BBP_R86			86
+#define BBP_R87			87
 #define BBP_R88			88
 #define BBP_R91			91
 #define BBP_R92			92
 #define BBP_R94			94 /* Tx Gain Control */
 #define BBP_R95			95
 #define BBP_R98			98
+#define BBP_R99			99
+#define BBP_R101		101
 #define BBP_R103		103
 #define BBP_R104		104
 #define BBP_R105		105
@@ -270,14 +261,16 @@
 #define BBP_R162		162
 #define BBP_R163		163
 #define BBP_R164		164
+#define BBP_R165		165
+#define BBP_R166		166
+#define BBP_R167		167
 
-#define BBP_R170		170
-#define BBP_R171		171
 #define BBP_R173		173
 #define BBP_R174		174
 #define BBP_R175		175
 #define BBP_R176		176
 #define BBP_R177		177
+#define BBP_R178		178
 #define BBP_R179		179
 #define BBP_R180		180
 #define BBP_R181		181
@@ -292,6 +285,9 @@
 #define BBP_R191		191
 #define BBP_R195		195
 #define BBP_R196		196
+#define BBP_R241		241
+#define BBP_R242		242
+#define BBP_R244		244
 #define BBP_R250		250
 #define BBP_R253		253
 #define BBP_R254		254
@@ -617,13 +613,66 @@ typedef union _BBP_R182_STRUC {
 #endif /*DFS_SUPPORT*/
 
 #ifdef RTMP_MAC_USB
+#ifndef MT7601
 #define RTMP_BBP_IO_READ8_BY_REG_ID(_A, _I, _pV)   RTUSBReadBBPRegister(_A, _I, _pV)
 #define RTMP_BBP_IO_WRITE8_BY_REG_ID(_A, _I, _V)   RTUSBWriteBBPRegister(_A, _I, _V)
 #define BBP_IO_WRITE8_BY_REG_ID(_A, _I, _V)			RTUSBWriteBBPRegister(_A, _I, _V)
 #define BBP_IO_READ8_BY_REG_ID(_A, _I, _pV)   		RTUSBReadBBPRegister(_A, _I, _pV)
+#endif /* MT7601 */
 #endif /* RTMP_MAC_USB */
 
+#ifdef MT7601
+NDIS_STATUS MT7601_BBP_write(
+	IN struct _RTMP_ADAPTER *pAd,
+	IN UCHAR regID,
+	IN UCHAR value);
 
+NDIS_STATUS MT7601_BBP_read(
+	IN struct _RTMP_ADAPTER *pAd,
+	IN UCHAR regID,
+	IN UCHAR *pValue);
+
+#define RTMP_BBP_IO_READ8_BY_REG_ID(_A, _I, _pV)	MT7601_BBP_read(_A, _I, _pV)
+#define RTMP_BBP_IO_WRITE8_BY_REG_ID(_A, _I, _V)	MT7601_BBP_write(_A, _I, _V)
+#define BBP_IO_WRITE8_BY_REG_ID(_A, _I, _V)			MT7601_BBP_write(_A, _I, _V)
+#define BBP_IO_READ8_BY_REG_ID(_A, _I, _pV)			MT7601_BBP_read(_A, _I, _pV)
+#endif /* MT7601 */
+
+
+
+#if defined(RT30xx) || defined(MT7601)
+
+#define RTMP_ASIC_MMPS_DISABLE(_pAd)							\
+	do{															\
+		UCHAR _bbpData = 0;											\
+		UINT32 _macData;											\
+		/* disable MMPS BBP control register */						\
+		RTMP_BBP_IO_READ8_BY_REG_ID(_pAd, BBP_R3, &_bbpData);	\
+		_bbpData &= ~(0x04);										\
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(_pAd, BBP_R3, _bbpData);	\
+																\
+		/* disable MMPS MAC control register */						\
+		RTMP_IO_READ32(_pAd, 0x1210, &_macData);				\
+		_macData &= ~(0x09);										\
+		RTMP_IO_WRITE32(_pAd, 0x1210, _macData);				\
+	}while(0)
+
+
+#define RTMP_ASIC_MMPS_ENABLE(_pAd)							\
+	do{															\
+		UCHAR _bbpData = 0;										\
+		UINT32 _macData;											\
+		/* enable MMPS BBP control register */						\
+		RTMP_BBP_IO_READ8_BY_REG_ID(_pAd, BBP_R3, &_bbpData);	\
+		_bbpData |= (0x04);								\
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(_pAd, BBP_R3, _bbpData);	\
+																\
+		/* enable MMPS MAC control register */						\
+		RTMP_IO_READ32(_pAd, 0x1210, &_macData);				\
+		_macData |= (0x09);										\
+		RTMP_IO_WRITE32(_pAd, 0x1210, _macData);				\
+	}while(0)
+#endif /*  defined(RT30xx) || defined(MT7601) */
 
 
 struct _RMTP_ADAPTER;
@@ -631,8 +680,6 @@ struct _RMTP_ADAPTER;
 INT rtmp_bbp_set_bw(struct _RTMP_ADAPTER *pAd, INT bw);
 INT rtmp_bbp_set_ctrlch(struct _RTMP_ADAPTER *pAd, INT ext_ch);
 INT rtmp_bbp_set_rxpath(struct _RTMP_ADAPTER *pAd, INT rxpath);
-INT rtmp_bbp_get_temp(struct _RTMP_ADAPTER *pAd, CHAR *temp_val);
-INT rtmp_bbp_tx_comp_init(struct _RTMP_ADAPTER *pAd, INT adc_insel, INT tssi_mode);
 INT rtmp_bbp_set_txdac(struct _RTMP_ADAPTER *pAd, INT tx_dac);
 INT rtmp_bbp_set_mmps(struct _RTMP_ADAPTER *pAd, BOOLEAN ReduceCorePower);
 INT rtmp_bbp_is_ready(struct _RTMP_ADAPTER *pAd);

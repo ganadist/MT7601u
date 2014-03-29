@@ -49,8 +49,7 @@ typedef enum CD_STATE_n {
 typedef enum _TONE_RADAR_VERSION {
 	DISABLE_TONE_RADAR = 0,
 	TONE_RADAR_V1,
-	TONE_RADAR_V2,
-	TONE_RADAR_V3
+	TONE_RADAR_V2
 } TONE_RADAR_VERSION;
 
 typedef struct CARRIER_DETECTION_s {
@@ -183,10 +182,6 @@ VOID ToneRadarProgram_v1(
 
 VOID ToneRadarProgram_v2(
 	IN PRTMP_ADAPTER pAd,
-	IN ULONG threshold);
-
-VOID ToneRadarProgram_v3(
-	IN PRTMP_ADAPTER pAd, 
 	IN ULONG threshold);
 
 #ifdef CARRIER_DETECTION_FIRMWARE_SUPPORT

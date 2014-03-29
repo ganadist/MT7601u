@@ -125,20 +125,7 @@ typedef struct ate_racfghdr {
 #define RACFG_CMD_ATE_TXBF_GOLDEN_INIT		0x0120
 #define RACFG_CMD_ATE_TXBF_VERIFY		0x0121
 #endif /* TXBF_SUPPORT */
-#ifdef RLT_RF
-#define RACFG_CMD_ATE_RF_READ_BULK_BANK		0x0123
-#define RACFG_CMD_ATE_RF_WRITE_BULK_BANK	0x0124
-#endif /* RLT_RF */
-#define RACFG_CMD_TX_START_V2 				0x0125
 
-
-#if defined (RT6352) || defined (MT76x0)
-#define RACFG_CMD_ATE_CALIBRATION	0x0204
-#endif /* defined (RT6352) || defined (MT76x0) */
-#ifdef RT6352
-#define RACFG_CMD_ATE_TSSI_COMPENSATION	0x0205
-#define RACFG_CMD_ATE_TEMP_COMPENSATION	0x0206
-#endif /* RT6352 */
 
 /* QA RACFG Command for ate test from localhost */
 #define RACFG_CMD_ATE_SHOW_PARAM 0xff00

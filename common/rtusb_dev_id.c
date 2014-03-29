@@ -35,12 +35,14 @@
 
 /* module table */
 USB_DEVICE_ID rtusb_dev_id[] = {
-#ifdef MT76x0
-	{USB_DEVICE(0x148F,0x7610)}, /* MT7610U */
-	{USB_DEVICE(0x0E8D,0x7610)}, /* MT7610U */
-	{USB_DEVICE_AND_INTERFACE_INFO(0x0E8D, 0x7630, 0xff, 0x2, 0xff)}, /* MT7630U */
-	{USB_DEVICE_AND_INTERFACE_INFO(0x0E8D, 0x7650, 0xff, 0x2, 0xff)}, /* MT7650U */
-#endif
+#ifdef RT6570
+	{USB_DEVICE(0x148f,0x6570)}, /* Ralink 6570 */
+#endif /* RT6570 */
+	{USB_DEVICE(0x148f, 0x7650)}, /* MT7650 */
+#ifdef MT7601U
+	{USB_DEVICE(0x148f,0x6370)}, /* Ralink 6370 */
+	{USB_DEVICE(0x148f,0x7601)}, /* MT 6370 */
+#endif /* MT7601U */
 	{ }/* Terminating entry */
 };
 

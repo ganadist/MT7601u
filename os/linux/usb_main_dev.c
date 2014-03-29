@@ -40,6 +40,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Paul Lin <paul_lin@ralinktech.com>");
 MODULE_DESCRIPTION("RT2870 Wireless Lan Linux Driver");
 
+
 #ifdef CONFIG_STA_SUPPORT
 #ifdef MODULE_VERSION
 MODULE_VERSION(STA_DRIVER_VERSION);
@@ -223,7 +224,7 @@ static BOOLEAN USBDevConfigInit(
 	ULONG BulkInIdx;
 	UINT32 i;
 	RT_CMD_USB_DEV_CONFIG Config, *pConfig = &Config;
-
+	
 	/* get the active interface descriptor */
 	iface_desc = intf->cur_altsetting;
 
@@ -354,7 +355,7 @@ static void rtusb_disconnect(struct usb_interface *intf)
 #endif
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 #endif /* CONFIG_PM */
-	
+
 }
 
 
@@ -371,10 +372,10 @@ struct usb_driver rtusb_driver = {
 #ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 	.supports_autosuspend = 1,
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-	.supports_autosuspend = 1,
 	suspend:	rt2870_suspend,
 	resume:		rt2870_resume,
 #endif /* CONFIG_PM */
+	.supports_autosuspend = 1,
 	};
 
 #ifdef CONFIG_PM
@@ -392,45 +393,53 @@ static int rt2870_suspend(
 {
 	struct net_device *net_dev;
 	VOID *pAd = usb_get_intfdata(intf);
-	
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	UCHAR Flag;
+
+	RTMP_DRIVER_ADAPTER_RT28XX_WOW_STATUS(pAd, &Flag);
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
+
 	DBGPRINT(RT_DEBUG_TRACE, ("===> rt2870_suspend()\n"));
 
 #ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 	UCHAR Flag;
 	DBGPRINT(RT_DEBUG_ERROR, ("autosuspend===> rt2870_suspend()\n"));
-#ifdef WOW_SUPPORT
-	RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_STATUS(pAd, &Flag);
-	if (Flag == TRUE)
-		RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_ENABLE(pAd);
-	else
-#endif /* WOW_SUPPORT */
+
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	if (Flag == FALSE)
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
 	{
-#ifdef CONFIG_STA_SUPPORT
+/*	if(!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF)) */
 		RTMP_DRIVER_ADAPTER_END_DISSASSOCIATE(pAd);
-#endif
 		RTMP_DRIVER_ADAPTER_IDLE_RADIO_OFF_TEST(pAd, &Flag);
-		
 		if(!Flag)
 		{
+			/*RT28xxUsbAsicRadioOff(pAd); */
 			RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_OFF(pAd);
 		}
 	}
+	/*RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_SUSPEND); */
 	RTMP_DRIVER_ADAPTER_SUSPEND_SET(pAd);
 	return 0;
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 
+
 #ifdef CONFIG_STA_SUPPORT
-	RTMP_DRIVER_ADAPTER_END_DISSASSOCIATE(pAd);
+	//RTMP_DRIVER_ADAPTER_END_DISSASSOCIATE(pAd);
 #endif
 
-	RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_OFF(pAd);
-	RTMP_DRIVER_ADAPTER_SUSPEND_SET(pAd);
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	if (Flag == TRUE)
+		RTMP_DRIVER_ADAPTER_RT28XX_WOW_ENABLE(pAd);
+	else
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
+	{
+		RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_OFF(pAd);
+		RTMP_DRIVER_ADAPTER_SUSPEND_SET(pAd);
+	}
 
-/*	net_dev = pAd->net_dev; */
-	//RTMP_DRIVER_NET_DEV_GET(pAd, &net_dev);
-	//netif_device_detach(net_dev);
 
-	//RTMP_DRIVER_USB_SUSPEND(pAd, netif_running(net_dev));
+
 	DBGPRINT(RT_DEBUG_TRACE, ("<=== rt2870_suspend()\n"));
 	return 0;
 }
@@ -440,11 +449,20 @@ static int rt2870_resume(
 {
 	struct net_device *net_dev;
 	VOID *pAd = usb_get_intfdata(intf);
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	UCHAR Flag;
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
 
 #ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 	INT 		pm_usage_cnt;
 	UCHAR Flag;
+#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	RTMP_DRIVER_ADAPTER_RT28XX_WOW_STATUS(pAd, &Flag);
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
+
+#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
 	pm_usage_cnt = atomic_read(&intf->pm_usage_cnt);	
 #else
@@ -459,33 +477,34 @@ static int rt2870_resume(
 	/*RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_SUSPEND); */
 	RTMP_DRIVER_ADAPTER_SUSPEND_CLEAR(pAd);
 
-#ifdef WOW_SUPPORT 
-	RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_STATUS(pAd, &Flag);
-	if (Flag == TRUE)
-		RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_DISABLE(pAd);
-	else
-#endif /* WOW_SUPPORT */
-	RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_ON(pAd);
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	if (Flag == FALSE)
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
+		/*RT28xxUsbAsicRadioOn(pAd); */
+		RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_ON(pAd);
 
 	DBGPRINT(RT_DEBUG_ERROR, ("autosuspend<===  rt2870_resume()\n"));
 
 	return 0;
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
+
+
 	DBGPRINT(RT_DEBUG_TRACE, ("===> rt2870_resume()\n"));
-	mdelay(1000);
 
-	RTMP_DRIVER_ADAPTER_SUSPEND_CLEAR(pAd);
-	RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_ON(pAd);
 
-/*	pAd->PM_FlgSuspend = 0; */
-	//RTMP_DRIVER_USB_RESUME(pAd);
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+	if (Flag == TRUE)
+		RTMP_DRIVER_ADAPTER_RT28XX_WOW_DISABLE(pAd);
+	else
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
+	{
+		RTMP_DRIVER_ADAPTER_SUSPEND_CLEAR(pAd);
+		RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_ON(pAd);
+	}
 
-/*	net_dev = pAd->net_dev; */
-	//RTMP_DRIVER_NET_DEV_GET(pAd, &net_dev);
-	//netif_device_attach(net_dev);
-	//netif_start_queue(net_dev);
-	//netif_carrier_on(net_dev);
-	//netif_wake_queue(net_dev);
+
+
+
 
 	DBGPRINT(RT_DEBUG_TRACE, ("<=== rt2870_resume()\n"));
 	return 0;
@@ -570,7 +589,6 @@ static void rt2870_disconnect(struct usb_device *dev, VOID *pAd)
 	/* FIXME: Shall we need following delay and flush the schedule?? */
 	udelay(1);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)	/* kernel 2.4 series */
-	;
 #else
 	flush_scheduled_work();
 #endif /* LINUX_VERSION_CODE */
@@ -622,8 +640,6 @@ static int rt2870_probe(
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 #endif /* CONFIG_PM */	
 
-	
-
 	DBGPRINT(RT_DEBUG_TRACE, ("===>rt2870_probe()!\n"));
 	
 #ifdef CONFIG_PM
@@ -643,12 +659,8 @@ static int rt2870_probe(
          intf->pm_usage_cnt = 1;
 	 printk(" rt2870_probe ====> pm_usage_cnt %d \n", intf->pm_usage_cnt);
 #endif
-	
-
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 #endif /* CONFIG_PM */
-
-
 
 /*RtmpDevInit============================================= */
 	/* Allocate RTMP_ADAPTER adapter structure */
@@ -663,13 +675,9 @@ static int rt2870_probe(
 
 	((POS_COOKIE)handle)->pUsb_Dev = usb_dev;
 
-#ifdef CONFIG_PM
-#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
+#ifdef CONFIG_STA_SUPPORT
 	((POS_COOKIE)handle)->intf = intf;
-#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-#endif /* CONFIG_PM */
-
-
+#endif /* CONFIG_STA_SUPPORT */
 
 	/* set/get operators to/from DRIVER module */
 #ifdef OS_ABL_FUNC_SUPPORT
@@ -783,10 +791,13 @@ err_out:
 RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkOutDataPacketComplete = NULL;
 RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkOutMLMEPacketComplete = NULL;
 RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkOutNullFrameComplete = NULL;
+#ifdef CONFIG_MULTI_CHANNEL
+RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkOutHCCANullFrameComplete = NULL;
+#endif /* CONFIG_MULTI_CHANNEL */
 RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkOutRTSFrameComplete = NULL;
 RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkOutPsPollComplete = NULL;
 RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkRxComplete = NULL;
-//RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkCmdRspEventComplete = NULL;
+RTMP_DRV_USB_COMPLETE_HANDLER RtmpDrvUsbBulkCmdRspEventComplete = NULL;
 
 USBHST_STATUS RTUSBBulkOutDataPacketComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs)
 {
@@ -803,6 +814,14 @@ USBHST_STATUS RTUSBBulkOutNullFrameComplete(URBCompleteStatus Status, purbb_t pU
 	RtmpDrvUsbBulkOutNullFrameComplete((VOID *)pURB);
 }
 
+#ifdef CONFIG_MULTI_CHANNEL
+USBHST_STATUS RTUSBBulkOutHCCANullFrameComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs)
+{
+	RtmpDrvUsbBulkOutHCCANullFrameComplete((VOID *)pURB);
+}
+#endif /* CONFIG_MULTI_CHANNEL */
+
+
 USBHST_STATUS RTUSBBulkOutRTSFrameComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs)
 {
 	RtmpDrvUsbBulkOutRTSFrameComplete((VOID *)pURB);
@@ -818,6 +837,10 @@ USBHST_STATUS RTUSBBulkRxComplete(URBCompleteStatus Status, purbb_t pURB, pregs 
 	RtmpDrvUsbBulkRxComplete((VOID *)pURB);
 }
 
+USBHST_STATUS RTUSBBulkCmdRspEventComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs)
+{
+	RtmpDrvUsbBulkCmdRspEventComplete((VOID *)pURB);
+}
 
 VOID RtmpNetOpsInit(
 	IN VOID			*pDrvNetOpsSrc)
@@ -828,10 +851,13 @@ VOID RtmpNetOpsInit(
 	pDrvNetOps->RtmpNetUsbBulkOutDataPacketComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkOutDataPacketComplete;
 	pDrvNetOps->RtmpNetUsbBulkOutMLMEPacketComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkOutMLMEPacketComplete;
 	pDrvNetOps->RtmpNetUsbBulkOutNullFrameComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkOutNullFrameComplete;
+#ifdef CONFIG_MULTI_CHANNEL
+	pDrvNetOps->RtmpNetUsbBulkOutHCCANullFrameComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkOutHCCANullFrameComplete;
+#endif /* CONFIG_MULTI_CHANNEL */
 	pDrvNetOps->RtmpNetUsbBulkOutRTSFrameComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkOutRTSFrameComplete;
 	pDrvNetOps->RtmpNetUsbBulkOutPsPollComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkOutPsPollComplete;
 	pDrvNetOps->RtmpNetUsbBulkRxComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkRxComplete;
-	//pDrvNetOps->RtmpNetUsbBulkCmdRspEventComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkCmdRspEventComplete;
+	pDrvNetOps->RtmpNetUsbBulkCmdRspEventComplete = (RTMP_DRV_USB_COMPLETE_HANDLER)RTUSBBulkCmdRspEventComplete;
 }
 
 
@@ -844,9 +870,13 @@ VOID RtmpNetOpsSet(
 	RtmpDrvUsbBulkOutDataPacketComplete = pDrvNetOps->RtmpDrvUsbBulkOutDataPacketComplete;
 	RtmpDrvUsbBulkOutMLMEPacketComplete = pDrvNetOps->RtmpDrvUsbBulkOutMLMEPacketComplete;
 	RtmpDrvUsbBulkOutNullFrameComplete = pDrvNetOps->RtmpDrvUsbBulkOutNullFrameComplete;
+#ifdef CONFIG_MULTI_CHANNEL
+	RtmpDrvUsbBulkOutHCCANullFrameComplete = pDrvNetOps->RtmpDrvUsbBulkOutHCCANullFrameComplete;
+#endif /* CONFIG_MULTI_CHANNEL */
+
 	RtmpDrvUsbBulkOutRTSFrameComplete = pDrvNetOps->RtmpDrvUsbBulkOutRTSFrameComplete;
 	RtmpDrvUsbBulkOutPsPollComplete = pDrvNetOps->RtmpDrvUsbBulkOutPsPollComplete;
 	RtmpDrvUsbBulkRxComplete = pDrvNetOps->RtmpDrvUsbBulkRxComplete;
-	//RtmpDrvUsbBulkCmdRspEventComplete = pDrvNetOps->RtmpDrvUsbBulkCmdRspEventComplete;
+	RtmpDrvUsbBulkCmdRspEventComplete = pDrvNetOps->RtmpDrvUsbBulkCmdRspEventComplete;
 }
 #endif /* OS_ABL_SUPPORT */

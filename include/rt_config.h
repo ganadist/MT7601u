@@ -49,10 +49,6 @@
 #include "ags.h"
 #endif /* AGS_SUPPORT */
 
-#ifdef CONFIG_FPGA_MODE
-#include "fpga/fpga_ctl.h"
-#endif /* CONFIG_FPGA_MODE */
-
 #include "mlme.h"
 #include "crypt_md5.h"
 #include "crypt_sha2.h"
@@ -69,7 +65,7 @@
 
 #include "eeprom.h"
 #if defined(RTMP_PCI_SUPPORT) || defined(RTMP_USB_SUPPORT)
-#include "mcu/mcu.h"
+#include "rtmp_mcu.h"
 #endif
 
 #undef AP_WSC_INCLUDED
@@ -119,6 +115,11 @@
 #define WSC_INCLUDED
 #endif
 
+//#ifdef CONFIG_AP_SUPPORT
+//#ifdef WDS_SUPPORT
+#define RALINK_PASSPHRASE	"Ralink"
+//#endif /* WDS_SUPPORT */
+//#endif /* CONFIG_AP_SUPPORT */
 
 
 #ifdef APCLI_WPA_SUPPLICANT_SUPPORT
@@ -167,6 +168,9 @@
 #include <linux/workqueue.h>
 #endif /* WORKQUEUE_BH / */
 
+#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
+#include "frq_cal.h"
+#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
 
 #ifdef TXBF_SUPPORT
 #include "rt_txbf.h"
@@ -176,3 +180,4 @@
 #include "mac_ral/fce.h"
 
 #endif	/* __RT_CONFIG_H__ */
+

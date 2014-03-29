@@ -82,6 +82,7 @@ typedef union _PBF_SYS_CTRL_STRUC{
 #define PBF_CFG			0x0404
 #define TX_MAX_PCNT	0x0408
 #define RX_MAX_PCNT	0x040c
+#define PBF_CTRL			0x0410
 #define RXQ_STA			0x0430
 #define TXQ_STA			0x0434
 
@@ -89,5 +90,49 @@ typedef union _PBF_SYS_CTRL_STRUC{
 #define BCN_OFFSET1		0x0420
 #define BCN_OFFSET2		0x0424
 #define BCN_OFFSET3		0x0428
+
+
+#define FCE_CTRL			0x0800
+#define FCE_PARAM		0x0804
+#define CHECKSUM_OFFLOAD	0x0808
+
+#ifdef RT_BIG_ENDIAN
+typedef union _CSO_CTRL_STRUC {
+	struct {
+                UINT32 rsv:21;
+                UINT32 stamp_seq_num_en:1;
+                UINT32 cso_bigendian:1;
+                UINT32 cso_en:1;
+                UINT32 tx_ipv6_en:1;
+                UINT32 tx_ipv4_cs_gen:1;
+                UINT32 tx_tcp_cs_gen:1;
+                UINT32 tx_udp_cs_gen:1;
+                UINT32 rx_ipv6_en:1;
+                UINT32 rx_ipv4_cs_en:1;
+                UINT32 rx_tcp_cs_en:1;
+                UINT32 rx_udp_cs_en:1;
+	} field;
+	UINT32 word;
+} CSO_CTRL_STRUC;
+#else
+typedef union _CSO_CTRL_STRUC{
+	struct {
+                UINT32 rx_udp_cs_en:1;
+                UINT32 rx_tcp_cs_en:1;
+                UINT32 rx_ipv4_cs_en:1;
+                UINT32 rx_ipv6_en:1;
+                UINT32 tx_udp_cs_gen:1;
+                UINT32 tx_tcp_cs_gen:1;
+                UINT32 tx_ipv4_cs_gen:1;
+                UINT32 tx_ipv6_en:1;
+                UINT32 cso_en:1;
+                UINT32 cso_bigendian:1;
+                UINT32 stamp_seq_num_en:1;
+                UINT32 rsv:21;
+	}field;
+	UINT32 word;
+} CSO_CTRL_STRUC;
+#endif
+
 #endif /* __RAL_NMAC_PBF_H__ */
 

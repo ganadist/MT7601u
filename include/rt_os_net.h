@@ -103,11 +103,9 @@ INT (*RTMP_STA_IoctlHandle)(
 	IN	ULONG					Data,
 	IN  USHORT                  priv_flags);
 
-VOID (*RTMPDrvSTAOpen)(VOID *pAd);
-VOID (*RTMPDrvAPOpen)(VOID *pAd);
+VOID (*RTMPDrvOpen)(VOID *pAd);
 
-VOID (*RTMPDrvSTAClose)(VOID *pAd, VOID *net_dev);
-VOID (*RTMPDrvAPClose)(VOID *pAd, VOID *net_dev);
+VOID (*RTMPDrvClose)(VOID *pAd, VOID *net_dev);
 
 VOID (*RTMPInfClose)(VOID *pAd);
 
@@ -138,6 +136,11 @@ typedef struct _RTMP_NET_ABL_OPS {
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutDataPacketComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutMLMEPacketComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutNullFrameComplete;
+
+#ifdef CONFIG_MULTI_CHANNEL
+RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutHCCANullFrameComplete;
+#endif /* CONFIG_MULTI_CHANNEL */
+
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutRTSFrameComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutPsPollComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkRxComplete;
@@ -147,6 +150,12 @@ RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkCmdRspEventComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutDataPacketComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutMLMEPacketComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutNullFrameComplete;
+
+#ifdef CONFIG_MULTI_CHANNEL
+RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutHCCANullFrameComplete;
+#endif /* CONFIG_MULTI_CHANNEL */
+
+
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutRTSFrameComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutPsPollComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkRxComplete;
@@ -180,10 +189,8 @@ VOID RtmpNetOpsSet(VOID *pNetOpsOrg);
 #define P2P_PacketSend (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->P2P_PacketSend)
 #define RTMP_AP_IoctlHandle (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMP_AP_IoctlHandle)
 #define RTMP_STA_IoctlHandle (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMP_STA_IoctlHandle)
-#define RTMPDrvSTAOpen (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvSTAOpen)
-#define RTMPDrvAPOpen (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvAPOpen)
-#define RTMPDrvSTAClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvSTAClose)
-#define RTMPDrvAPClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvAPClose)
+#define RTMPDrvOpen (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvOpen)
+#define RTMPDrvClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvClose)
 #define RTMPInfClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPInfClose)
 #define rt28xx_init (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->rt28xx_init)
 
@@ -247,10 +254,8 @@ INT RTMP_STA_IoctlHandle(
 	IN  USHORT                  priv_flags );
 #endif /* CONFIG_STA_SUPPORT */
 
-VOID RTMPDrvSTAOpen(VOID *pAd);
-VOID RTMPDrvAPOpen(VOID *pAd);
-VOID RTMPDrvSTAClose(VOID *pAd, VOID *net_dev);
-VOID RTMPDrvAPClose(VOID *pAd, VOID *net_dev);
+VOID RTMPDrvOpen(VOID *pAd);
+VOID RTMPDrvClose(VOID *pAd, VOID *net_dev);
 VOID RTMPInfClose(VOID *pAd);
 
 int rt28xx_init(
@@ -427,26 +432,16 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_MCU_SLEEP_CLEAR(__pAd)	\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_MCU_SLEEP_CLEAR, 0, NULL, 0)
 
-
 #ifdef CONFIG_APSTA_MIXED_SUPPORT
 #define RTMP_DRIVER_MAX_IN_BITS_SET(__pAd, __MaxInBit)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_MAX_IN_BIT, 0, NULL, __MaxInBit)
 #endif /* CONFIG_APSTA_MIXED_SUPPORT */
-//#ifdef CONFIG_STA_SUPPORT
+#ifdef CONFIG_STA_SUPPORT
 //#ifdef CONFIG_PM
 //#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 
 #define RTMP_DRIVER_USB_DEV_GET(__pAd, __pUsbDev)                                                       \
         RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_USB_DEV_GET, 0, __pUsbDev, 0)
-
-#define RTMP_DRIVER_USB_INTF_GET(__pAd, __pUsbIntf)                                                     \
-        RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_USB_INTF_GET, 0, __pUsbIntf, 0)
-
-#define RTMP_DRIVER_ADAPTER_SUSPEND_SET(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_SET, 0, NULL, 0)
-
-#define RTMP_DRIVER_ADAPTER_SUSPEND_CLEAR(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_CLEAR, 0, NULL, 0)
 
 #define RTMP_DRIVER_ADAPTER_END_DISSASSOCIATE(__pAd)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SEND_DISSASSOCIATE, 0, NULL, 0)
@@ -457,32 +452,34 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_ADAPTER_IDLE_RADIO_OFF_TEST(__pAd, __flag)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_IDLE_RADIO_OFF_TEST, 0,  __flag, 0)
 
+//#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
+#define RTMP_DRIVER_ADAPTER_RT28XX_WOW_STATUS(__pAd, __flag)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_WOW_STATUS, 0, __flag, 0)
+
+#define RTMP_DRIVER_ADAPTER_RT28XX_WOW_ENABLE(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_WOW_ENABLE, 0, NULL, 0)
+
+#define RTMP_DRIVER_ADAPTER_RT28XX_WOW_DISABLE(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_WOW_DISABLE, 0, NULL, 0)
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
+//#endif /* CONFIG_PM */	
+
+#define RTMP_DRIVER_AP_SSID_GET(__pAd, pData)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_AP_BSSID_GET, 0, pData, 0)
+#endif /* CONFIG_STA_SUPPORT */
+
 #define RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_OFF(__pAd)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_OFF, 0, NULL, 0)
 
 #define RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_ON(__pAd)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_ON, 0, NULL, 0)
 
+#define RTMP_DRIVER_ADAPTER_SUSPEND_SET(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_SET, 0, NULL, 0)
 
-#ifdef WOW_SUPPORT
-#ifdef RTMP_MAC_USB
-#define RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_STATUS(__pAd, __flag)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_STATUS, 0, __flag, 0)
-
-#define RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_ENABLE(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_ENABLE, 0, NULL, 0)
-
-#define RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_DISABLE(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_DISABLE, 0, NULL, 0)
-#endif /* RTMP_MAC_USB */
-#endif /* WOW_SUPPORT */
-
-//#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-//#endif /* CONFIG_PM */	
-
-#define RTMP_DRIVER_AP_SSID_GET(__pAd, pData)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_AP_BSSID_GET, 0, pData, 0)
-//#endif /* CONFIG_STA_SUPPORT */
+#define RTMP_DRIVER_ADAPTER_SUSPEND_CLEAR(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_CLEAR, 0, NULL, 0)
 
 #define RTMP_DRIVER_VIRTUAL_INF_NUM_GET(__pAd, __pIfNum)					\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_VIRTUAL_INF_GET, 0, __pIfNum, 0)

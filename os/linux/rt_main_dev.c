@@ -125,7 +125,6 @@ int MainVirtualIF_close(IN struct net_device *net_dev)
 
 
 #ifdef IFUP_IN_PROBE
-	;
 #else
 	VIRTUAL_IF_DOWN(pAd);
 #endif /* IFUP_IN_PROBE */
@@ -211,23 +210,16 @@ int rt28xx_close(VOID *dev)
 {
 	struct net_device * net_dev = (struct net_device *)dev;
     VOID	*pAd = NULL;
-	
+
 	GET_PAD_FROM_NET_DEV(pAd, net_dev);	
 
 	DBGPRINT(RT_DEBUG_TRACE, ("===> rt28xx_close\n"));
 
+	/* Sanity check for pAd */
 	if (pAd == NULL)
 		return 0; /* close ok */
 
-
-#ifdef CONFIG_STA_SUPPORT
-	RTMPDrvSTAClose(pAd, net_dev);
-#endif
-
-#ifdef VENDOR_FEATURE2_SUPPORT
-	printk("Number of Packet Allocated in open = %lu\n", OS_NumOfPktAlloc);
-	printk("Number of Packet Freed in open = %lu\n", OS_NumOfPktFree);
-#endif /* VENDOR_FEATURE2_SUPPORT */
+	RTMPDrvClose(pAd, net_dev);
 
 	DBGPRINT(RT_DEBUG_TRACE, ("<=== rt28xx_close\n"));
 	return 0;
@@ -377,20 +369,29 @@ int rt28xx_open(VOID *dev)
 
 #ifdef LINUX
 #ifdef RT_CFG80211_SUPPORT
+/*	RT_CFG80211_REINIT(pAd); */
+/*	RT_CFG80211_CRDA_REG_RULE_APPLY(pAd); */
 	RTMP_DRIVER_CFG80211_START(pAd);
 #endif /* RT_CFG80211_SUPPORT */
 #endif /* LINUX */
 
+	RTMPDrvOpen(pAd);
 
-#ifdef CONFIG_STA_SUPPORT
-	RTMPDrvSTAOpen(pAd);
-#endif
+
+#ifdef VENDOR_FEATURE2_SUPPORT
+	printk("Number of Packet Allocated in open = %lu\n", OS_NumOfPktAlloc);
+	printk("Number of Packet Freed in open = %lu\n", OS_NumOfPktFree);
+#endif /* VENDOR_FEATURE2_SUPPORT */
 
 	return (retval);
 
 err:
+/*+++move from rt28xx_init() to here. */
+/*	RtmpOSIRQRelease(net_dev); */
 	RTMP_DRIVER_IRQ_RELEASE(pAd);
-	return -1;
+/*---move from rt28xx_init() to here. */
+
+	return (-1);
 }
 
 

@@ -48,11 +48,7 @@
 #define DFS_ONOFF_MCU_CMD					0x64
 
 /*#define DFS_SW_RADAR_DECLARE_THRES	3*/
-#ifdef MT76x0
-#define DFS_EVENT_SIZE						4    /* Number of UINT32 of each DFS event buffer data */
-#else
 #define DFS_EVENT_SIZE						6    /* Number of bytes of each DFS event */
-#endif
 #define DFS_EVENT_BUFFER_SIZE				384  /* Number of bytes of a DFS event buffer */
 #define DFS_SW_RADAR_CHECK_LOOP				50
 #define DFS_SW_RADAR_SHIFT          		3
@@ -82,11 +78,7 @@
 #define NEW_DFS_CHANNEL_4				16
 #define NEW_DFS_CHANNEL_5				32
 
-#ifdef MT76x0
-#define NEW_DFS_MAX_CHANNEL			4
-#else
 #define NEW_DFS_MAX_CHANNEL			5
-#endif
 
 #define CE_SW_CHECK						3
 
@@ -136,24 +128,6 @@
 		!(((_DfsEvent).EngineId >= _pAd->chipCap.DfsEngineNum) ||	\
 		 ((_DfsEvent).TimeStamp & 0xffc00000) ||	\
 		 ((_DfsEvent).Width & 0xe000))
-
-#ifdef MT76x0
-#define MT7650_DFS_EVENT_SANITY_CHECK(_pAd, _DfsEvent)	\
-		!(((_DfsEvent).EngineId >= _pAd->chipCap.DfsEngineNum) ||	\
-		 ((_DfsEvent).TimeStamp & 0xffc00000) ||	\
-		 ((_DfsEvent).Width & 0xF000))
-
-#define MT7650_DFS_EVENT_BUFF_PRINT(_StarIdx,  _TableIdx, _BufSize)				\
-{																				\
-	UINT32 __k;																	\
-	for (__k = _StarIdx; __k < _BufSize; __k++)									\
-	{																			\
-		DBGPRINT(RT_DEBUG_TRACE, ("0x%08x ", _TableIdx[__k]));					\
-		if(__k%DFS_EVENT_SIZE == ((DFS_EVENT_SIZE-1+_StarIdx)%DFS_EVENT_SIZE)) 	\
-			DBGPRINT(RT_DEBUG_TRACE, ("\n"));									\
-	}																			\
-}
-#endif /* MT76x0 */
 		 
 #define DFS_EVENT_PRINT(_DfsEvent)		\
 		DBGPRINT(RT_DEBUG_ERROR, ( "EngineId = %u, Timestamp = %u, Width = %u\n",	\
@@ -279,11 +253,6 @@ typedef struct _DFS_EVENT{
 	UINT8  EngineId;
 	UINT32 TimeStamp;
 	UINT16 Width;
-#ifdef MT76x0
-	UINT16 phase;
-	UINT8 power_stable_counter;
-	UINT16 current_power; 
-#endif /* MT76x0 */
 }DFS_EVENT, *PDFS_EVENT;
 
 typedef struct _DFS_SW_DETECT_PARAM{

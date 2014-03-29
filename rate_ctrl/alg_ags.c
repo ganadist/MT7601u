@@ -624,7 +624,7 @@ VOID MlmeDynamicTxRateSwitchingAGS(
 		RTMPZeroMemory(pEntry->TxQuality, (sizeof(USHORT) * (MAX_TX_RATE_INDEX+1)));
 		RTMPZeroMemory(pEntry->PER, (sizeof(UCHAR) * (MAX_TX_RATE_INDEX+1)));
 		
-		pEntry->fLastSecAccordingRSSI = TRUE;
+		pEntry->fLastSecAccordingRSSI = TRUE;			
 		/* reset all OneSecTx counters */
 		RESET_ONE_SEC_TX_CNT(pEntry);
 		return;

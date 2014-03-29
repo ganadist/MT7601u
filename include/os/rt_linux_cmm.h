@@ -204,10 +204,6 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 #define NdisFreeSpinLock						OS_NdisFreeSpinLock
 #define RTMP_SEM_LOCK							OS_SEM_LOCK
 #define RTMP_SEM_UNLOCK							OS_SEM_UNLOCK
-#define RTMP_SPIN_LOCK_IRQ						OS_SPIN_LOCK_IRQ
-#define RTMP_SPIN_UNLOCK_IRQ					OS_SPIN_UNLOCK_IRQ
-#define RTMP_SPIN_LOCK_IRQSAVE					OS_SPIN_LOCK_IRQSAVE
-#define RTMP_SPIN_UNLOCK_IRQRESTORE				OS_SPIN_UNLOCK_IRQRESTORE
 #define RTMP_IRQ_LOCK							OS_IRQ_LOCK
 #define RTMP_IRQ_UNLOCK							OS_IRQ_UNLOCK
 #define RTMP_INT_LOCK							OS_INT_LOCK
@@ -220,7 +216,7 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 
 #define RTMP_SEM_EVENT_INIT_LOCKED(__pSema, __pSemaList)	OS_SEM_EVENT_INIT_LOCKED(__pSema)
 #define RTMP_SEM_EVENT_INIT(__pSema, __pSemaList)			OS_SEM_EVENT_INIT(__pSema)
-#define RTMP_SEM_EVENT_DESTROY					OS_SEM_EVENT_DESTROY
+#define RTMP_SEM_EVENT_DESTORY					OS_SEM_EVENT_DESTORY
 #define RTMP_SEM_EVENT_WAIT						OS_SEM_EVENT_WAIT
 #define RTMP_SEM_EVENT_UP						OS_SEM_EVENT_UP
 
@@ -238,7 +234,7 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 
 #define RTMP_SEM_EVENT_INIT_LOCKED 				RtmpOsSemaInitLocked
 #define RTMP_SEM_EVENT_INIT						RtmpOsSemaInit
-#define RTMP_SEM_EVENT_DESTROY					RtmpOsSemaDestroy
+#define RTMP_SEM_EVENT_DESTORY					RtmpOsSemaDestory
 #define RTMP_SEM_EVENT_WAIT(_pSema, _status)	((_status) = RtmpOsSemaWaitInterruptible((_pSema)))
 #define RTMP_SEM_EVENT_UP						RtmpOsSemaWakeUp
 
@@ -254,8 +250,6 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 #define NdisAllocateSpinLock(__pAd, __pLock)		RtmpOsAllocateLock(__pLock, &(__pAd)->RscLockMemList)
 #define NdisFreeSpinLock							RtmpOsFreeSpinLock
 
-
-
 #define RTMP_SEM_LOCK(__lock)					\
 {												\
 	RtmpOsSpinLockBh(__lock);					\
@@ -265,10 +259,6 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 {												\
 	RtmpOsSpinUnLockBh(__lock);					\
 }
-#define RTMP_SPIN_LOCK_IRQ						RtmpOsSpinLockIrq
-#define RTMP_SPIN_UNLOCK_IRQ					RtmpOsSpinUnlockIrq
-#define RTMP_SPIN_LOCK_IRQSAVE					RtmpOsSpinLockIrqSave
-#define RTMP_SPIN_UNLOCK_IRQRESTORE				RtmpOsSpinUnlockIrqRestore
 
 /* sample, use semaphore lock to replace IRQ lock, 2007/11/15 */
 #ifdef MULTI_CORE_SUPPORT
@@ -298,8 +288,6 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 #define RTMP_INT_LOCK(__Lock, __Flag)	RtmpOsIntLock(__Lock, &__Flag)
 #define RTMP_INT_UNLOCK					RtmpOsIntUnLock
 
-
-
 #define NdisAcquireSpinLock				RTMP_SEM_LOCK
 #define NdisReleaseSpinLock				RTMP_SEM_UNLOCK
 
@@ -316,26 +304,12 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
 #define RTMP_NET_TASK_STRUCT		OS_NET_TASK_STRUCT
 #define PRTMP_NET_TASK_STRUCT		POS_NET_TASK_STRUCT
 
-typedef struct completion RTMP_OS_COMPLETION; 
-
-#define RTMP_OS_INIT_COMPLETION(__pCompletion)	\
-		init_completion(__pCompletion)
-
-#define RTMP_OS_EXIT_COMPLETION(__pCompletion)
-
-#define RTMP_OS_COMPLETE(__pCompletion)	\
-		complete(__pCompletion)
-
-#define RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(__pCompletion, __Timeout)	\
-		wait_for_completion_timeout(__pCompletion, __Timeout)
-
 #ifdef WORKQUEUE_BH	
 #define RTMP_OS_TASKLET_SCHE(__pTasklet)							\
 		schedule_work(__pTasklet)
 #define RTMP_OS_TASKLET_INIT(__pAd, __pTasklet, __pFunc, __Data)	\
 		INIT_WORK((struct work_struct *)__pTasklet, (work_func_t)__pFunc)
-#define RTMP_OS_TASKLET_KILL(__pTasklet) \
-		cancel_work_sync(__pTasklet)
+#define RTMP_OS_TASKLET_KILL(__pTasklet)
 #else
 #define RTMP_OS_TASKLET_SCHE(__pTasklet)							\
 		tasklet_hi_schedule(__pTasklet)
@@ -351,22 +325,8 @@ typedef struct completion RTMP_OS_COMPLETION;
 #else
 
 /* rt_linux_cmm.h */
-typedef OS_RSTRUC RTMP_NET_TASK_STRUCT;
-typedef OS_RSTRUC *PRTMP_NET_TASK_STRUCT;
-typedef OS_RSTRUC RTMP_OS_COMPLETION;
-typedef OS_RSTRUC *PRTMP_OS_COMPLETION;
-
-#define RTMP_OS_INIT_COMPLETION(__pCompletion)	\
-		RtmpOsInitCompletion(__pCompletion)
-
-#define RTMP_OS_EXIT_COMPLETION(__pCompletion)	\
-		RtmpOsExitCompletion(__pCompletion)
-
-#define RTMP_OS_COMPLETE(__pCompletion)	\
-		RtmpOsComplete(__pCompletion)
-
-#define RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(__pCompletion, __Timeout)	\
-		RtmpOsWaitForCompletionTimeout(__pCompletion, __Timeout)
+typedef OS_RSTRUC					RTMP_NET_TASK_STRUCT;
+typedef OS_RSTRUC					*PRTMP_NET_TASK_STRUCT;
 
 #define RTMP_OS_TASKLET_SCHE(__pTasklet)					\
 		RtmpOsTaskletSche(__pTasklet)
@@ -432,7 +392,6 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 #endif /* RTMP_USB_SUPPORT */
 
 #define RTMP_OS_PCI_VENDOR_ID			PCI_VENDOR_ID
-#define RTMP_OS_PCI_DEVICE_ID			PCI_DEVICE_ID
 
 #define ra_dma_addr_t					dma_addr_t
 

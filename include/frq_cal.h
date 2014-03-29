@@ -37,7 +37,7 @@ typedef struct _FREQUENCY_CALIBRATION_CONTROL
 
 	BOOLEAN bSkipFirstFrequencyCalibration; /* Avoid calibrating frequency at the time the STA is just link-up */
 	BOOLEAN bApproachFrequency; /* Approach the frequency */
-	CHAR AdaptiveFreqOffset; /* Adaptive frequency offset */
+	UCHAR AdaptiveFreqOffset; /* Adaptive frequency offset */
 	CHAR LatestFreqOffsetOverBeacon; /* Latest frequency offset from the beacon */
 	CHAR BeaconPhyMode; /* Latest frequency offset from the beacon */
 	
@@ -66,6 +66,23 @@ typedef struct _FREQUENCY_CALIBRATION_CONTROL
 #define LOW_FREQUENCY_TRIGGER_POINT_OFDM		-20
 #define HIGH_FREQUENCY_TRIGGER_POINT_CCK		4
 #define LOW_FREQUENCY_TRIGGER_POINT_CCK		-4
+
+#ifdef MT7601
+#define MT7601_HIGH_FREQUENCY_TRIGGER_POINT_CCK		19
+#define MT7601_LOW_FREQUENCY_TRIGGER_POINT_CCK		-19
+#define MT7601_DECREASE_FREQUENCY_OFFSET_CCK		5
+#define MT7601_INCREASE_FREQUENCY_OFFSET_CCK		-5
+
+#define MT7601_HIGH_FREQUENCY_TRIGGER_POINT_OFDM20		102
+#define MT7601_LOW_FREQUENCY_TRIGGER_POINT_OFDM20		-102
+#define MT7601_DECREASE_FREQUENCY_OFFSET_OFDM20			32
+#define MT7601_INCREASE_FREQUENCY_OFFSET_OFDM20			-32
+
+#define MT7601_HIGH_FREQUENCY_TRIGGER_POINT_OFDM40		82
+#define MT7601_LOW_FREQUENCY_TRIGGER_POINT_OFDM40		-82
+#define MT7601_DECREASE_FREQUENCY_OFFSET_OFDM40			20
+#define MT7601_INCREASE_FREQUENCY_OFFSET_OFDM40			-20
+#endif /* MT7601 */
 
 /* */
 /* The trigger point of decreasng/increasing the frequency offset */

@@ -116,7 +116,7 @@ typedef union _EEPROM_NIC_CINFIG2_STRUC {
 #endif
 
 
-#if defined(BT_COEXISTENCE_SUPPORT) || defined(RT3290) || defined(RT8592)
+#if defined(BT_COEXISTENCE_SUPPORT) || defined(RT3290)
 #ifdef RTMP_USB_SUPPORT
 #ifdef RT_BIG_ENDIAN
 typedef union _EEPROM_NIC_CINFIG3_STRUC {
@@ -141,7 +141,7 @@ typedef union _EEPROM_NIC_CINFIG3_STRUC {
 #endif
 #endif /* RTMP_USB_SUPPORT */
 
-#endif /* defined(BT_COEXISTENCE_SUPPORT) || defined(RT3290) || defined(RT8592) */
+#endif /* defined(BT_COEXISTENCE_SUPPORT) || defined(RT3290) */
 
 
 
@@ -304,6 +304,12 @@ NTSTATUS eFuseWrite(struct _RTMP_ADAPTER *pAd, USHORT Offset, USHORT *pData, USH
 
 INT eFuse_init(struct _RTMP_ADAPTER *pAd);
 INT efuse_probe(struct _RTMP_ADAPTER *pAd);
+
+#ifdef RALINK_ATE
+INT Set_LoadEepromBufferFromEfuse_Proc(
+	IN struct _RTMP_ADAPTER *pAd,
+	IN PSTRING			arg);
+#endif /* RALINK_ATE */
 #endif /* RTMP_EFUSE_SUPPORT */
 
 

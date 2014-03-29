@@ -349,7 +349,7 @@ VOID ChangeToCellPowerLimit(
 }
 
 
-CHAR ConvertToRssi(RTMP_ADAPTER *pAd, CHAR Rssi, UCHAR rssi_idx)
+CHAR ConvertToRssi(RTMP_ADAPTER *pAd, CHAR Rssi, UCHAR rssi_idx, UCHAR AntSel, UCHAR BW)
 {
 	UCHAR	RssiOffset, LNAGain;
 
@@ -364,15 +364,55 @@ CHAR ConvertToRssi(RTMP_ADAPTER *pAd, CHAR Rssi, UCHAR rssi_idx)
 		RssiOffset = pAd->BGRssiOffset[rssi_idx];
 
 #ifdef RT65xx
-	/*
-		Recommended by CSD team:
-		2.4G : RSSI_report = RSSI_bpp + EEPROM_0x46[15:8 or 7:0] - EEPROM_0x44[7:0]
-		5G : RSSI_report = RSSI_bbp + EEPROM_0x4A[15:8 or 7:0] - EEPROM_0x44 or 0x48 or 0x4c[15:8]
-	*/
 	if (IS_RT65XX(pAd))
-		return (Rssi + RssiOffset - LNAGain);
+		return (Rssi - LNAGain - RssiOffset);
 	else
 #endif /* RT65xx */
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+	{
+		CHAR LNA, RSSI;
+		PCHAR LNATable;
+/*
+		CHAR MainBW40LNA[] = { 1, 18, 35 };
+		CHAR MainBW20LNA[] = { 1, 18, 36 };
+		CHAR AuxBW40LNA[] = { 1, 23, 42 };
+		CHAR AuxBW20LNA[] = { 1, 23, 42 };
+*/
+		CHAR MainBW40LNA[] = { 0, 16, 34 };
+		CHAR MainBW20LNA[] = { -2, 15, 33 };
+		CHAR AuxBW40LNA[] = { -2, 16, 34 };
+		CHAR AuxBW20LNA[] = { -2, 15, 33 };
+
+		LNA = (Rssi >> 6) & 0x3;
+		RSSI = Rssi & 0x3F;
+
+		if ( (AntSel >> 7) == 0 )
+		{
+			if (BW == BW_40)
+				LNATable = MainBW40LNA;
+			else
+				LNATable = MainBW20LNA;
+		}
+		else
+		{
+			if (BW == BW_40)
+				LNATable = AuxBW40LNA;
+			else
+				LNATable = AuxBW20LNA;
+		}
+
+		if ( LNA == 3 )
+			LNA = LNATable[2];
+		else if ( LNA == 2 )
+			LNA = LNATable[1];
+		else
+			LNA = LNATable[0];
+
+		return ( 8 - LNA - RSSI - LNAGain - RssiOffset );
+	}
+	else
+#endif /* MT7601 */
 		return (-12 - RssiOffset - LNAGain - Rssi);
 }
 

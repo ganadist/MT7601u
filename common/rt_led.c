@@ -28,24 +28,23 @@
 #include	"rt_config.h"
 
 #ifdef LED_CONTROL_SUPPORT
-
 INT LED_Array[16][12]={
-	{	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1},
-	{ 	0, 	2,  	1,	0,	-1,	-1,	0, 	-1, 	5, 	-1, 	-1, 	17},
-	{	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1, 	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{  	3,  	2,   	-1,	-1,	-1, 	-1, 	16,	1, 	5,	-1, 	-1, 	17},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
-	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1,	-1, 	-1, 	-1, 	-1, 	-1},
-	{ 	1,   	2,	1,	-1,	-1, 	-1,	3, 	-1,	6, 	-1, 	-1,	0},
-	{ 	1,   	2,	1,   	-1, 	-1, 	-1, 	-1,  	1,   	4, 	-1, 	-1, 	18}
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{ 0,   2,     1,    0,   -1,  -1,  0, -1,   5, -1, -1, 17},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{  3,  2,   -1,   -1,   -1, -1, 16,   1,  5,  -1, -1, 17},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{-1, -1,   -1,   -1,   -1, -1, -1, -1, -1, -1, -1, -1},
+	{ 1,   2,     1,   -1,   -1, -1,  3, -1,   6, -1, -1,   0},
+	{ 1,   2,     1,   -1,   -1, -1, -1,  1,   4, -1, -1, 18}
 };
 
 
@@ -102,14 +101,12 @@ VOID RTMPSetLEDStatus(
 
 
 	LedMode = LED_MODE(pAd);
-
-	if (IS_MT76x0(pAd)) {
-		if (LedMode < 0 || Status < 0 || LedMode > 15 || Status > 11)
+	if (LedMode < 0 || Status <0 || LedMode > 15 || Status > 11)
+	{
 			return;
-
-		LED_CMD = LED_Array[LedMode][Status];
 	}
-	
+
+	LED_CMD = LED_Array[LedMode][Status];
 	switch (Status)
 	{
 		case LED_LINK_DOWN:
@@ -153,16 +150,13 @@ VOID RTMPSetLEDStatus(
 			DBGPRINT(RT_DEBUG_WARN, ("RTMPSetLED::Unknown Status 0x%x\n", Status));
 			break;
 	}
-
-	if (IS_MT76x0(pAd)) {
-		if (LED_CMD != -1)
-			andes_led_op(pAd, 0, LED_CMD);
-	} else {
-		if (MCUCmd)
-			AsicSendCommandToMcu(pAd, MCUCmd, 0xff, LedMode, LinkStatus, FALSE);
+	if (LED_CMD != -1)
+	{
+		//AsicSendCommandToMcu(pAd, MCUCmd, 0xff, LedMode, LinkStatus, FALSE);
+		AndesLedOP(pAd, 1, LED_CMD);
+		DBGPRINT(RT_DEBUG_TRACE, ("%s: MCUCmd:0x%x, LED Mode:0x%x, LinkStatus:0x%x\n", __FUNCTION__, MCUCmd, LedMode, LinkStatus)); 
 	}
-	DBGPRINT(RT_DEBUG_TRACE, ("%s: MCUCmd:0x%x, LED Mode:0x%x, LinkStatus:0x%x\n", __FUNCTION__, MCUCmd, LedMode, LinkStatus));
-	
+#endif	
     /* */
 	/* Keep LED status for LED SiteSurvey mode. */
 	/* After SiteSurvey, we will set the LED mode to previous status. */
@@ -249,20 +243,28 @@ void RTMPGetLEDSetting(IN RTMP_ADAPTER *pAd)
 	USHORT Value;
 	PLED_CONTROL pLedCntl = &pAd->LedCntl;
 #ifdef RT65xx
-	if (IS_MT76x0(pAd))
+	if (IS_RT6590(pAd))
 	{
-		// TODO: wait TC6008 EEPROM format
-		RT28xx_EEPROM_READ16(pAd, EEPROM_FREQ_OFFSET, Value);
-		pLedCntl->MCULedCntl.word = (Value >> 8);
-		RT28xx_EEPROM_READ16(pAd, EEPROM_LEDAG_CONF_OFFSET, Value);
-		pLedCntl->LedAGCfg= Value;
-		RT28xx_EEPROM_READ16(pAd, EEPROM_LEDACT_CONF_OFFSET, Value);
-		pLedCntl->LedACTCfg = Value;
-		RT28xx_EEPROM_READ16(pAd, EEPROM_LED_POLARITY_OFFSET, Value);
-		pLedCntl->LedPolarity = Value;
+		; // TODO: wait TC6008 EEPROM format
 	}
 	else
 #endif /* RT65xx */
+#ifdef MT7601
+	if (IS_MT7601(pAd))
+	{
+		; // TODO: wait TC6008 EEPROM format
+		// add  by woody
+		RT28xx_EEPROM_READ16(pAd, EEPROM_FREQ_OFFSET, Value);
+                pLedCntl->MCULedCntl.word = (Value >> 8);
+                RT28xx_EEPROM_READ16(pAd, EEPROM_LEDAG_CONF_OFFSET, Value);
+                pLedCntl->LedAGCfg= Value;
+                RT28xx_EEPROM_READ16(pAd, EEPROM_LEDACT_CONF_OFFSET, Value);
+                pLedCntl->LedACTCfg = Value;
+                RT28xx_EEPROM_READ16(pAd, EEPROM_LED_POLARITY_OFFSET, Value);
+                pLedCntl->LedPolarity = Value;		
+	}
+	else
+#endif /* MT7601 */
 	{
 		RT28xx_EEPROM_READ16(pAd, EEPROM_FREQ_OFFSET, Value);
 		pLedCntl->MCULedCntl.word = (Value >> 8);
@@ -316,4 +318,3 @@ inline void RTMPExitLEDMode(IN RTMP_ADAPTER *pAd)
 	return;
 }
 
-#endif /* LED_CONTROL_SUPPORT */

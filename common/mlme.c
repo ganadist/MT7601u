@@ -44,6 +44,7 @@ UCHAR PRE_N_HT_OUI[]	= {0x00, 0x90, 0x4c};
 #endif /* DOT11_N_SUPPORT */
 #endif /* CONFIG_STA_SUPPORT */
 
+
 UCHAR OfdmRateToRxwiMCS[12] = {
 	0,  0,	0,  0,
 	0,  1,	2,  3,	/* OFDM rate 6,9,12,18 = rxwi mcs 0,1,2,3 */
@@ -242,6 +243,11 @@ NDIS_STATUS MlmeInit(
 
 		/* Init mlme periodic timer*/
 		RTMPInitTimer(pAd, &pAd->Mlme.PeriodicTimer, GET_TIMER_FUNCTION(MlmePeriodicExec), pAd, TRUE);
+
+#ifdef CONFIG_MULTI_CHANNEL
+		pAd->Mlme.StaStayTick = 0;
+		pAd->Mlme.P2pStayTick = 0;
+#endif /* CONFIG_MULTI_CHANNEL */
 
 		/* Set mlme periodic timer*/
 		RTMPSetTimer(&pAd->Mlme.PeriodicTimer, MLME_TASK_EXEC_INTV);
@@ -510,9 +516,9 @@ VOID MlmeHalt(
 #endif /* RTMP_MAC_USB */
 #endif /* LED_CONTROL_SUPPORT */
 
-#if defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
 		if (pAd->WOW_Cfg.bEnable == FALSE)
-#endif /* WOW_SUPPORT */
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
 			if (pChipOps->AsicHaltAction)
 				pChipOps->AsicHaltAction(pAd);
 	}
@@ -568,7 +574,38 @@ VOID MlmePeriodicExec(
 	ULONG			TxTotalCnt;
 	PRTMP_ADAPTER	pAd = (RTMP_ADAPTER *)FunctionContext;
 
+#ifdef MICROWAVE_OVEN_SUPPORT
+	/* update False CCA count to an array */
+	NICUpdateRxStatusCnt1(pAd, pAd->Mlme.PeriodicRound%10);
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
 	/* No More 0x84 MCU CMD from v.30 FW*/
+
+#ifdef MICROWAVE_OVEN_SUPPORT
+	//printk("MO_Cfg.bEnable=%d \n", pAd->CommonCfg.MO_Cfg.bEnable);
+	if (pAd->CommonCfg.MO_Cfg.bEnable)
+	{
+		UINT8 stage = pAd->Mlme.PeriodicRound%10;
+
+		if (stage == MO_MEAS_PERIOD)
+		{
+			ASIC_MEASURE_FALSE_CCA(pAd);
+			pAd->CommonCfg.MO_Cfg.nPeriod_Cnt = 0;
+		}
+		else if (stage == MO_IDLE_PERIOD)
+		{
+			UINT16 Idx;
+
+			for (Idx = MO_MEAS_PERIOD + 1; Idx < MO_IDLE_PERIOD + 1; Idx++)
+				pAd->CommonCfg.MO_Cfg.nFalseCCACnt += pAd->RalinkCounters.FalseCCACnt_100MS[Idx];
+
+			//printk("%s: fales cca1 %d\n", __FUNCTION__, pAd->CommonCfg.MO_Cfg.nFalseCCACnt);
+			if (pAd->CommonCfg.MO_Cfg.nFalseCCACnt > pAd->CommonCfg.MO_Cfg.nFalseCCATh)
+				ASIC_MITIGATE_MICROWAVE(pAd);
+
+		}
+	}
+#endif /* MICROWAVE_OVEN_SUPPORT */
 
 #ifdef INF_AMAZON_SE
 #ifdef RTMP_MAC_USB
@@ -603,19 +640,6 @@ VOID MlmePeriodicExec(
 								fRTMP_ADAPTER_RESET_IN_PROGRESS |
 								fRTMP_ADAPTER_NIC_NOT_EXIST))))
 		return;
-
-	if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP))
-	{
-		//DBGPRINT(RT_DEBUG_TRACE, ("%s(): StartUp not finish yet!\n", __FUNCTION__));
-		return;
-	}
-
-#ifdef CONFIG_FPGA_MODE
-#ifdef CAPTURE_MODE
-	cap_status_chk_and_get(pAd);
-#endif /* CAPTURE_MODE */
-#endif /* CONFIG_FPGA_MODE */
-
 
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
@@ -657,6 +681,37 @@ VOID MlmePeriodicExec(
 	NICUpdateFifoStaCounters(pAd);
 #endif /* RTMP_MAC_USB */
 
+#ifdef CONFIG_MULTI_CHANNEL
+	/*
+		Use StayTicks to call MlmeDynamicTxRateSwitching
+	*/
+	if ((OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED)
+			)
+		&& (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE)))
+	{
+	
+		if (INFRA_ON(pAd) 
+			&& ((pAd->MultiChannelFlowCtl & EDCA_AC0_DEQUEUE_DISABLE) == 0))
+		{
+			pAd->Mlme.StaStayTick++;			
+		}
+
+		if (P2P_CLI_ON(pAd)
+			&& ((pAd->MultiChannelFlowCtl & HCCA_DEQUEUE_DISABLE) == 0))
+		{
+			pAd->Mlme.P2pStayTick++;			
+		}
+
+		if ((pAd->P2pCfg.bStartP2pConnect == FALSE)
+#ifdef CONFIG_MULTI_CHANNEL
+ && (pAd->Multi_Channel_Enable == TRUE)
+#endif /* CONFIG_MULTI_CHANNEL */
+)
+			MlmeDynamicTxRateSwitching(pAd);
+	}
+#endif /* CONFIG_MULTI_CHANNEL */
+
+
 	/* by default, execute every 500ms */
 	if ((pAd->ra_interval) && 
 		((pAd->Mlme.PeriodicRound % (pAd->ra_interval / 100)) == 0) && 
@@ -667,10 +722,15 @@ VOID MlmePeriodicExec(
 		/* perform dynamic tx rate switching based on past TX history*/
 		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 		{
+#ifdef CONFIG_MULTI_CHANNEL
+			if (pAd->Multi_Channel_Enable == FALSE) 
+#endif /* CONFIG_MULTI_CHANNEL */
+			{
 			if ((OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED)
 					)
 				&& (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE)))
 				MlmeDynamicTxRateSwitching(pAd);
+		}
 		}
 #endif /* CONFIG_STA_SUPPORT */
 	}
@@ -678,6 +738,24 @@ VOID MlmePeriodicExec(
 #ifdef DFS_SUPPORT
 #endif /* DFS_SUPPORT */
 
+
+#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
+#ifdef CONFIG_STA_SUPPORT
+	if ((pAd->chipCap.FreqCalibrationSupport) 
+#ifdef CONFIG_MULTI_CHANNEL
+&& (pAd->Multi_Channel_Enable == FALSE)
+#endif /* CONFIG_MULTI_CHANNEL */
+)
+	{
+		if ((pAd->FreqCalibrationCtrl.bEnableFrequencyCalibration == TRUE) && 
+		     (INFRA_ON(pAd)))
+			{
+				FrequencyCalibration(pAd);	
+
+			}
+		}
+#endif /* CONFIG_STA_SUPPORT */
+#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
 
 
 	/* Normal 1 second Mlme PeriodicExec.*/
@@ -693,14 +771,13 @@ VOID MlmePeriodicExec(
 		/* add the most up-to-date h/w raw counters into software variable, so that*/
 		/* the dynamic tuning mechanism below are based on most up-to-date information*/
 		/* Hint: throughput impact is very serious in the function */
-		NICUpdateRawCounters(pAd);
-
-		RTMP_SECOND_CCA_DETECTION(pAd);
+		NICUpdateRawCounters(pAd);																										
 
 #ifdef RTMP_MAC_USB
 #ifndef INF_AMAZON_SE
-		//RTUSBWatchDog(pAd);
-		;
+#ifndef CONFIG_MULTI_CHANNEL
+		RTUSBWatchDog(pAd);
+#endif /* !CONFIG_MULTI_CHANNEL */
 #endif /* INF_AMAZON_SE */
 #endif /* RTMP_MAC_USB */
 
@@ -745,61 +822,13 @@ VOID MlmePeriodicExec(
 	*/
 #endif /* VIDEO_TURBINE_SUPPORT */
 
-#ifdef MT76x0_TSSI_CAL_COMPENSATION
-		if (IS_MT76x0(pAd) &&
-			(pAd->chipCap.bInternalTxALC) &&
-			(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF | fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET) == FALSE))
+#ifdef VCORECAL_SUPPORT
 		{
-			if ((pAd->Mlme.OneSecPeriodicRound % 4) == 0)
-			{
-				/* TSSI compensation */
-				MT76x0_IntTxAlcProcess(pAd);
-			}
-		}
-#endif /* MT76x0_TSSI_CAL_COMPENSATION */
-
-		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF | fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET) == FALSE)
-		{
-			if ((pAd->Mlme.OneSecPeriodicRound % 5) == 0)
-			{
-#ifdef MT76x0
-#ifdef CONFIG_STA_SUPPORT
-				if (IS_MT76x0U(pAd))
-					MT76x0_dynamic_vga_tuning(pAd);
-#endif /* CONFIG_STA_SUPPORT */
-#endif /* MT76x0 */
-			}
-			
 			if ((pAd->Mlme.OneSecPeriodicRound % 10) == 0)
-			{
-#ifdef MT76x0
-				if (IS_MT76x0(pAd) &&
-					pAd->chipCap.bDoTemperatureSensor)
-				{
-					INT32 temperature_diff = 0;
-					/*
-						For temperature sensor
-					*/
-
-					MT76x0_TempSensor(pAd);
-
-					temperature_diff = (pAd->chipCap.NowTemperature - pAd->chipCap.LastTemperatureforVCO);
-					if ((temperature_diff > 20) || 
-						(temperature_diff < (-20)))
-					{						
-						DBGPRINT(RT_DEBUG_OFF, ("%s - Do VCORecalibration again!(LastTemperatureforVCO=%d, NowTemperature = %d)\n", 
-							__FUNCTION__, pAd->chipCap.LastTemperatureforVCO, pAd->chipCap.NowTemperature));
-						pAd->chipCap.LastTemperatureforVCO = pAd->chipCap.NowTemperature;
-						MT76x0_VCO_CalibrationMode3(pAd, pAd->hw_cfg.cent_ch);
-					}
-
-				}
-				else
-#endif /* MT76x0 */
-				{
-				}
-			}
+				AsicVCORecalibration(pAd);
 		}
+#endif /* VCORECAL_SUPPORT */
+
 
 #ifdef CONFIG_STA_SUPPORT
 		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
@@ -808,7 +837,7 @@ VOID MlmePeriodicExec(
 		}
 #endif /* CONFIG_STA_SUPPORT */
 
-		RTMP_SECOND_CCA_DETECTION(pAd);
+
 
 		MlmeResetRalinkCounters(pAd);
 
@@ -816,7 +845,8 @@ VOID MlmePeriodicExec(
 		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 		{
 #ifdef RTMP_MAC_USB
-			if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF))
+			if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF) &&
+				!RTMP_TEST_FLAG(pAd, fRTMP_PS_MCU_SLEEP))
 #endif /* RTMP_MAC_USB */
 			{
 
@@ -844,6 +874,7 @@ VOID MlmePeriodicExec(
 
 		RTMP_MLME_HANDLER(pAd);
 	}
+
 
 
 
@@ -894,6 +925,10 @@ VOID STAMlmePeriodicExec(
 #endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 #endif /* CONFIG_PM */
 
+
+
+
+
 	RTMP_CHIP_HIGH_POWER_TUNING(pAd, &pAd->StaCfg.RssiSample);
 
 #ifdef WPA_SUPPLICANT_SUPPORT
@@ -918,7 +953,6 @@ VOID STAMlmePeriodicExec(
 		)
 	{
 			ASIC_RADIO_OFF(pAd, MLME_RADIO_OFF);
-
 #ifdef CONFIG_PM
 #ifdef USB_SUPPORT_SELECTIVE_SUSPEND	
 			if(!RTMP_Usb_AutoPM_Put_Interface(pObj->pUsb_Dev,pObj->intf))
@@ -939,7 +973,12 @@ VOID STAMlmePeriodicExec(
 	}
 	else
 	{
-    	AsicStaBbpTuning(pAd);
+#ifdef CONFIG_MULTI_CHANNEL
+		if (P2P_CLI_ON(pAd) && (pAd->Multi_Channel_Enable == TRUE))
+			;
+		else
+#endif /*CONFIG_MULTI_CHANNEL*/
+    			AsicStaBbpTuning(pAd);
 	}
 	
 	TxTotalCnt = pAd->RalinkCounters.OneSecTxNoRetryOkCount + 
@@ -976,16 +1015,10 @@ VOID STAMlmePeriodicExec(
 	/* must be AFTER MlmeDynamicTxRateSwitching() because it needs to know if*/
 	/* Radio is currently in noisy environment*/
 	if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS)) 
-		AsicAdjustTxPower(pAd);
-
-#ifndef SINGLE_SKU_V2
-	if (pAd->Mlme.OneSecPeriodicRound % 5 == 0)
-		mt76x0_adjust_per_rate_pwr(pAd);
-#endif /* SINGLE_SKU_V2 */
-
-#ifdef RTMP_TEMPERATURE_TX_ALC
-	mt76x0_temp_tx_alc(pAd);
-#endif /* RTMP_TEMPERATURE_TX_ALC */
+	{
+	AsicAdjustTxPower(pAd);
+	RTMP_CHIP_ASIC_TEMPERATURE_COMPENSATION(pAd);
+	}
 
 	/*
 		Driver needs to up date value of LastOneSecTotalTxCount here;
@@ -1116,9 +1149,6 @@ VOID STAMlmePeriodicExec(
 
 	if (INFRA_ON(pAd))
 	{		
-
-
-
 #ifdef QOS_DLS_SUPPORT
 		/* Check DLS time out, then tear down those session*/
 		RTMPCheckDLSTimeOut(pAd);
@@ -1156,9 +1186,13 @@ VOID STAMlmePeriodicExec(
 		if ((RTMP_TIME_AFTER(pAd->Mlme.Now32, pAd->StaCfg.LastBeaconRxTime + (1*OS_HZ))) &&
 			(!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS)) &&
 			(pAd->StaCfg.bImprovedScan == FALSE) &&
-			((TxTotalCnt + pAd->RalinkCounters.OneSecRxOkCnt) < 600))
+			((TxTotalCnt + pAd->RalinkCounters.OneSecRxOkCnt) < 600)
+#ifdef CONFIG_MULTI_CHANNEL
+				&&(pAd->P2pCfg.bStartP2pConnect != TRUE)
+	                        && (pAd->Multi_Channel_Enable == TRUE)
+#endif /*CONFIG_MULTI_CHANNEL*/
+		)
 		{
-			printk("pAd->PendingRx = %d\n", pAd->PendingRx);
 			RTMPSetAGCInitValue(pAd, BW_20);
 			DBGPRINT(RT_DEBUG_TRACE, ("MMCHK - No BEACON. restore R66 to the low bound(%d) \n", (0x2E + GET_LNA_GAIN(pAd))));
 		}
@@ -1256,7 +1290,12 @@ VOID STAMlmePeriodicExec(
 
         /*if ((pAd->RalinkCounters.OneSecTxNoRetryOkCount == 0) &&*/
         /*    (pAd->RalinkCounters.OneSecTxRetryOkCount == 0))*/
-       if ((!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS)))
+#ifdef CONFIG_MULTI_CHANNEL
+	if (INFRA_ON(pAd) && (P2P_CLI_ON(pAd) | P2P_GO_ON(pAd)) && (pAd->Multi_Channel_Enable == TRUE))
+		; /* Doesn't need to send null frame in this case. */
+	else
+#endif /* CONFIG_MULTI_CHANNEL */
+       if ((!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS)) )
         {
     		if (pAd->StaCfg.UapsdInfo.bAPSDCapable && pAd->CommonCfg.APEdcaParm.bAPSDCapable)
     		{
@@ -1271,15 +1310,40 @@ VOID STAMlmePeriodicExec(
     		    /* Send out a NULL frame every 10 sec to inform AP that STA is still alive (Avoid being age out)*/
     			if ((pAd->Mlme.OneSecPeriodicRound % 10) == 8)
 			{
-				RTMPSendNullFrame(pAd, 
-								  pAd->CommonCfg.TxRate, 
-								  (pAd->CommonCfg.bWmmCapable & pAd->CommonCfg.APEdcaParm.bValid),
-								  pAd->CommonCfg.bAPSDForcePowerSave ? PWR_SAVE : pAd->StaCfg.Psm);
+
+				if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF))
+				{
+#ifdef CONFIG_MULTI_CHANNEL
+				if(INFRA_ON(pAd) && (pAd->Multi_Channel_Enable == TRUE))		
+#endif /* CONFIG_MULTI_CHANNEL */
+					RTMPSendNullFrame(pAd, 
+									  pAd->CommonCfg.TxRate, 
+									  (pAd->CommonCfg.bWmmCapable & pAd->CommonCfg.APEdcaParm.bValid),
+									  pAd->CommonCfg.bAPSDForcePowerSave ? PWR_SAVE : pAd->StaCfg.Psm);
+#ifdef CONFIG_MULTI_CHANNEL
+				if( (P2P_CLI_ON(pAd)) && (pAd->Multi_Channel_Enable == TRUE))
+					RTMPP2PSendNullFrame(pAd, 
+									pAd->CommonCfg.TxRate, 
+									(OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_WMM_INUSED) ? TRUE:FALSE),
+									pAd->CommonCfg.bAPSDForcePowerSave ? PWR_SAVE : pAd->StaCfg.Psm);
+#endif /* CONFIG_MULTI_CHANNEL */
+
+				}
+				else
+				{
+					pAd->Mlme.bSendNullFrameAfterWareUp = TRUE;
+				}
 			}
     		}
         }
 
-		if (CQI_IS_DEAD(pAd->Mlme.ChannelQuality))
+		if (CQI_IS_DEAD(pAd->Mlme.ChannelQuality)
+#ifdef CONFIG_MULTI_CHANNEL
+			&& (pWscControl->bWscTrigger == FALSE)
+			&& (!pAd->P2pCfg.bStartP2pConnect)
+			&& (pAd->Multi_Channel_Enable == TRUE)
+#endif /*CONFIG_MULTI_CHANNEL*/
+		)
 			{
 			DBGPRINT(RT_DEBUG_TRACE, ("MMCHK - No BEACON. Dead CQI. Auto Recovery attempt #%ld\n", pAd->RalinkCounters.BadCQIAutoRecoveryCount));
 
@@ -1300,7 +1364,13 @@ VOID STAMlmePeriodicExec(
 			/* RTMPPatchMacBbpBug(pAd);*/
 			MlmeAutoReconnectLastSSID(pAd);
 		}
-		else if (CQI_IS_BAD(pAd->Mlme.ChannelQuality))
+		else if (CQI_IS_BAD(pAd->Mlme.ChannelQuality)
+#ifdef CONFIG_MULTI_CHANNEL
+			&& (pWscControl->bWscTrigger == FALSE)
+			&& (!pAd->P2pCfg.bStartP2pConnect)
+			&& (pAd->Multi_Channel_Enable == TRUE)
+#endif /*CONFIG_MULTI_CHANNEL*/
+		)
 		{
 			pAd->RalinkCounters.BadCQIAutoRecoveryCount ++;
 			DBGPRINT(RT_DEBUG_TRACE, ("MMCHK - Bad CQI. Auto Recovery attempt #%ld\n", pAd->RalinkCounters.BadCQIAutoRecoveryCount));
@@ -1539,6 +1609,19 @@ VOID MlmeAutoScan(
 VOID MlmeAutoReconnectLastSSID(
 	IN PRTMP_ADAPTER pAd)
 {
+#ifdef CONFIG_MULTI_CHANNEL
+	if ((pAd->P2pCfg.bStartP2pConnect) && (pAd->Multi_Channel_Enable == TRUE))
+		return;
+
+
+	if ((pAd->StaCfg.ReConnectCountDown != 0 ) && (pAd->Multi_Channel_Enable == TRUE))
+	{
+		pAd->StaCfg.ReConnectCountDown--;
+		return;			
+	}		
+#endif /*CONFIG_MULTI_CHANNEL*/	
+
+
 	if (pAd->StaCfg.bAutoConnectByBssid)
 	{	
 		DBGPRINT(RT_DEBUG_TRACE, ("Driver auto reconnect to last OID_802_11_BSSID setting - %02X:%02X:%02X:%02X:%02X:%02X\n",
@@ -1564,7 +1647,6 @@ VOID MlmeAutoReconnectLastSSID(
 		NdisMoveMemory(OidSsid.Ssid, pAd->MlmeAux.AutoReconnectSsid, pAd->MlmeAux.AutoReconnectSsidLen);
 
 		DBGPRINT(RT_DEBUG_TRACE, ("Driver auto reconnect to last OID_802_11_SSID setting - %s, len - %d\n", pAd->MlmeAux.AutoReconnectSsid, pAd->MlmeAux.AutoReconnectSsidLen));
-		
 		MlmeEnqueue(pAd, 
 					MLME_CNTL_STATE_MACHINE, 
 					OID_802_11_SSID, 
@@ -3009,11 +3091,6 @@ ULONG BssTableSetEntry(
 	IN PNDIS_802_11_VARIABLE_IEs pVIE)
 {
 	ULONG	Idx;
-#ifdef APCLI_SUPPORT
-	BOOLEAN bInsert = FALSE;
-	PAPCLI_STRUCT pApCliEntry = NULL;
-	UCHAR i;
-#endif /* APCLI_SUPPORT */
 
 
 	Idx = BssTableSearch(Tab, ie_list->Bssid, ie_list->Channel);
@@ -3026,25 +3103,14 @@ ULONG BssTableSetEntry(
 				The desired AP will not be added into BSS Table
 				In this case, if we found the desired AP then overwrite BSS Table.
 			*/
-#ifdef APCLI_SUPPORT
-			for (i = 0; i < pAd->ApCfg.ApCliNum; i++)
-			{
-				pApCliEntry = &pAd->ApCfg.ApCliTab[i];
-				if (MAC_ADDR_EQUAL(pApCliEntry->ApCliMlmeAux.Bssid, ie_list->Bssid)
-					|| SSID_EQUAL(pApCliEntry->ApCliMlmeAux.Ssid, pApCliEntry->ApCliMlmeAux.SsidLen, ie_list->Ssid, ie_list->SsidLen))
-				{
-					bInsert = TRUE;
-					break;
-				}
-			}
-#endif /* APCLI_SUPPORT */
 			if(!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) ||
 				!OPSTATUS_TEST_FLAG(pAd, fOP_AP_STATUS_MEDIA_STATE_CONNECTED))
 			{
 				if (MAC_ADDR_EQUAL(pAd->MlmeAux.Bssid, ie_list->Bssid) ||
 					SSID_EQUAL(pAd->MlmeAux.Ssid, pAd->MlmeAux.SsidLen, ie_list->Ssid, ie_list->SsidLen)
 #ifdef APCLI_SUPPORT
-					|| bInsert
+					|| MAC_ADDR_EQUAL(pAd->ApCliMlmeAux.Bssid, ie_list->Bssid)
+					|| SSID_EQUAL(pAd->ApCliMlmeAux.Ssid, pAd->ApCliMlmeAux.SsidLen, ie_list->Ssid, ie_list->SsidLen)
 #endif /* APCLI_SUPPORT */
 					)
 				{
@@ -3188,7 +3254,7 @@ VOID BssTableSsidSort(
 			BSS_ENTRY *pOutBss = &OutTab->BssEntry[OutTab->BssNr];
 
 #ifdef WPA_SUPPLICANT_SUPPORT
-			if (pAd->StaCfg.WpaSupplicantUP & 0x80)
+			if (pAd->StaCfg.WpaSupplicantUP & WPA_SUPPLICANT_ENABLE_WPS)
 			{
 				/* copy matching BSS from InTab to OutTab*/
 				NdisMoveMemory(pOutBss, pInBss, sizeof(BSS_ENTRY));
@@ -4007,6 +4073,7 @@ BOOLEAN MlmeEnqueueForRecv(
 	IN UCHAR Rssi0, 
 	IN UCHAR Rssi1, 
 	IN UCHAR Rssi2, 
+	IN UCHAR AntSel, 
 	IN ULONG MsgLen, 
 	IN VOID *Msg,
 	IN UCHAR Signal,
@@ -4043,7 +4110,6 @@ BOOLEAN MlmeEnqueueForRecv(
 		return FALSE;
 	}
 
-
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
@@ -4074,6 +4140,7 @@ BOOLEAN MlmeEnqueueForRecv(
 	Queue->Entry[Tail].Rssi0 = Rssi0;
 	Queue->Entry[Tail].Rssi1 = Rssi1;
 	Queue->Entry[Tail].Rssi2 = Rssi2;
+	Queue->Entry[Tail].AntSel = AntSel;
 	Queue->Entry[Tail].Signal = Signal;
 	Queue->Entry[Tail].Wcid = (UCHAR)Wcid;
 	Queue->Entry[Tail].OpMode = (ULONG)OpMode;
@@ -5131,7 +5198,7 @@ VOID AsicRxAntEvalTimeout(
 {
 	RTMP_ADAPTER	*pAd = (RTMP_ADAPTER *)FunctionContext;
 #ifdef CONFIG_STA_SUPPORT
-	CHAR			larger = -127, rssi0, rssi1, rssi2;
+	CHAR			larger = -127, rssi0, rssi1, rssi2, rssi_diff;
 #endif /* CONFIG_STA_SUPPORT */
 
 
@@ -5524,4 +5591,230 @@ BOOLEAN CHAN_PropertyCheck(
 }
 
 
+
+
+#ifdef ED_MONITOR
+static INT ed_tx_stop_start(RTMP_ADAPTER *pAd, BOOLEAN stop)
+{
+	UINT32 macCfg, macStatus;
+	UINT32 MTxCycle;
+	ULONG stTime, mt_time;
+
+	/* Disable MAC Tx and wait MAC Tx/Rx status in idle state or direcyl enable tx */
+	NdisGetSystemUpTime(&stTime);
+	RTMP_IO_READ32(pAd, MAC_SYS_CTRL, &macCfg);
+	if (stop == TRUE)
+		macCfg &= (~0x04);
+	else
+		macCfg |= 0x04;
+	RTMP_IO_WRITE32(pAd, MAC_SYS_CTRL, macCfg);
+			
+	if (stop == TRUE)
+	{
+		for (MTxCycle = 0; MTxCycle < 10000; MTxCycle++)
+		{
+			RTMP_IO_READ32(pAd, MAC_STATUS_CFG, &macStatus);
+			if (macStatus & 0x1)
+				RTMPusecDelay(50);
+			else
+				break;
+		}
+		NdisGetSystemUpTime(&mt_time);
+		mt_time -= stTime;
+		if (MTxCycle == 10000)
+		{
+			DBGPRINT(RT_DEBUG_OFF, ("%s(cnt=%d,time=0x%lx):stop MTx,macStatus=0x%x!\n", 
+				__FUNCTION__, MTxCycle, mt_time, macStatus));
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_OFF, ("%s():%s tx\n", 
+				__FUNCTION__, ((stop == TRUE) ? "stop" : "start")));
+
+	show_ed_stat_proc(pAd, NULL);
+	return TRUE;
+}
+
+
+static INT ed_status_read(RTMP_ADAPTER *pAd)
+{
+	UINT32 period_us = pAd->ed_chk_period * 1000;
+	ULONG irqflag;
+	INT percent;
+	RX_STA_CNT1_STRUC RxStaCnt1;
+	UINT32 ed_2nd_stat = 0;
+	
+	RTMP_IRQ_LOCK(&pAd->irq_lock, irqflag);
+	// TODO: check with DFS case!
+	RTMP_IO_READ32(pAd, CH_IDLE_STA, &pAd->ch_idle_stat[pAd->ed_stat_lidx]);
+	RTMP_IO_READ32(pAd, CH_BUSY_STA, &pAd->ch_busy_stat[pAd->ed_stat_lidx]);
+	RTMP_IO_READ32(pAd, CH_BUSY_STA_SEC, &ed_2nd_stat);
+	pAd->ed_2nd_stat[pAd->ed_stat_lidx] += ed_2nd_stat;
+	RTMP_IO_READ32(pAd, 0x1140, &pAd->ed_stat[pAd->ed_stat_lidx]);
+
+	// TODO: remove this!
+	RTMP_IO_READ32(pAd, RX_STA_CNT1, &RxStaCnt1.word);
+	pAd->false_cca_stat[pAd->ed_stat_lidx] += RxStaCnt1.field.FalseCca;
+	pAd->RalinkCounters.OneSecFalseCCACnt += RxStaCnt1.field.FalseCca;
+			
+	NdisGetSystemUpTime(&pAd->chk_time[pAd->ed_stat_lidx]);
+	
+	if ((pAd->ed_threshold > 0) && (period_us > 0) && (pAd->ed_block_tx_threshold >= 0)) {
+		percent = (pAd->ed_stat[pAd->ed_stat_lidx] * 100 ) / period_us;
+		if (percent > 100)
+			percent = 100;
+
+		if ((percent >= pAd->ed_threshold) && 
+			(pAd->false_cca_stat[pAd->ed_stat_lidx] >= pAd->false_cca_threshold)) 
+		{
+			pAd->ed_trigger_cnt++;
+			pAd->ed_silent_cnt = 0;
+		}
+		else
+		{
+			pAd->ed_trigger_cnt = 0;
+			pAd->ed_silent_cnt++;
+		}
+	}
+	pAd->ed_trigger_stat[pAd->ed_stat_lidx] = pAd->ed_trigger_cnt;
+	pAd->ed_silent_stat[pAd->ed_stat_lidx] = pAd->ed_silent_cnt;
+
+	INC_RING_INDEX(pAd->ed_stat_lidx, ED_STAT_CNT);
+	pAd->false_cca_stat[pAd->ed_stat_lidx] = 0;
+	pAd->tx_cnt[pAd->ed_stat_lidx] = 0;
+	pAd->rx_cnt[pAd->ed_stat_lidx] = 0;
+	pAd->ed_2nd_stat[pAd->ed_stat_lidx] = 0;
+	if (pAd->ed_stat_sidx == pAd->ed_stat_lidx) {
+		INC_RING_INDEX(pAd->ed_stat_sidx, ED_STAT_CNT);
+	}
+	RTMP_IRQ_UNLOCK(&pAd->irq_lock, irqflag);
+
+	if (pAd->ed_trigger_cnt > pAd->ed_block_tx_threshold) {
+		if (pAd->ed_tx_stoped == FALSE) {
+			ed_tx_stop_start(pAd, TRUE);
+			pAd->ed_tx_stoped = TRUE;
+		}
+	}
+
+	if (pAd->ed_silent_cnt > pAd->ed_block_tx_threshold) {
+		if (pAd->ed_tx_stoped == TRUE) {
+			ed_tx_stop_start(pAd, FALSE);
+			pAd->ed_tx_stoped = FALSE;
+		}
+	}
+	
+	return TRUE;
+}
+
+
+static INT asic_set_ed_cca(RTMP_ADAPTER *pAd, BOOLEAN enable)
+{
+#ifdef MT7601
+	if (IS_MT7601(pAd))
+		return MT7601_set_ed_cca(pAd, enable);
+#endif /* MT7601 */
+	return FALSE;
+}
+
+
+static VOID ed_time_out(
+	IN PVOID SystemSpecific1, 
+	IN PVOID FunctionContext, 
+	IN PVOID SystemSpecific2, 
+	IN PVOID SystemSpecific3)
+{
+	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)FunctionContext;
+
+	if (pAd->ed_chk) {
+		ed_status_read(pAd);
+		RTMPSetTimer(&pAd->ed_timer, pAd->ed_chk_period);
+	}
+
+	return;
+}
+
+
+DECLARE_TIMER_FUNCTION(ed_time_out);
+BUILD_TIMER_FUNCTION(ed_time_out);
+
+
+INT ed_monitor_exit(RTMP_ADAPTER *pAd)
+{
+	BOOLEAN Cancelled;
+	ULONG irqflag;
+
+	RTMP_IRQ_LOCK(&pAd->irq_lock, irqflag);
+
+	NdisZeroMemory(&pAd->ed_stat[0], sizeof(pAd->ed_stat));
+	NdisZeroMemory(&pAd->ch_idle_stat[0], sizeof(pAd->ch_idle_stat));
+	NdisZeroMemory(&pAd->ch_busy_stat[0], sizeof(pAd->ch_busy_stat));
+	NdisZeroMemory(&pAd->chk_time[0], sizeof(pAd->chk_time));
+	NdisZeroMemory(&pAd->ed_trigger_stat[0], sizeof(pAd->ed_trigger_stat));
+	NdisZeroMemory(&pAd->ed_silent_stat[0], sizeof(pAd->ed_silent_stat));
+	NdisZeroMemory(&pAd->false_cca_stat[0], sizeof(pAd->false_cca_stat));
+	NdisZeroMemory(&pAd->tx_cnt[0], sizeof(pAd->tx_cnt));
+	NdisZeroMemory(&pAd->rx_cnt[0], sizeof(pAd->rx_cnt));
+
+	pAd->ed_stat_lidx = pAd->ed_stat_sidx = 0;
+	pAd->ed_trigger_cnt = 0;
+	pAd->ed_silent_cnt = 0;
+	pAd->ed_tx_stoped = FALSE;
+	RTMP_IRQ_UNLOCK(&pAd->irq_lock, irqflag);
+
+	if (pAd->ed_timer_inited) {
+		RTMPCancelTimer(&pAd->ed_timer, &Cancelled);
+	}
+
+	ed_tx_stop_start(pAd, FALSE);
+
+	return TRUE;
+}
+
+
+INT ed_monitor_init(RTMP_ADAPTER *pAd)
+{
+	ULONG irqflag;
+	BOOLEAN Cancelled = FALSE;
+
+	DBGPRINT(RT_DEBUG_OFF, ("-->%s(), pAd->ed_chk=%d, pAd->ed_timer_inited=%d\n", 
+			__FUNCTION__, pAd->ed_chk, pAd->ed_timer_inited));
+
+	if (pAd->ed_chk)
+	{
+		RTMP_IRQ_LOCK(&pAd->irq_lock, irqflag);
+
+		NdisZeroMemory(&pAd->ed_stat[0], sizeof(pAd->ed_stat));
+		NdisZeroMemory(&pAd->ch_idle_stat[0], sizeof(pAd->ch_idle_stat));
+		NdisZeroMemory(&pAd->ch_busy_stat[0], sizeof(pAd->ch_busy_stat));
+		NdisZeroMemory(&pAd->chk_time[0], sizeof(pAd->chk_time));
+		NdisZeroMemory(&pAd->ed_trigger_stat[0], sizeof(pAd->ed_trigger_stat));
+		NdisZeroMemory(&pAd->ed_silent_stat[0], sizeof(pAd->ed_silent_stat));
+		NdisZeroMemory(&pAd->false_cca_stat[0], sizeof(pAd->false_cca_stat));
+		NdisZeroMemory(&pAd->tx_cnt[0], sizeof(pAd->tx_cnt));
+		NdisZeroMemory(&pAd->rx_cnt[0], sizeof(pAd->rx_cnt));
+		
+		pAd->ed_stat_lidx = pAd->ed_stat_sidx = 0;
+		pAd->ed_trigger_cnt = 0;
+		pAd->ed_silent_cnt = 0;
+		pAd->ed_tx_stoped = FALSE;
+		RTMP_IRQ_UNLOCK(&pAd->irq_lock, irqflag);
+
+		asic_set_ed_cca(pAd, TRUE);
+		
+		RTMPInitTimer(pAd, &pAd->ed_timer, GET_TIMER_FUNCTION(ed_time_out), pAd, FALSE);
+		pAd->ed_timer_inited = TRUE;
+		RTMPSetTimer(&pAd->ed_timer, pAd->ed_chk_period);
+	}
+	else
+	{
+		asic_set_ed_cca(pAd, FALSE);
+		if (pAd->ed_timer_inited) {
+			RTMPCancelTimer(&pAd->ed_timer, &Cancelled);
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_OFF, ("<--%s()\n", __FUNCTION__));
+	return TRUE;
+}
+#endif /* ED_MONITOR */
 

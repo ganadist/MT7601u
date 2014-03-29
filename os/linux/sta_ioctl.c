@@ -106,6 +106,11 @@ struct iw_priv_args privtab[] = {
 { RTPRIV_IOCTL_MAC,
   IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | 1024,
   "mac"},  
+#if defined(RLT_RF) || defined(RTMP_RF_RW_SUPPORT)
+{ RTPRIV_IOCTL_RF,
+  IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
+  "rf"},
+#endif /* RTMP_RF_RW_SUPPORT */
 { RTPRIV_IOCTL_E2P,
   IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | 1024,
   "e2p"},
@@ -857,9 +862,9 @@ int rt_ioctl_giwscan(struct net_device *dev,
 		if (pBssEntry->Channel>14)
 		{
 			if (pBssEntry->HtCapabilityLen!=0)
-				strcpy(iwe.u.name,"802.11a/n");
+				strcpy(iwe.u.name,"11a/n");
 			else	
-				strcpy(iwe.u.name,"802.11a");
+				strcpy(iwe.u.name,"11a");
 		}
 		else
 		{
@@ -885,23 +890,29 @@ int rt_ioctl_giwscan(struct net_device *dev,
 			if (pBssEntry->HtCapabilityLen!=0)
 			{
 				if (isGonly==TRUE)
-					strcpy(iwe.u.name,"802.11g/n");
+					strcpy(iwe.u.name,"11g/n");
 				else
-					strcpy(iwe.u.name,"802.11b/g/n");
+					strcpy(iwe.u.name,"11b/g/n");
 			}
 			else
 			{
 				if (isGonly==TRUE)
-					strcpy(iwe.u.name,"802.11g");
+					strcpy(iwe.u.name,"11g");
 				else
 				{
 					if (pBssEntry->SupRateLen==4 && pBssEntry->ExtRateLen==0)
-						strcpy(iwe.u.name,"802.11b");
+						strcpy(iwe.u.name,"11b");
 					else
-						strcpy(iwe.u.name,"802.11b/g");		
+						strcpy(iwe.u.name,"11b/g");		
 				}
 			}
 		}
+		
+		if ( pBssEntry->ChannelWidth ==  1 )
+			sprintf(iwe.u.name, "%s %s", iwe.u.name, "BW40");
+		else
+			sprintf(iwe.u.name, "%s %s", iwe.u.name, "BW20");
+		
 	}
 
 		previous_ev = current_ev;
@@ -1054,6 +1065,7 @@ int rt_ioctl_giwscan(struct net_device *dev,
 				UCHAR tmpSupRate =(pIoctlScan->pBssTable[i].SupRate[pIoctlScan->pBssTable[i].SupRateLen-1]& 0x7f);
 				UCHAR tmpExtRate =(pIoctlScan->pBssTable[i].ExtRate[pIoctlScan->pBssTable[i].ExtRateLen-1]& 0x7f);
 				iwe.u.bitrate.value = (tmpSupRate > tmpExtRate) ? (tmpSupRate)*500000 : (tmpExtRate)*500000;	
+				tmpRate = (tmpSupRate > tmpExtRate)? tmpSupRate:tmpExtRate;
 			}
 
 			if (tmpRate == 0x6c && pIoctlScan->pBssTable[i].HtCapabilityLen > 0)
@@ -1863,6 +1875,11 @@ int rt_ioctl_siwauth(struct net_device *dev,
 			pIoctlWpa->flags = RT_CMD_STA_IOCTL_WPA_AUTH_WPA_ENABLED;
     		DBGPRINT(RT_DEBUG_TRACE, ("%s::IW_AUTH_WPA_ENABLED - Driver supports WPA!(param->value = %d)\n", __FUNCTION__, param->value));
     		break;
+	case IW_AUTH_TKIP_COUNTERMEASURES:
+		pIoctlWpa->flags = RT_CMD_STA_IOCTL_WPA_AUTH_COUNTERMEASURES;
+		pIoctlWpa->value = param->value;
+    		DBGPRINT(RT_DEBUG_TRACE, ("%s::IW_AUTH_TKIP_COUNTERMEASURES -(param->value = %d)\n", __FUNCTION__, param->value));
+		break;
     	default:
     		return -EOPNOTSUPP;
 }
@@ -2327,7 +2344,7 @@ static const iw_handler rt_priv_handlers[] = {
 	(iw_handler) NULL, /* + 0x00 */
 	(iw_handler) NULL, /* + 0x01 */
 	(iw_handler) rt_ioctl_setparam, /* + 0x02 */
-#ifdef DBG
+#ifdef DBG	
 	(iw_handler) rt_private_ioctl_bbp, /* + 0x03 */	
 #else
 	(iw_handler) NULL, /* + 0x03 */
@@ -2612,6 +2629,11 @@ INT rt28xx_sta_ioctl(
 			RTMP_STA_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_E2P, 0,
 								NULL, 0, RT_DEV_PRIV_FLAGS_GET(net_dev));
 /*			RTMPIoctlE2PROM(pAd, wrq); */
+			break;
+		case RTPRIV_IOCTL_RF:
+			RTMP_STA_IoctlHandle(pAd, wrq, CMD_RTPRIV_IOCTL_RF, 0,
+								NULL, 0, RT_DEV_PRIV_FLAGS_GET(net_dev));
+/*			RTMPIoctlRF(pAd, wrq); */
 			break;
 #endif /* DBG */
 

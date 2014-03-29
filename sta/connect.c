@@ -165,6 +165,9 @@ VOID MlmeCntlMachinePerformAction(
 
 			if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) && (INFRA_ON(pAd)) 
 				&& ((pAd->LatchRfRegs.Channel == pAd->CommonCfg.Channel) ||(pAd->LatchRfRegs.Channel == pAd->CommonCfg.CentralChannel))
+#ifdef CONFIG_MULTI_CHANNEL
+				&& (pAd->Multi_Channel_Enable == FALSE)
+#endif /* CONFIG_MULTI_CHANNEL */
 )
 			{
 				RTMPSendNullFrame(pAd, 
@@ -180,6 +183,8 @@ VOID MlmeCntlMachinePerformAction(
 
 			}
 			
+
+
 #ifdef LED_CONTROL_SUPPORT
 			/* */
 			/* Set LED status to previous status. */
@@ -538,6 +543,16 @@ VOID CntlOidSsidProc(
 		MlmeEnqueue(pAd, ASSOC_STATE_MACHINE, MT2_MLME_DISASSOC_REQ,
 			    sizeof (MLME_DISASSOC_REQ_STRUCT), &DisassocReq, 0);
 		pAd->Mlme.CntlMachine.CurrState = CNTL_WAIT_DISASSOC;
+
+#ifdef CONFIG_MULTI_CHANNEL
+	if (P2P_CLI_ON(pAd) && (pAd->Multi_Channel_Enable == TRUE))
+	{	
+		DBGPRINT(RT_DEBUG_TRACE,
+				 ("disassociate with current AP and P2P_CLI_ON set pAd->StaCfg.bAutoReconnect = TRUE\n"));
+		pAd->StaCfg.bAutoReconnect = TRUE;
+	}
+#endif /*CONFIG_MULTI_CHANNEL*/
+
 	} else {
 		if (ADHOC_ON(pAd)) {
 			DBGPRINT(RT_DEBUG_TRACE,
@@ -650,6 +665,10 @@ VOID CntlOidRTBssidProc(
 #ifdef WPA_SUPPLICANT_SUPPORT
 	if (pAd->StaCfg.WpaSupplicantUP & WPA_SUPPLICANT_ENABLE_WPS) ;
 	else
+#ifdef NATIVE_WPA_SUPPLICANT_SUPPORT
+	if (pAd->StaCfg.WpaSupplicantUP & WPA_SUPPLICANT_ENABLE) ;
+	else
+#endif /* NATIVE_WPA_SUPPLICANT_SUPPORT */
 #endif /* WPA_SUPPLICANT_SUPPORT */
 	if (
 		(BssIdx != BSS_NOT_FOUND))
@@ -1101,9 +1120,14 @@ VOID CntlWaitJoinProc(
 			else
 			{
 				{
+#ifdef WEPAUTO_OPEN_FIRST
+					/* Only Ndis802_11AuthModeShared try shared key first, Ndis802_11AuthModeAutoSwitch use open first */
+					if (pAd->StaCfg.AuthMode == Ndis802_11AuthModeShared)
+#else
 					/* either Ndis802_11AuthModeShared or Ndis802_11AuthModeAutoSwitch, try shared key first */
 					if ((pAd->StaCfg.AuthMode == Ndis802_11AuthModeShared)
 					    || (pAd->StaCfg.AuthMode == Ndis802_11AuthModeAutoSwitch))
+#endif
 					{
 						AuthParmFill(pAd, &AuthReq,
 							     pAd->MlmeAux.Bssid,
@@ -1271,10 +1295,15 @@ VOID CntlWaitAuthProc(
 			DBGPRINT(RT_DEBUG_TRACE,
 				 ("CNTL - AUTH FAIL, try again...\n"));
 			{
+#ifdef WEPAUTO_OPEN_FIRST
+				/* Only Ndis802_11AuthModeShared try shared key first, Ndis802_11AuthModeAutoSwitch use open first */
+				if (pAd->StaCfg.AuthMode == Ndis802_11AuthModeShared)
+#else
+				/* either Ndis802_11AuthModeShared or Ndis802_11AuthModeAutoSwitch, try shared key first */
 				if ((pAd->StaCfg.AuthMode == Ndis802_11AuthModeShared)
 				    || (pAd->StaCfg.AuthMode == Ndis802_11AuthModeAutoSwitch))
+#endif				
 				{
-					/* either Ndis802_11AuthModeShared or Ndis802_11AuthModeAutoSwitch, try shared key first */
 					AuthParmFill(pAd, &AuthReq,
 						     pAd->MlmeAux.Bssid,
 						     AUTH_MODE_KEY);
@@ -1329,12 +1358,22 @@ VOID CntlWaitAuthProc2(
 		}
 		else
 		{
+
+#ifdef WEPAUTO_OPEN_FIRST
+			if ((pAd->StaCfg.AuthMode == Ndis802_11AuthModeAutoSwitch)
+				    && (pAd->MlmeAux.Alg == Ndis802_11AuthModeOpen)) {
+				DBGPRINT(RT_DEBUG_TRACE,
+					 ("CNTL - AUTH OPEN FAIL, try SHARE system...\n"));
+				AuthParmFill(pAd, &AuthReq, pAd->MlmeAux.Bssid,
+					     Ndis802_11AuthModeShared);
+#else
 			if ((pAd->StaCfg.AuthMode == Ndis802_11AuthModeAutoSwitch)
 				    && (pAd->MlmeAux.Alg == Ndis802_11AuthModeShared)) {
 				DBGPRINT(RT_DEBUG_TRACE,
 					 ("CNTL - AUTH FAIL, try OPEN system...\n"));
 				AuthParmFill(pAd, &AuthReq, pAd->MlmeAux.Bssid,
 					     Ndis802_11AuthModeOpen);
+#endif
 				MlmeEnqueue(pAd, AUTH_STATE_MACHINE,
 					    MT2_MLME_AUTH_REQ,
 					    sizeof (MLME_AUTH_REQ_STRUCT),
@@ -1547,6 +1586,13 @@ VOID LinkUp(
 		  BssType, pAd->StaActive.Aid, pAd->CommonCfg.Ssid,
 		  pAd->CommonCfg.Channel, pAd->CommonCfg.CentralChannel));
 
+#ifdef CONFIG_MULTI_CHANNEL
+	if (pAd->StaCfg.BW == BW_20)
+	{
+		pAd->CommonCfg.CentralChannel = pAd->CommonCfg.Channel;
+	}
+#endif /* CONFIG_MULTI_CHANNEL */
+
 #ifdef DOT11_N_SUPPORT
 	DBGPRINT(RT_DEBUG_TRACE, ("!!! LINK UP !!! (Density =%d, )\n", pAd->MacTab.Content[BSSID_WCID].MpduDensity));
 #endif /* DOT11_N_SUPPORT */
@@ -1632,8 +1678,8 @@ VOID LinkUp(
 
 		/* In ad hoc mode, use MAC table from index 1. */
 		/* p.s ASIC use all 0xff as termination of WCID table search.To prevent it's 0xff-ff-ff-ff-ff-ff, Write 0 here. */
-		AsicDelWcidTab(pAd, MCAST_WCID);
-		AsicDelWcidTab(pAd, 1);
+		RTMP_IO_WRITE32(pAd, MAC_WCID_BASE, 0x00);
+		RTMP_IO_WRITE32(pAd, 0x1808, 0x00);
 
 		/* If WEP is enabled, add key material and cipherAlg into Asic */
 		/* Fill in Shared Key Table(offset: 0x6c00) and Shared Key Mode(offset: 0x7000) */
@@ -2108,14 +2154,66 @@ VOID LinkUp(
 	}
 #endif /* WPA_SUPPLICANT_SUPPORT */
 
-#ifdef MT76x0
-	if (IS_MT76x0(pAd))
-		MT76x0_Calibration(pAd, pAd->hw_cfg.cent_ch, TRUE, TRUE, TRUE);
-#endif /* MT76x0 */
+#ifdef CONFIG_MULTI_CHANNEL
+if (pAd->Multi_Channel_Enable == TRUE)
+	RtmpPrepareHwNullFrame(pAd,
+						&pAd->MacTab.Content[BSSID_WCID],
+						FALSE,
+						FALSE,
+						0,
+						OPMODE_STA,
+						PWR_SAVE,
+						0,
+						0);
+#endif /* CONFIG_MULTI_CHANNEL */
+
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+	{
+#ifdef DPD_CALIBRATION_SUPPORT
+		/* DPD-Calibration */
+		DBGPRINT(RT_DEBUG_TRACE,("TX DPD Calibration\n"));
+		AndesCalibrationOP(pAd, ANDES_CALIBRATION_DPD, pAd->chipCap.CurrentTemperature);
+#endif /* DPD_CALIBRATION_SUPPORT */
+
+		// MT7601_RXDC_CAL
+		MT7601_RXDC_CAL(pAd);
+ 	}
+#endif /* MT7601 */
 
 	pAd->MacTab.MsduLifeTime = 5; /* default 5 seconds */
 
-	pAd->chipCap.pWeakestEntry = &pAd->MacTab.Content[BSSID_WCID];
+#ifdef CONFIG_MULTI_CHANNEL
+	if (pAd->Multi_Channel_Enable == TRUE)
+	{
+		RTMP_IO_READ32(pAd, WMM_CTRL, &Data);
+		Data &= 0x7fffffff;/* bit 31 set to 0 */	/*  WMM Channel switch to EDCA1 */
+		RTMP_IO_WRITE32(pAd, WMM_CTRL, Data);
+
+		if ((pAd->StaCfg.WscControl.WscConfMode != WSC_DISABLE) &&
+		    (pAd->StaCfg.WscControl.bWscTrigger
+		    )) 
+		{
+				DBGPRINT(RT_DEBUG_TRACE,
+					 ("WSC trigger not set Multi-channel!!\n"));
+		}
+		else if (P2P_CLI_ON(pAd)  
+			&& pEntry->PortSecured == WPA_802_1X_PORT_SECURED
+			&& pEntry->WepStatus == Ndis802_11WEPDisabled)
+		{
+			RTMPSetTimer(&pAd->Mlme.MCCTimer, pAd->Mlme.EDCAToHCCATimerValue);
+		}
+		pAd->Mlme.StaStayTick = 0;
+		if (P2P_CLI_ON(pAd))
+			pAd->StaCfg.bAutoReconnect = FALSE;
+	}
+#endif /* CONFIG_MULTI_CHANNEL */
+
+
+#ifdef MICROWAVE_OVEN_SUPPORT
+	pAd->CommonCfg.MO_Cfg.bEnable = TRUE;
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
 }
 
 
@@ -2153,6 +2251,14 @@ VOID LinkDown(
 	/* Do nothing if monitor mode is on */
 	if (MONITOR_ON(pAd))
 		return;
+
+
+#ifdef CONFIG_MULTI_CHANNEL
+	if (pAd->Multi_Channel_Enable == TRUE)
+		MultiChannelTimerStop(pAd);
+#endif /* CONFIG_MULTI_CHANNEL */
+
+
 
 #ifdef RALINK_ATE
 	/* Nothing to do in ATE mode. */
@@ -2486,8 +2592,44 @@ VOID LinkDown(
 	pAd->StaCfg.ConnectinfoBssType  = 1;
 	pAd->StaCfg.ConnectinfoChannel = 0;
 
+#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
+	if (pAd->chipCap.FreqCalibrationSupport) 
+		StopFrequencyCalibration(pAd);
+#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
 
-	pAd->chipCap.pWeakestEntry = NULL;
+
+#ifdef CONFIG_MULTI_CHANNEL
+	if (pAd->Multi_Channel_Enable == TRUE)
+	{
+		if (P2P_CLI_ON(pAd)/* && pAd->P2pCfg.bStartP2pConnect*/)
+		{
+			BssTableDeleteEntry(&pAd->ScanTab, pAd->CommonCfg.Bssid,
+					    pAd->CommonCfg.Channel);
+			
+			pAd->StaCfg.bAutoReconnect = TRUE;
+		}
+
+		if (P2P_CLI_ON(pAd) && (!pAd->P2pCfg.bStartP2pConnect))
+			MultiChannelSwitchToP2P(pAd);
+
+		UINT32 Value=0;
+		RTUSBReadMACRegister(pAd, PBF_CFG, &Value);
+		Value |= ((1 << 3) | (1 << 13));/* bit 3 and bit 13 set to 1 */
+		Value |= ((1 << 2) | (1 << 12));/* bit 2  and bit 12 set to 1 */
+		RTUSBWriteMACRegister(pAd, PBF_CFG, Value,FALSE);
+		pAd->MultiChannelFlowCtl=0;
+
+	/* when p2p & p2p all connnect , when rao disconnect then scan , channel will back to common channel so p2p will also disconnect... , */
+		pAd->CommonCfg.Channel = pAd->ApCliMlmeAux.Channel;
+	}
+#endif /*CONFIG_MULTI_CHANNEL*/
+
+
+
+#ifdef MICROWAVE_OVEN_SUPPORT
+	pAd->CommonCfg.MO_Cfg.bEnable = FALSE;
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
 }
 
 /*
@@ -2583,6 +2725,19 @@ VOID IterateOnBssTab(
 #ifdef DOT11_N_SUPPORT
 #endif /* DOT11_N_SUPPORT */
 		{
+#ifdef CONFIG_MULTI_CHANNEL
+			if (P2P_CLI_ON(pAd) && (pAd->Multi_Channel_Enable == TRUE))
+			{
+				AsicSwitchChannel(pAd, pAd->ApCliMlmeAux.Channel, FALSE);
+				AsicLockChannel(pAd, pAd->ApCliMlmeAux.Channel);
+
+				DBGPRINT(RT_DEBUG_TRACE,
+					 ("CNTL - All roaming failed,  p2p_on restore to p2p channel channel %d, Total BSS[%02d]\n",
+					  pAd->ApCliMlmeAux.Channel, pAd->ScanTab.BssNr));
+
+			}
+			else
+#endif /* CONFIG_MULTI_CHANNEL */
 			DBGPRINT(RT_DEBUG_TRACE,
 				 ("CNTL - All roaming failed, restore to channel %d, Total BSS[%02d]\n",
 				  pAd->CommonCfg.Channel, pAd->ScanTab.BssNr));
@@ -3101,10 +3256,15 @@ VOID AdjustChannelRelatedValue(
 	IN USHORT ifIndex,
 	IN BOOLEAN BandWidth,
 	IN UCHAR PriCh,
-	IN UCHAR ExtraCh)
+	IN UCHAR ExtraCh
+#ifdef CONFIG_MULTI_CHANNEL
+	,IN BOOLEAN bfromP2P
+#endif /*CONFIG_MULTI_CHANNEL*/
+	)
 {
 	UCHAR rf_channel, rf_bw = BW_20;
 	INT ext_ch;
+
 
 	// TODO: shiang-6590, this function need to revise to make sure two purpose can achieved!
 	//	1. Channel-binding rule between STA and P2P-GO mode
@@ -3118,8 +3278,80 @@ VOID AdjustChannelRelatedValue(
 	DBGPRINT(RT_DEBUG_TRACE, ("%s():CentralChannel=%d, Channel=%d, ChannelWidth=%d\n",
 			__FUNCTION__, ExtraCh, PriCh, BandWidth));
 
+
+
+#ifdef CONFIG_MULTI_CHANNEL
+
+
+	pApCliEntry = &pAd->ApCfg.ApCliTab[ifIndex];
+
+		if ((bfromP2P) && (pAd->Multi_Channel_Enable == TRUE))
+		{
+			if (BandWidth == BW_40)
+			{
+				pAd->ApCliMlmeAux.CentralChannel = ExtraCh;
+				pAd->ApCliMlmeAux.Channel = PriCh;
+				pAd->P2pCfg.BW = BW_40;
+			}
+			else
+			{
+				pAd->ApCliMlmeAux.CentralChannel = PriCh;
+				pAd->ApCliMlmeAux.Channel = PriCh;
+				pAd->P2pCfg.BW = BW_20;
+			}
+		}
+		else
+		{
+			if (BandWidth == BW_40)
+			{
+				pAd->CommonCfg.CentralChannel = ExtraCh;
+				pAd->CommonCfg.Channel = PriCh;
+				pAd->StaCfg.BW = BW_40;
+			}
+			else
+			{
+				pAd->CommonCfg.CentralChannel = PriCh;
+				pAd->CommonCfg.Channel = PriCh;
+				pAd->StaCfg.BW = BW_20;
+			}		
+		}
+
+#else
 	pAd->CommonCfg.CentralChannel = ExtraCh;
 	pAd->CommonCfg.Channel = PriCh;
+#endif /*CONFIG_MULTI_CHANNEL*/
+
+
+
+
+#ifdef CONFIG_MULTI_CHANNEL
+
+	if ((bfromP2P) && (pAd->Multi_Channel_Enable == TRUE))
+#ifdef DOT11_N_SUPPORT
+	{
+		if ((pAd->ApCliMlmeAux.CentralChannel  > pAd->ApCliMlmeAux.Channel) && (BandWidth == BW_40))
+		{
+			rf_channel = pAd->CommonCfg.CentralChannel;
+			rf_bw = BW_40;
+			ext_ch = EXTCHA_ABOVE;
+		} 
+		else if ((pAd->ApCliMlmeAux.CentralChannel  < pAd->ApCliMlmeAux.Channel) && (BandWidth == BW_40))
+		{
+			rf_channel = pAd->ApCliMlmeAux.CentralChannel;
+			rf_bw = BW_40;
+			ext_ch = EXTCHA_BELOW;
+		}
+		else
+#endif /* DOT11_N_SUPPORT */
+		{
+			rf_channel = pAd->ApCliMlmeAux.Channel;
+			rf_bw = BW_20;
+			ext_ch = EXTCHA_NONE;
+		}
+	}
+	else
+#endif /*CONFIG_MULTI_CHANNEL*/
+
 #ifdef DOT11_N_SUPPORT
 	/* Change to AP channel */
 	if ((pAd->CommonCfg.CentralChannel > pAd->CommonCfg.Channel) && (BandWidth == BW_40))

@@ -3,9 +3,14 @@ include $(RT28xx_DIR)/os/linux/config.mk
 
 #ifdef CONFIG_STA_SUPPORT
 ifeq ($(RT28xx_MODE), STA)
-MOD_NAME = $(MODULE)_sta_util
+ifneq ($(findstring 7601,$(CHIPSET)),)
+MOD_NAME = mtutil$(MODULE)sta
+else
+MOD_NAME = rtutil$(MODULE)sta
+endif
 endif
 #endif // CONFIG_STA_SUPPORT //
+
 
 obj-m := $(MOD_NAME).o
 

@@ -37,6 +37,13 @@ BUILD_TIMER_FUNCTION(EnqueueStartForPSKExec);
 #endif /* CONFIG_STA_SUPPORT */
 
 
+
+#ifdef CONFIG_MULTI_CHANNEL
+BUILD_TIMER_FUNCTION(MCC_ChangeAction);
+BUILD_TIMER_FUNCTION(ConcurrentP2PConnectTimeout);
+#endif /* CONFIG_MULTI_CHANNEL */
+
+
 #ifdef RTMP_MAC_USB
 BUILD_TIMER_FUNCTION(BeaconUpdateExec);
 #endif /* RTMP_MAC_USB */

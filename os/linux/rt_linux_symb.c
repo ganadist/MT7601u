@@ -89,13 +89,18 @@ EXPORT_SYMBOL(RtmpOsPktIappMakeUp);
 EXPORT_SYMBOL(RtmpOsPktInit);
 EXPORT_SYMBOL(wlan_802_11_to_802_3_packet);
 EXPORT_SYMBOL(RtmpOsPktOffsetInit);
+
+#ifdef HDR_TRANS_SUPPORT
+EXPORT_SYMBOL(RtmpOsSetPacket);
+#endif /* HDR_TRANS_SUPPORT */
+
 EXPORT_SYMBOL(RtmpOSNetDevCreate);
 EXPORT_SYMBOL(RtmpOSNetDevClose);
 EXPORT_SYMBOL(RtmpOSNetDevAttach);
 EXPORT_SYMBOL(RtmpOSNetDevDetach);
+EXPORT_SYMBOL(RtmpOSNetDevProtect);
 EXPORT_SYMBOL(RtmpOSNetDevFree);
 EXPORT_SYMBOL(RtmpOSNetDevIsUp);
-EXPORT_SYMBOL(RtmpOSNetDevProtect);
 EXPORT_SYMBOL(RtmpOsNetDevGetPhyAddr);
 EXPORT_SYMBOL(RtmpOsNetQueueStart);
 EXPORT_SYMBOL(RtmpOsNetQueueStop);
@@ -130,10 +135,6 @@ EXPORT_SYMBOL(RtmpOsCheckTaskLegality);
 EXPORT_SYMBOL(RtmpOsTaskDataGet);
 EXPORT_SYMBOL(RtmpOsTaskIsKilled);
 EXPORT_SYMBOL(RtmpOsTaskWakeUp);
-EXPORT_SYMBOL(RtmpOsInitCompletion);
-EXPORT_SYMBOL(RtmpOsExitCompletion);
-EXPORT_SYMBOL(RtmpOsComplete);
-EXPORT_SYMBOL(RtmpOsWaitForCompletionTimeout);
 
 EXPORT_SYMBOL(RtmpOsTaskletSche);
 EXPORT_SYMBOL(RtmpOsTaskletInit);
@@ -150,7 +151,7 @@ EXPORT_SYMBOL(RtmpOsIntUnLock);
 
 EXPORT_SYMBOL(RtmpOsSemaInitLocked);
 EXPORT_SYMBOL(RtmpOsSemaInit);
-EXPORT_SYMBOL(RtmpOsSemaDestroy);
+EXPORT_SYMBOL(RtmpOsSemaDestory);
 EXPORT_SYMBOL(RtmpOsSemaWaitInterruptible);
 EXPORT_SYMBOL(RtmpOsSemaWakeUp);
 EXPORT_SYMBOL(RtmpOsMlmeUp);
@@ -182,10 +183,8 @@ EXPORT_SYMBOL(hex_dump);
 EXPORT_SYMBOL(RtmpOsSendWirelessEvent);
 EXPORT_SYMBOL(RTMP_GetCurrentSystemTime);
 EXPORT_SYMBOL(RTMP_GetCurrentSystemTick);
-EXPORT_SYMBOL(RTMPMsecsToJiffies);
 EXPORT_SYMBOL(RTMPusecDelay);
 EXPORT_SYMBOL(RtmpOsMsDelay);
-EXPORT_SYMBOL(RtmpOsUsDelay);
 EXPORT_SYMBOL(RtmpOSWrielessEventSend);
 EXPORT_SYMBOL(RtmpOSWrielessEventSendExt);
 EXPORT_SYMBOL(RtmpOsTickUnitGet);
@@ -294,15 +293,20 @@ EXPORT_SYMBOL(RtmpFlashRead);
 EXPORT_SYMBOL(RtmpFlashWrite);
 #endif /* defined(RTMP_RBUS_SUPPORT) || defined (RTMP_FLASH_SUPPORT)  */
 
+#ifdef CONFIG_STA_SUPPORT
+EXPORT_SYMBOL(RtmpOSNotifyRawData);
+#endif /* CONFIG_STA_SUPPORT */
 
 EXPORT_SYMBOL(RtPrivIoctlSetVal);
 
-EXPORT_SYMBOL(RtmpOsSpinLockIrqSave);
-EXPORT_SYMBOL(RtmpOsSpinUnlockIrqRestore);
-EXPORT_SYMBOL(RtmpOsSpinLockIrq);
-EXPORT_SYMBOL(RtmpOsSpinUnlockIrq);
-EXPORT_SYMBOL(OS_TEST_BIT);
-EXPORT_SYMBOL(OS_SET_BIT);
-EXPORT_SYMBOL(OS_CLEAR_BIT);
+#ifdef RTMP_USB_SUPPORT
+EXPORT_SYMBOL(RtmpInitCompletion);
+EXPORT_SYMBOL(RtmpWaitForCompletionTimeout);
+EXPORT_SYMBOL(RtmpComplete);
+#endif /* RTMP_USB_SUPPORT */
+EXPORT_SYMBOL(RtmpMsecsToJiffies);
+
+
+EXPORT_SYMBOL(RtmpDrvAllRFPrint);
 #endif /* OS_ABL_SUPPORT */
 

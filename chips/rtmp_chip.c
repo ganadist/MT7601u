@@ -296,6 +296,20 @@ VOID RtmpChipBcnInit(
 	pChipCap->BcnMaxNum = (pChipCap->BcnMaxHwNum - MAX_MESH_NUM - MAX_APCLI_NUM);
 	pChipCap->BcnMaxHwSize = 0x1000;
 
+#ifdef MT7601
+	if ( IS_MT7601(pAd))
+	{
+		pChipCap->BcnBase[0] = 0xC000;
+		pChipCap->BcnBase[1] = 0xC200;
+		pChipCap->BcnBase[2] = 0xC400;
+		pChipCap->BcnBase[3] = 0xC600;
+		pChipCap->BcnBase[4] = 0xC800;
+		pChipCap->BcnBase[5] = 0xCA00;
+		pChipCap->BcnBase[6] = 0xCC00;
+		pChipCap->BcnBase[7] = 0xCE00;
+	} else
+#endif /* MT7601 */
+	{
 	pChipCap->BcnBase[0] = 0x7800;
 	pChipCap->BcnBase[1] = 0x7A00;
 	pChipCap->BcnBase[2] = 0x7C00;
@@ -304,6 +318,7 @@ VOID RtmpChipBcnInit(
 	pChipCap->BcnBase[5] = 0x7400;
 	pChipCap->BcnBase[6] = 0x5DC0;
 	pChipCap->BcnBase[7] = 0x5BC0;
+	}
 
 	/*
 		If the MAX_MBSSID_NUM is larger than 6,
@@ -311,6 +326,11 @@ VOID RtmpChipBcnInit(
 		-	these wcid 238~253 are reserved for beacon#6(ra6).
 		-	these wcid 222~237 are reserved for beacon#7(ra7).
 	*/
+#ifdef MT7601
+	if ( IS_MT7601(pAd))
+		pChipCap->WcidHwRsvNum = 127;
+	else
+#endif
 	if (pChipCap->BcnMaxNum == 8)
 		pChipCap->WcidHwRsvNum = 222;
 	else if (pChipCap->BcnMaxNum == 7)
@@ -343,7 +363,12 @@ VOID rlt_bcn_buf_init(RTMP_ADAPTER *pAd)
 
 	pChipCap->FlgIsSupSpecBcnBuf = FALSE;
 	pChipCap->BcnMaxHwNum = 16;
-	pChipCap->WcidHwRsvNum = 255;
+#ifdef MT7601
+	if ( IS_MT7601(pAd))
+		pChipCap->WcidHwRsvNum = 127;
+	else
+#endif
+		pChipCap->WcidHwRsvNum = 255;
 
 /*
 	In 16-MBSS support mode, if AP-Client is enabled, 
@@ -374,16 +399,14 @@ VOID rlt_bcn_buf_init(RTMP_ADAPTER *pAd)
 	pChipCap->BcnBase[14] = 0xdc00;
 	pChipCap->BcnBase[15] = 0xde00;
 
+#ifdef CONFIG_MULTI_CHANNEL
+	/* Record HW Null Frame offset */
+	//pAd->NullBufOffset[0] = 0xd000;
+	pAd->NullBufOffset[0] = 0xd000;
+	pAd->NullBufOffset[1] = 0xd200;
+#endif /* CONFIG_MULTI_CHANNEL */
+
 	pAd->chipOps.BeaconUpdate = RtmpChipWriteMemory;
-
-	DBGPRINT(RT_DEBUG_TRACE, ("< Beacon Spec Information: >\n"));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tBcnMaxHwNum = \t%d\n", pChipCap->BcnMaxHwNum));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tBcnMaxNum = \t%d\n", pChipCap->BcnMaxNum));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tBcnMaxHwSize = \t0x%x\n", pChipCap->BcnMaxHwSize));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tWcidHwRsvNum = \t%d\n", pChipCap->WcidHwRsvNum));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tBcnBase[0] = \t0x%x\n", pChipCap->BcnBase[0]));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tBcnBase[8] = \t0x%x\n", pChipCap->BcnBase[8]));
-
 }
 #endif /* RLT_MAC */
 
@@ -531,7 +554,6 @@ static VOID ChipBBPAdjust(RTMP_ADAPTER *pAd)
 	UCHAR rf_bw, ext_ch;
 	UCHAR bbp_val;
 
-
 #ifdef DOT11_N_SUPPORT
 	if (get_ht_cent_ch(pAd, &rf_bw, &ext_ch) == FALSE)
 #endif /* DOT11_N_SUPPORT */
@@ -668,7 +690,7 @@ UINT32 SetHWAntennaDivsersity(
 		
 		RT30xxReadRFRegister(pAd, RF_R29, &RFValue);
 		RFValue &= 0x3f; // clear bit7:6
-		RFValue |= (value << 6);
+		RFValue |= (value << 6);			
 		RT30xxWriteRFRegister(pAd, RF_R29, RFValue);
 
 		// BBP_R47 bit7=1
@@ -678,17 +700,17 @@ UINT32 SetHWAntennaDivsersity(
 	
 		BBPValue = 0xbe;
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R150, BBPValue);
-		BBPValue = 0xb0;
+		BBPValue = 0xb0;			
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R151, BBPValue);
-		BBPValue = 0x23;
+		BBPValue = 0x23;			
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R152, BBPValue);
-		BBPValue = 0x3a;
+		BBPValue = 0x3a;			
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R153, BBPValue);
-		BBPValue = 0x10;
+		BBPValue = 0x10;			
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R154, BBPValue);
-		BBPValue = 0x3b;
+		BBPValue = 0x3b;			
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R155, BBPValue);
-		BBPValue = 0x04;
+		BBPValue = 0x04;			
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R253, BBPValue);
 
 		DBGPRINT(RT_DEBUG_TRACE, ("HwAnDi> Enable!\n"));
@@ -757,15 +779,14 @@ INT WaitForAsicReady(
 		if ((mac_val != 0x00) && (mac_val != 0xFFFFFFFF))
 			return TRUE;
 
-		RtmpOsMsDelay(5);
-	} while (idx++ < 500);
+		RTMPusecDelay(10);
+	} while (idx++ < 100);
 
 	DBGPRINT(RT_DEBUG_ERROR,
 				("%s(0x%x):AsicNotReady!\n",
 				__FUNCTION__, mac_val));
-
-		
-	return FALSE;
+	
+	return TRUE;
 }
 
 
@@ -779,15 +800,11 @@ INT AsicGetMacVersion(
 		reg = 0x0;
 #endif /* RT3290 */
 
-#ifdef RT65xx
-	RTMP_IO_READ32(pAd, ASIC_VERSION, &pAd->MacIcVersion);
-#endif /* RT65xx */
-
 	if (WaitForAsicReady(pAd) == TRUE)
 	{
 		RTMP_IO_READ32(pAd, reg, &pAd->MACVersion);
-		DBGPRINT(RT_DEBUG_OFF, ("MACVersion[Ver:Rev]=0x%08x : 0x%08x\n",
-					pAd->MACVersion, pAd->MacIcVersion));
+		DBGPRINT(RT_DEBUG_OFF, ("MACVersion[Ver:Rev]=0x%08x\n",
+					pAd->MACVersion));
 		return TRUE;
 	}
 	else
@@ -812,32 +829,18 @@ Return Value:
 Note:
 ========================================================================
 */
-int RtmpChipOpsHook(VOID *pCB)
+VOID RtmpChipOpsHook(VOID *pCB)
 {
 	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)pCB;
 	RTMP_CHIP_OP *pChipOps = &pAd->chipOps;
 	RTMP_CHIP_CAP *pChipCap = &pAd->chipCap;
 	UINT32 MacValue;
-	int ret = 0;
 
 
 	/* sanity check */
-	if (WaitForAsicReady(pAd) == FALSE)
-		return -1;
-
+	WaitForAsicReady(pAd);
 	RTMP_IO_READ32(pAd, MAC_CSR0, &MacValue);
-	pAd->MACVersion = MacValue;
-	
-	if (pAd->MACVersion == 0xffffffff)
-		return -1;
-
-#ifdef RT65xx
-	RTMP_IO_READ32(pAd, ASIC_VERSION, &MacValue);
-	pAd->MacIcVersion = MacValue;
-
-	if (pAd->MacIcVersion == 0xffffffff)
-		return -1;
-#endif /* RT65xx */
+	pAd->MACVersion = MacValue;	
 
 	/* default init */
 	RTMP_DRS_ALG_INIT(pAd, RATE_ALG_LEGACY);
@@ -860,13 +863,19 @@ int RtmpChipOpsHook(VOID *pCB)
 	}
 #endif /* RT8592 */
 
-#ifdef MT76x0
-	if (IS_MT76x0(pAd)) {
-		MT76x0_Init(pAd);
+#ifdef RT65xx
+	if (IS_RT65XX(pAd)) {
+		RT6590_Init(pAd);
 		goto done;
 	}
-#endif /* MT76x0 */
+#endif /* RT65xx */
 
+#ifdef MT7601
+	if (IS_MT7601(pAd)) {
+		MT7601_Init(pAd);
+		goto done;
+	}
+#endif /* MT7601 */
 
 
 	/* init default value whatever chipsets */
@@ -922,6 +931,8 @@ int RtmpChipOpsHook(VOID *pCB)
 	/* Init value. If pChipOps->AsicResetBbpAgent==NULL, "AsicResetBbpAgent" as default. If your chipset has specific routine, please re-hook it at self init function */
 	pChipOps->AsicResetBbpAgent = NULL;
 
+	pChipOps->InitTemperCompensation = NULL;
+	pChipOps->TemperCompensation = NULL;
 
 #ifdef RT28xx
 	pChipOps->ChipSwitchChannel = RT28xx_ChipSwitchChannel;
@@ -936,19 +947,14 @@ int RtmpChipOpsHook(VOID *pCB)
 	pChipOps->CckMrcStatusCtrl = NULL;
 	pChipOps->RadarGLRTCompensate = NULL;
 
-	/*
-		2nd CCA detection
-	*/
-	pChipCap->b2ndCCACheck = FALSE;
 
 	/* We depends on RfICType and MACVersion to assign the corresponding operation callbacks. */
 
 
 
-#if defined(RT3883) || defined(RT3290) || defined(RT65xx)
+#if defined(RT3883) || defined(RT3290) || defined(RT65xx) || defined(MT7601)
 done:
-#endif /* defined(RT3883) || defined(RT3290) */
+#endif /* defined(RT3883) || defined(RT3290) || defined(RT65xx) || define(MT7601) */
 	DBGPRINT(RT_DEBUG_TRACE, ("Chip specific bbpRegTbSize=%d!\n", pChipCap->bbpRegTbSize));
 	DBGPRINT(RT_DEBUG_TRACE, ("Chip VCO calibration mode = %d!\n", pChipCap->FlgIsVcoReCalMode));
-	return ret;
 }

@@ -1115,6 +1115,13 @@ VOID PeerPairMsg3Action(
 	{
 		pEntry->PortSecured = WPA_802_1X_PORT_SECURED;
 		pEntry->PrivacyFilter = Ndis802_11PrivFilterAcceptAll;	
+#ifdef CONFIG_MULTI_CHANNEL
+		if (pAd->Multi_Channel_Enable == TRUE)
+		{
+			MultiChannelTimerStart(pAd,pEntry);
+		}
+#endif /*CONFIG_MULTI_CHANNEL*/
+
 
 #ifdef CONFIG_STA_SUPPORT
 		STA_PORT_SECURED(pAd);
@@ -1203,6 +1210,8 @@ VOID PeerPairMsg4Action(
 
 			/* send wireless event - for set key done WPA2*/
 				RTMPSendWirelessEvent(pAd, IW_SET_KEY_DONE_WPA2_EVENT_FLAG, pEntry->Addr, pEntry->apidx, 0); 
+
+
 	 
 	        DBGPRINT(RT_DEBUG_OFF, ("AP SETKEYS DONE - WPA2, AuthMode(%d)=%s, WepStatus(%d)=%s, GroupWepStatus(%d)=%s\n\n", 
 									pEntry->AuthMode, GetAuthMode(pEntry->AuthMode), 
@@ -1802,17 +1811,17 @@ int RtmpPasswordHash(PSTRING password, PUCHAR ssid, INT ssidlength, PUCHAR outpu
 	Return Value:
 
 	Note:
-		Output ¡ö KDF-Length (K, label, Context) where
+		Output: KDF-Length (K, label, Context) where
 		Input:    K, a 256-bit key derivation key
 				  label, a string identifying the purpose of the keys derived using this KDF
 				  Context, a bit string that provides context to identify the derived key
 				  Length, the length of the derived key in bits
 		Output: a Length-bit derived key
 
-		result ¡ö ""
-		iterations ¡ö (Length+255)/256 
+		result : ""
+		iterations : (Length+255)/256 
 		do i = 1 to iterations
-			result ¡ö result || HMAC-SHA256(K, i || label || Context || Length)
+			result : result || HMAC-SHA256(K, i || label || Context || Length)
 		od
 		return first Length bits of result, and securely delete all unused bits
 
@@ -3557,6 +3566,15 @@ PCIPHER_KEY RTMPSwCipherKeySelection(
 		}	
 #endif /* CONFIG_STA_SUPPORT */		
 	}
+
+#ifdef CONFIG_STA_SUPPORT
+	if ((CipherAlg == Ndis802_11GroupWEP40Enabled) ||
+		(CipherAlg == Ndis802_11GroupWEP104Enabled))				
+	{										
+		pKey = &pAd->SharedKey[BSS0][pAd->StaCfg.DefaultKeyId];
+		return pKey;
+	}
+#endif /* CONFIG_STA_SUPPORT */		
 
 	if ((keyIdx = RTMPExtractKeyIdxFromIVHdr(pIV, CipherAlg)) > 3)
 	{

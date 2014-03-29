@@ -48,60 +48,6 @@
 	========================================================================
 */
 
-void usb_cfg_read_v1(PRTMP_ADAPTER ad, u32 *value)
-{
-	RTUSBReadMACRegister(ad, USB_DMA_CFG, value);
-}
-
-void usb_cfg_write_v1(PRTMP_ADAPTER ad, u32 value)
-{
-	RTUSBWriteMACRegister(ad, USB_DMA_CFG, value, FALSE);
-}
-
-void usb_cfg_read_v2(PRTMP_ADAPTER ad, u32 *value)
-{
-	int ret;
-	u32 io_value;
-
-	ret = RTUSB_VendorRequest(ad,
-							  (USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK),
-							  DEVICE_VENDOR_REQUEST_IN,
-							  0x47,
-							  0,
-							  U3DMA_WLCFG,
-							  &io_value,
-							  4);
-
-	*value = le2cpu32(io_value);
-
-	if (ret)
-		*value = 0xffffffff;
-}
-
-void usb_cfg_write_v2(PRTMP_ADAPTER ad, u32 value)
-{
-	int ret;
-	u32 io_value;
-
-
-	io_value = cpu2le32(value);
-
-	ret = RTUSB_VendorRequest(ad,
-							  USBD_TRANSFER_DIRECTION_OUT,
-							  DEVICE_VENDOR_REQUEST_OUT,
-							  0x46,
-							  0,
-							  U3DMA_WLCFG,
-							  &io_value,
-							  4);
-
-
-	if (ret) {
-		DBGPRINT(RT_DEBUG_ERROR, ("usb cfg write fail\n"));
-		return;
-	}
-}
-
 static NTSTATUS	RTUSBFirmwareRun(
 	IN	PRTMP_ADAPTER	pAd)
 {
@@ -212,7 +158,9 @@ NTSTATUS	RTUSBVenderReset(
 	IN	PRTMP_ADAPTER	pAd)
 {
 	NTSTATUS	Status;
-	DBGPRINT_RAW(RT_DEBUG_ERROR, ("-->RTUSBVenderReset\n"));
+
+	pAd->VendorResetFlag = TRUE;
+
 	Status = RTUSB_VendorRequest(
 		pAd,
 		USBD_TRANSFER_DIRECTION_OUT,
@@ -223,7 +171,8 @@ NTSTATUS	RTUSBVenderReset(
 		NULL,
 		0);
 
-	DBGPRINT_RAW(RT_DEBUG_ERROR, ("<--RTUSBVenderReset\n"));
+	pAd->VendorResetFlag = FALSE;
+
 	return Status;
 }
 /*
@@ -465,7 +414,7 @@ NTSTATUS	RTUSBReadMACRegister(
 
 	========================================================================
 */
-NTSTATUS RTUSBWriteMACRegister(
+NTSTATUS	RTUSBWriteMACRegister(
 	IN RTMP_ADAPTER *pAd,
 	IN USHORT Offset,
 	IN UINT32 Value,
@@ -475,83 +424,12 @@ NTSTATUS RTUSBWriteMACRegister(
 	UINT32 localVal;
 
 	localVal = Value;
-
-	/* MT76xx HW has 4 byte alignment constrained */    
-	if (IS_MT76xx(pAd)) {   
-		Status = RTUSBMultiWrite_nBytes(
-		pAd,
-		Offset,
-		&Value,
-		4,
-		4);
-	} else {
-		Status = RTUSBSingleWrite(pAd, Offset, (USHORT)(localVal & 0xffff), bWriteHigh);
-		Status = RTUSBSingleWrite(pAd, Offset + 2, (USHORT)((localVal & 0xffff0000) >> 16), bWriteHigh);
-	}
+	Status = RTUSBSingleWrite(pAd, Offset, (USHORT)(localVal & 0xffff), bWriteHigh);
+	Status = RTUSBSingleWrite(pAd, Offset + 2, (USHORT)((localVal & 0xffff0000) >> 16), bWriteHigh);
 
 	return Status;
 }
 
-int write_reg(
-	RTMP_ADAPTER *ad,
-	u32 base,
-	u16 offset,
-	u32 value)
-{
-	int ret;
-	u8 req;
-	u32 io_value;
-
-	if (base == 0x40)
-		req = 0x46;
-
-	io_value = cpu2le32(value);
-
-	ret = RTUSB_VendorRequest(ad,
-							  USBD_TRANSFER_DIRECTION_OUT,
-							  DEVICE_VENDOR_REQUEST_OUT,
-							  req,
-							  0,
-							  offset,
-							  &io_value,
-							  4);
-
-
-	if (ret) {
-		DBGPRINT(RT_DEBUG_ERROR, ("write reg fail\n"));
-		return;
-	}
-}
-
-int read_reg(
-	RTMP_ADAPTER *ad,
-	u32 base,
-	u16 offset,
-	u32 *value)
-{
-	int ret;
-	u8 req;
-	u32 io_value;
-	
-	if (base == 0x40)
-		req = 0x47;
-	else if (base == 0x41)
-		req = 0x7;
-
-	ret = RTUSB_VendorRequest(ad,
-							  (USBD_TRANSFER_DIRECTION_IN | USBD_SHORT_TRANSFER_OK),
-							  DEVICE_VENDOR_REQUEST_IN,
-							  req,
-							  0,
-							  offset,
-							  &io_value,
-							  4);
-
-	*value = le2cpu32(io_value);
-
-	if (ret)
-		*value = 0xffffffff;
-}
 
 /*
 	========================================================================
@@ -800,7 +678,7 @@ NTSTATUS RTUSBWriteEEPROM(
 	IN	PUCHAR			pData,
 	IN	USHORT			length)
 {
-	NTSTATUS Status = STATUS_SUCCESS;
+	NTSTATUS	Status = STATUS_SUCCESS;
 	USHORT Value;
 
 	Status = RTUSB_VendorRequest(
@@ -1047,11 +925,22 @@ NTSTATUS    RTUSB_VendorRequest(
 		return NDIS_STATUS_FAILURE;
 	}
 
-	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)) 
+#ifdef CONFIG_STA_SUPPORT
+#ifdef CONFIG_PM
+#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
+	if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_SUSPEND))
 	{
-		DBGPRINT(RT_DEBUG_ERROR, ("WIFI device has been disconnected\n"));
 		return NDIS_STATUS_FAILURE;
-	} 
+	}
+#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
+#endif /* CONFIG_PM */
+#endif /* CONFIG_STA_SUPPORT */
+
+	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
+	{
+		/*DBGPRINT(RT_DEBUG_ERROR, ("WIFI device has been disconnected\n"));*/
+		return NDIS_STATUS_FAILURE;
+	}
 	else if (RTMP_TEST_PSFLAG(pAd, fRTMP_PS_MCU_SLEEP))
 	{
 		DBGPRINT(RT_DEBUG_ERROR, ("MCU has entered sleep mode\n"));
@@ -1076,7 +965,7 @@ NTSTATUS    RTUSB_VendorRequest(
 		do {
 				RTUSB_CONTROL_MSG(pObj->pUsb_Dev, 0, Request, RequestType, Value, Index, pAd->UsbVendorReqBuf, TransferBufferLength, CONTROL_TIMEOUT_JIFFIES, RET);
 				
-			if (RET < 0 ) {
+			if (RET < 0 && !pAd->VendorResetFlag) {
 				DBGPRINT(RT_DEBUG_OFF, ("#\n"));
 				if (RET == RTMP_USB_CONTROL_MSG_ENODEV)
 				{
@@ -1086,7 +975,7 @@ NTSTATUS    RTUSB_VendorRequest(
 				RetryCount++;
 				RTMPusecDelay(5000); /* wait for 5ms*/
 			}
-		} while((RET < 0 ) && (RetryCount < MAX_VENDOR_REQ_RETRY_COUNT));
+		} while((RET < 0 && !pAd->VendorResetFlag) && (RetryCount < MAX_VENDOR_REQ_RETRY_COUNT));
 
 	  	if ( (!(RET < 0)) && (TransferBufferLength > 0) && (RequestType == DEVICE_VENDOR_REQUEST_IN))
 			NdisMoveMemory(TransferBuffer, pAd->UsbVendorReqBuf, TransferBufferLength);
@@ -1162,15 +1051,29 @@ NTSTATUS CheckGPIOHdlr(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 			UINT32 data;
 			/* Read GPIO pin2 as Hardware controlled radio state*/
 
-			RTUSBReadMACRegister( pAd, GPIO_CTRL_CFG, &data);
-
-			if (data & 0x04)
+#ifdef MT7601
+			if ( IS_MT7601(pAd) )
 			{
-				pAd->StaCfg.bHwRadio = TRUE;
+				RTMP_IO_READ32(pAd, WLAN_FUN_CTRL, &data);
+
+				if (data & 0x400)
+					pAd->StaCfg.bHwRadio = TRUE;
+				else
+					pAd->StaCfg.bHwRadio = FALSE;
 			}
 			else
+#endif /* MT7601 */
 			{
-				pAd->StaCfg.bHwRadio = FALSE;
+				RTUSBReadMACRegister( pAd, GPIO_CTRL_CFG, &data);
+
+				if (data & 0x04)
+				{
+					pAd->StaCfg.bHwRadio = TRUE;
+				}
+				else
+				{
+					pAd->StaCfg.bHwRadio = FALSE;
+				}
 			}
 
 			if (pAd->StaCfg.bRadio != (pAd->StaCfg.bHwRadio && pAd->StaCfg.bSwRadio))
@@ -1333,7 +1236,7 @@ static NTSTATUS ResetBulkOutHdlr(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 				PHT_TX_CONTEXT pHTTXContext = (PHT_TX_CONTEXT)(&pAd->TxContext[pAd->bulkResetPipeid ]);
 				PTX_CONTEXT pMLMEContext = (PTX_CONTEXT)(pAd->MgmtRing.Cell[pAd->MgmtRing.TxDmaIdx].AllocVa);
 				PTX_CONTEXT pNULLContext = (PTX_CONTEXT)(&pAd->PsPollContext);
-				PTX_CONTEXT pPsPollContext = (PTX_CONTEXT)(&pAd->NullContext);
+				PTX_CONTEXT pPsPollContext = (PTX_CONTEXT)(&pAd->NullContext[0]);
 
 				if (pHTTXContext->IRPPending)
 					pendingContext |= 1;
@@ -1768,18 +1671,18 @@ static NTSTATUS UpdateTXChainAddress(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt
 }
 #endif /* STREAM_MODE_SUPPORT */
 
-extern MSG_EVENT_HANDLER msg_event_handler_tb[];
+#ifdef RLT_MAC
+extern CMD_RSP_HANDLER CmdRspHandlerTable[];
 
 static NTSTATUS CmdRspEventCallback(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt)
 {
 	RXFCE_INFO_CMD *pFceInfo = CMDQelmt->buffer;
 
-	(*msg_event_handler_tb[pFceInfo->evt_type])(pAd, CMDQelmt->buffer, 
-												CMDQelmt->bufferlength);
+	(*CmdRspHandlerTable[pFceInfo->evt_type])(pAd, CMDQelmt->buffer + sizeof(*pFceInfo));
 	
 	return NDIS_STATUS_SUCCESS;
 }
-
+#endif /* RLT_MAC */
 
 typedef NTSTATUS (*CMDHdlr)(IN PRTMP_ADAPTER pAd, IN PCmdQElmt CMDQelmt);
 
@@ -1866,7 +1769,10 @@ static CMDHdlr CMDHdlrTable[] = {
 #else
 	NULL,
 #endif
+
+#ifdef RLT_MAC
 	CmdRspEventCallback, /* CMDTHREAD_RESPONSE_EVENT_CALLBACK */
+#endif /* RLT_MAC */
 };
 
 
@@ -1943,6 +1849,8 @@ VOID RTUSBWatchDog(IN RTMP_ADAPTER *pAd)
 	PURB		   		pUrb;
 	BOOLEAN				needDumpSeq = FALSE;
 	UINT32          	MACValue;
+
+	return;
 
 	if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
 		return;
@@ -2024,7 +1932,7 @@ VOID RTUSBWatchDog(IN RTMP_ADAPTER *pAd)
 					/*Check MgmtContext.*/
 					pMLMEContext = (PTX_CONTEXT)(pAd->MgmtRing.Cell[pAd->MgmtRing.TxDmaIdx].AllocVa);
 					pPsPollContext = (PTX_CONTEXT)(&pAd->PsPollContext);
-					pNULLContext = (PTX_CONTEXT)(&pAd->NullContext);
+					pNULLContext = (PTX_CONTEXT)(&pAd->NullContext[0]);
 
 					if (pMLMEContext->IRPPending)
 					{

@@ -28,6 +28,7 @@
 #ifndef __RTMP_MAC_H__
 #define __RTMP_MAC_H__
 
+
 #ifdef RLT_MAC
 #include "mac_ral/nmac/ral_nmac.h"
 #endif /* RLT_MAC */
@@ -35,6 +36,7 @@
 #ifdef RTMP_MAC
 #include "mac_ral/omac/ral_omac.h"
 #endif /* RTMP_MAC */
+
 
 /*
 	TX / RX ring descriptor format
@@ -52,6 +54,7 @@
 #define FIFO_MGMT	0
 #define FIFO_HCCA	1
 #define FIFO_EDCA	2
+#define FIFO_EDCA2	3
 
 typedef	union GNU_PACKED _TXWI_STRUC {
 #ifdef RLT_MAC
@@ -82,7 +85,11 @@ typedef union GNU_PACKED _TXINFO_STRUC{
 */
 typedef	union GNU_PACKED _RXWI_STRUC {
 #ifdef RLT_MAC
+#ifdef MT7601
+	struct _RXWI_OMAC RXWI_O;
+#else
 	struct _RXWI_NMAC RXWI_N;
+#endif /* MT7601 */
 #endif /* RLT_MAC */
 #ifdef RTMP_MAC
 	struct _RXWI_OMAC RXWI_O;
@@ -95,14 +102,14 @@ typedef	union GNU_PACKED _RXWI_STRUC {
 typedef	struct GNU_PACKED _RXINFO_STRUC {
 	UINT32		ip_sum_err:1;		/* IP checksum error */
 	UINT32		tcp_sum_err:1;	/* TCP checksum error */
-	UINT32		rsv:1;
-	UINT32		action_wanted:1;
-	UINT32		deauth:1;
-	UINT32		disasso:1;
-	UINT32		beacon:1;
-	UINT32		probe_rsp:1;
-	UINT32		sw_fc_type1:1;
-	UINT32		sw_fc_type0:1;
+	UINT32		ip_sum_bypass:1;		/* IP checksum bypass(hw does not do checksum) */
+	UINT32		tcp_sum_bypass:1;	/* TCP/UDP checksum bypass(hw does not do checksum) */
+#ifdef HDR_TRANS_SUPPORT
+	UINT32		rsv:5;
+	UINT32		pkt_80211:1;
+#else
+	UINT32		rsv:6;
+#endif /* HDR_TRANS_SUPPORT */
 	UINT32		pn_len:3;
 	UINT32		wapi_kidx:1;
 	UINT32		BssIdx3:1;
@@ -144,14 +151,14 @@ typedef	struct GNU_PACKED _RXINFO_STRUC {
 	UINT32		BssIdx3:1;
 	UINT32		wapi_kidx:1;
 	UINT32		pn_len:3;
-	UINT32		sw_fc_type0:1;
-	UINT32      	sw_fc_type1:1;
-	UINT32      	probe_rsp:1;
-	UINT32		beacon:1;
-	UINT32		disasso:1;
-	UINT32      	deauth:1;
-	UINT32      	action_wanted:1;
-	UINT32      	rsv:1;
+#ifdef HDR_TRANS_SUPPORT
+	UINT32		pkt_80211:1;
+	UINT32		rsv:5;
+#else
+	UINT32		rsv:6;
+#endif /* HDR_TRANS_SUPPORT */
+	UINT32		tcp_sum_bypass:1;
+	UINT32		ip_sum_bypass:1;
 	UINT32		tcp_sum_err:1;
 	UINT32		ip_sum_err:1;
 }RXINFO_STRUC, *PRXINFO_STRUC;
@@ -622,7 +629,7 @@ typedef union _TX_CHAIN_ADDR0_H_STRUC {
 #endif
 
 
-#ifdef RT_BIG_ENDIAN
+#ifdef BIG_ENDIAN
 typedef union _TX_CHAIN_ADDR1_L_STRUC {
 	struct {
 		UINT8	TxChainAddr1L_Byte3; /* Destination MAC address of Tx chain1 (byte 3) */
@@ -1226,7 +1233,7 @@ typedef	union _LG_FBK_CFG0_STRUC {
 #ifdef RT_BIG_ENDIAN
 typedef	union _LG_FBK_CFG1_STRUC {
 	struct {
-	    UINT32       rsv:16;
+	    UINT32       rsv:16;	 
 	    UINT32       CCKMCS3FBK:4;
 	    UINT32       CCKMCS2FBK:4;
 	    UINT32       CCKMCS1FBK:4;
@@ -1265,13 +1272,7 @@ typedef	union _LG_FBK_CFG1_STRUC {
 #ifdef RT_BIG_ENDIAN
 typedef	union _PROT_CFG_STRUC {
 	struct {
-#ifdef DOT11_VHT_AC
-		UINT32		 ProtectTxop:3; /* TXOP allowance */
-		UINT32       DynCbw:1;  /* RTS use dynamic channel bandwidth when TX signaling mode is turned on */
-		UINT32       RtsTaSignal:1; /* RTS TA signaling mode */
-#else
 	    UINT32       rsv:5;	 
-#endif
 	    UINT32       RTSThEn:1;	/*RTS threshold enable on CCK TX */
 	    UINT32       TxopAllowGF40:1;	/*CCK TXOP allowance.0:disallow. */
 	    UINT32       TxopAllowGF20:1;	/*CCK TXOP allowance.0:disallow. */
@@ -1298,13 +1299,7 @@ typedef	union _PROT_CFG_STRUC {
 	    UINT32       TxopAllowGF20:1;
 	    UINT32       TxopAllowGF40:1;
 	    UINT32       RTSThEn:1;
-#ifdef DOT11_VHT_AC
-		UINT32       RtsTaSignal:1; /* RTS TA signaling mode */
-		UINT32       DynCbw:1;  /* RTS use dynamic channel bandwidth when TX signaling mode is turned on */
-		UINT32		 ProtectTxop:3; /* TXOP allowance */
-#else
 	    UINT32       rsv:5;	 
-#endif /* !DOT11_VHT_AC */
 	} field;
 	UINT32 word;
 } PROT_CFG_STRUC;
@@ -1317,7 +1312,6 @@ typedef	union _PROT_CFG_STRUC {
 
 #define HT_FBK_TO_LEGACY	0x1384
 
-#define TX_FBK_LIMIT		0x1398
 
 #ifdef DOT11N_SS3_SUPPORT
 #define TX_FBK_CFG_3S_0	0x13c4
@@ -1484,7 +1478,6 @@ typedef union _AUTO_RSP_CFG_STRUC {
 #define SIFS_COST_CFG		0x1414
 #define RX_PARSER_CFG		0x1418	/*Set NAV for all received frames */
 
-#define EXT_CCA_CFG			0x141c
 
 /*  4.5 MAC Security configuration (offset:0x1500) */
 #define TX_SEC_CNT0		0x1500
@@ -1992,9 +1985,6 @@ typedef	union _WCID_MAPPING_STRUC {
 #define MAC_WCID_BASE		0x1800 /*8-bytes(use only 6-bytes) * 256 entry = */
 #define HW_WCID_ENTRY_SIZE   8
 
-#ifdef MCS_LUT_SUPPORT
-#define MAC_MCS_LUT_BASE	0x1c00
-#endif /* MCS_LUT_SUPPORT */
 
 #ifdef RT_BIG_ENDIAN
 typedef	union _SHAREDKEY_MODE_STRUC {
@@ -2353,9 +2343,11 @@ typedef	union _QOS_CSR1_STRUC {
 #define QID_AC_VO               3
 #define QID_HCCA                4
 #define NUM_OF_TX_RING          5
+#define QID_CTRL	            9
 #define QID_MGMT                13
 #define QID_RX                  14
 #define QID_OTHER               15
+
 
 
 
@@ -2375,8 +2367,8 @@ typedef	union _QOS_CSR1_STRUC {
 struct _RTMP_ADAPTER;
 
 INT get_pkt_phymode_by_rxwi(RXWI_STRUC *rxwi);
-INT get_pkt_rssi_by_rxwi(RXWI_STRUC *rxwi, INT size, CHAR *rssi);
-INT get_pkt_snr_by_rxwi(RXWI_STRUC *rxwi, INT size, UCHAR *snr);
+INT get_pkt_rssi_by_rxwi(struct _RTMP_ADAPTER *pAd, RXWI_STRUC *rxwi, INT size, CHAR *rssi);
+INT get_pkt_snr_by_rxwi(struct _RTMP_ADAPTER *pAd, RXWI_STRUC *rxwi, INT size, UCHAR *snr);
 
 INT rtmp_mac_set_band(struct _RTMP_ADAPTER *pAd, int  band);
 INT rtmp_mac_set_ctrlch(struct _RTMP_ADAPTER *pAd, INT extch);

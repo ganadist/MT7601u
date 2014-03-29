@@ -148,17 +148,17 @@ VOID ScanTimeout(
 	*/
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS))
 		return;
-
+	
 	if (MlmeEnqueue(pAd, SYNC_STATE_MACHINE, MT2_SCAN_TIMEOUT, 0, NULL, 0))
 	{
-		RTMP_MLME_HANDLER(pAd);
-	}
+	RTMP_MLME_HANDLER(pAd);
+}
 	else
 	{
 		/* To prevent SyncMachine.CurrState is SCAN_LISTEN forever. */
 		pAd->MlmeAux.Channel = 0;
 		ScanNextChannel(pAd, OPMODE_STA);
-		RTMPSendWirelessEvent(pAd, IW_SCAN_ENQUEUE_FAIL_EVENT_FLAG, NULL, BSS0, 0); 
+			RTMPSendWirelessEvent(pAd, IW_SCAN_ENQUEUE_FAIL_EVENT_FLAG, NULL, BSS0, 0); 
 	}
 }
 
@@ -351,7 +351,12 @@ VOID MlmeForceScanReqAction(
 
 #ifdef RTMP_MAC_USB
 	if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF))
-			ASIC_RADIO_ON(pAd, MLME_RADIO_ON);
+	{
+			if ( IS_MT7601(pAd) )
+				ASIC_RADIO_ON(pAd, DOT11_RADIO_ON);
+			else
+			RT28xxUsbAsicRadioOn(pAd);
+	}
 #endif /* RTMP_MAC_USB */
        /*
 	    Check the total scan tries for one single OID command
@@ -386,7 +391,11 @@ VOID MlmeForceScanReqAction(
 		    Send an NULL data with turned PSM bit on to current associated AP before SCAN progress.
 		    And should send an NULL data with turned PSM bit off to AP, when scan progress done 
 		*/
-		if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) && (INFRA_ON(pAd)))
+		if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) && (INFRA_ON(pAd))
+#ifdef CONFIG_MULTI_CHANNEL
+								&& (pAd->CommonCfg.Channel == pAd->LatchRfRegs.Channel)
+#endif /*CONFIG_MULTI_CHANNEL*/
+)
 		{
 			RTMPSendNullFrame(pAd, 
 							  pAd->CommonCfg.TxRate, 
@@ -473,9 +482,15 @@ VOID MlmeScanReqAction(
 	ULONG		   Now;
 	USHORT         Status;
 
+
 #ifdef RTMP_MAC_USB
 	if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF))
-			ASIC_RADIO_ON(pAd, MLME_RADIO_ON);
+	{
+			if ( IS_MT7601(pAd) )
+				ASIC_RADIO_ON(pAd, DOT11_RADIO_ON);
+			else
+			RT28xxUsbAsicRadioOn(pAd);
+	}
 #endif /* RTMP_MAC_USB */
        /*
 	    Check the total scan tries for one single OID command
@@ -528,7 +543,11 @@ VOID MlmeScanReqAction(
 		    Send an NULL data with turned PSM bit on to current associated AP before SCAN progress.
 		    And should send an NULL data with turned PSM bit off to AP, when scan progress done 
 		*/
-		if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) && (INFRA_ON(pAd)))
+		if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) && (INFRA_ON(pAd))
+#ifdef CONFIG_MULTI_CHANNEL
+								&& (pAd->CommonCfg.Channel == pAd->LatchRfRegs.Channel)
+#endif /*CONFIG_MULTI_CHANNEL*/
+)
 		{
 			RTMPSendNullFrame(pAd, 
 							  pAd->CommonCfg.TxRate, 
@@ -553,6 +572,21 @@ VOID MlmeScanReqAction(
 		pAd->MlmeAux.SsidLen = SsidLen;
 		NdisZeroMemory(pAd->MlmeAux.Ssid, MAX_LEN_OF_SSID);
 		NdisMoveMemory(pAd->MlmeAux.Ssid, Ssid, SsidLen);
+
+#ifdef CONFIG_MULTI_CHANNEL
+		if (P2P_CLI_ON(pAd) && (pAd->Multi_Channel_Enable == TRUE))
+		{
+			pAd->StaCfg.bImprovedScan = TRUE;
+			pAd->StaCfg.ScanChannelCnt = 0;	/* reset channel counter to 0 */
+		}
+#elif defined (WIFI_P2P_CONCURRENT_FAST_SCAN)
+		/* If p2p is connected as GO||GC, then we need to perform Elegant scan */
+		if (P2P_GO_ON(pAd) || P2P_CLI_ON(pAd))
+		{
+			pAd->StaCfg.bImprovedScan = TRUE;
+			pAd->StaCfg.ScanChannelCnt = 0; /* reset channel counter to 0 */
+		}
+#endif /*CONFIG_MULTI_CHANNEL*/
 
 		/*
 			Scanning was pending (for fast scanning)
@@ -1295,9 +1329,8 @@ VOID PeerBeaconAtScanAction(
 
 
 	BCN_IE_LIST *ie_list = NULL;
+
 	
-
-
 	os_alloc_mem(NULL, (UCHAR **)&ie_list, sizeof(BCN_IE_LIST));
 	if (!ie_list) {
 		DBGPRINT(RT_DEBUG_ERROR, ("%s():Alloc ie_list failed!\n", __FUNCTION__));
@@ -1328,9 +1361,9 @@ VOID PeerBeaconAtScanAction(
 		if (Idx != BSS_NOT_FOUND) 
 			Rssi = pAd->ScanTab.BssEntry[Idx].Rssi;
 
-		Rssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0),
-							ConvertToRssi(pAd, Elem->Rssi1, RSSI_1),
-							ConvertToRssi(pAd, Elem->Rssi2, RSSI_2));
+		Rssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0, Elem->AntSel, BW_20),
+							ConvertToRssi(pAd, Elem->Rssi1, RSSI_1, Elem->AntSel, BW_20),
+							ConvertToRssi(pAd, Elem->Rssi2, RSSI_2, Elem->AntSel, BW_20));
 
 
 #ifdef DOT11_N_SUPPORT
@@ -1417,7 +1450,7 @@ LabelErr:
 LabelOK:
 	if (VarIE != NULL)
 		os_free_mem(NULL, VarIE);
-	if (ie_list)
+	if (ie_list != NULL)
 		os_free_mem(NULL, ie_list);
 	return;
 }
@@ -1492,9 +1525,9 @@ VOID PeerBeaconAtJoinAction(
 			RTMPCancelTimer(&pAd->MlmeAux.BeaconTimer, &TimerCancelled);
 
 			/* Update RSSI to prevent No signal display when cards first initialized */
-			pAd->StaCfg.RssiSample.LastRssi0 = ConvertToRssi(pAd, Elem->Rssi0, RSSI_0);
-			pAd->StaCfg.RssiSample.LastRssi1 = ConvertToRssi(pAd, Elem->Rssi1, RSSI_1);
-			pAd->StaCfg.RssiSample.LastRssi2 = ConvertToRssi(pAd, Elem->Rssi2, RSSI_2);
+			pAd->StaCfg.RssiSample.LastRssi0 = ConvertToRssi(pAd, Elem->Rssi0, RSSI_0, Elem->AntSel, BW_20);
+			pAd->StaCfg.RssiSample.LastRssi1 = ConvertToRssi(pAd, Elem->Rssi1, RSSI_1, Elem->AntSel, BW_20);
+			pAd->StaCfg.RssiSample.LastRssi2 = ConvertToRssi(pAd, Elem->Rssi2, RSSI_2, Elem->AntSel, BW_20);
 			pAd->StaCfg.RssiSample.AvgRssi0 = pAd->StaCfg.RssiSample.LastRssi0;
 			pAd->StaCfg.RssiSample.AvgRssi0X8	= pAd->StaCfg.RssiSample.AvgRssi0 << 3;
 			pAd->StaCfg.RssiSample.AvgRssi1 = pAd->StaCfg.RssiSample.LastRssi1;
@@ -1519,9 +1552,9 @@ VOID PeerBeaconAtJoinAction(
 
 				if (Idx == BSS_NOT_FOUND)				
 				{
-					Rssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0),
-											ConvertToRssi(pAd, Elem->Rssi1, RSSI_1),
-											ConvertToRssi(pAd, Elem->Rssi2, RSSI_2));
+					Rssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0, Elem->AntSel, BW_20),
+											ConvertToRssi(pAd, Elem->Rssi1, RSSI_1, Elem->AntSel, BW_20),
+											ConvertToRssi(pAd, Elem->Rssi2, RSSI_2, Elem->AntSel, BW_20));
 					Idx = BssTableSetEntry(pAd, &pAd->ScanTab, ie_list, Rssi, LenVIE, pVIE);
 					if (Idx != BSS_NOT_FOUND)
 					{
@@ -1603,8 +1636,6 @@ VOID PeerBeaconAtJoinAction(
 			/*  Get the ext capability info element */
 			NdisMoveMemory(&pAd->MlmeAux.ExtCapInfo, &ie_list->ExtCapInfo,sizeof(ie_list->ExtCapInfo));
 
-			pAd->StaActive.SupportedPhyInfo.bVhtEnable = FALSE;
-			pAd->StaActive.SupportedPhyInfo.vht_bw = VHT_BW_2040;	
 			
 #ifdef DOT11_N_SUPPORT
 #ifdef DOT11N_DRAFT3
@@ -1669,15 +1700,13 @@ VOID PeerBeaconAtJoinAction(
 					NdisMoveMemory(&pAd->MlmeAux.vht_cap, &ie_list->vht_cap_ie, ie_list->vht_cap_len);
 					pAd->MlmeAux.vht_cap_len = ie_list->vht_cap_len;
 					pAd->StaActive.SupportedPhyInfo.bVhtEnable = TRUE;
-					if (vht_op->ch_width == 0) {
-						pAd->StaActive.SupportedPhyInfo.vht_bw = VHT_BW_2040;
-					} else if (vht_op->ch_width == 1) {
+					if (vht_op->ch_width > 0) {
 						CentralChannel = vht_op->center_freq_1;
 						pAd->StaActive.SupportedPhyInfo.vht_bw = VHT_BW_80;
 					}
 
-					DBGPRINT(RT_DEBUG_OFF, ("%s(): VHT->center_freq_1=%d, CentralChannel=>%d, vht_cent_ch=%d\n",
-		 						__FUNCTION__, vht_op->center_freq_1, CentralChannel, pAd->CommonCfg.vht_cent_ch));
+					DBGPRINT(RT_DEBUG_OFF, ("%s(): VHT->center_freq_1=%d, CentralChannel=>%d\n",
+		 						__FUNCTION__, vht_op->center_freq_1, CentralChannel));
 				}
 #endif /* DOT11_VHT_AC */
 			}
@@ -1699,7 +1728,6 @@ VOID PeerBeaconAtJoinAction(
 				RTMPZeroMemory(&pAd->MlmeAux.AddHtInfo, SIZE_ADD_HT_INFO_IE);
 			}
 
-			pAd->hw_cfg.cent_ch = CentralChannel;
 			pAd->MlmeAux.CentralChannel = CentralChannel;
 			DBGPRINT(RT_DEBUG_OFF, ("%s(): Set CentralChannel=%d\n", __FUNCTION__, pAd->MlmeAux.CentralChannel));
 
@@ -1750,7 +1778,11 @@ VOID PeerBeaconAtJoinAction(
 											BSS0,
 											InfraAP_BW,
 											pAd->MlmeAux.Channel,
-											pAd->MlmeAux.CentralChannel);
+											pAd->MlmeAux.CentralChannel
+#ifdef CONFIG_MULTI_CHANNEL
+											,0
+#endif /*CONFIG_MULTI_CHANNEL*/											
+				);
 			}
 
 			pAd->Mlme.SyncMachine.CurrState = SYNC_IDLE;
@@ -1828,7 +1860,6 @@ VOID PeerBeacon(
 	pVIE = (PNDIS_802_11_VARIABLE_IEs) VarIE;
 	pVIE->Length = 0;
 
-
 	if (PeerBeaconAndProbeRspSanity(pAd, 
 								Elem->Msg, 
 								Elem->MsgLen, 
@@ -1840,9 +1871,9 @@ VOID PeerBeacon(
 		BOOLEAN is_my_bssid, is_my_ssid;
 		ULONG Bssidx, Now;
 		BSS_ENTRY *pBss;
-		CHAR RealRssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0),
-									ConvertToRssi(pAd, Elem->Rssi1, RSSI_1),
-									ConvertToRssi(pAd, Elem->Rssi2, RSSI_2));
+		CHAR RealRssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0, Elem->AntSel, BW_20),
+									ConvertToRssi(pAd, Elem->Rssi1, RSSI_1, Elem->AntSel, BW_20),
+									ConvertToRssi(pAd, Elem->Rssi2, RSSI_2, Elem->AntSel, BW_20));
 
 		is_my_bssid = MAC_ADDR_EQUAL(ie_list->Bssid, pAd->CommonCfg.Bssid)? TRUE : FALSE;
 		is_my_ssid = SSID_EQUAL(ie_list->Ssid, ie_list->SsidLen, pAd->CommonCfg.Ssid, pAd->CommonCfg.SsidLen)? TRUE:FALSE;
@@ -2037,6 +2068,7 @@ VOID PeerBeacon(
 			{
 				if ((((pAd->StaCfg.WepStatus != Ndis802_11WEPDisabled) << 4) ^ ie_list->CapabilityInfo) & 0x0010)
 				{
+
 					/*
 						To prevent STA connect to OPEN/WEP AP when STA is OPEN/NONE or 
 						STA connect to OPEN/NONE AP when STA is OPEN/WEP AP.
@@ -2423,14 +2455,14 @@ VOID PeerBeacon(
 					}
 #endif /* PCIE_PS_SUPPORT */
 				} 
-				else if ((pAd->TxSwQueue[QID_AC_BK].Number != 0) ||
-						(pAd->TxSwQueue[QID_AC_BE].Number != 0) ||
-						(pAd->TxSwQueue[QID_AC_VI].Number != 0) ||
-						(pAd->TxSwQueue[QID_AC_VO].Number != 0) ||
-						(RTMPFreeTXDRequest(pAd, QID_AC_BK, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS) ||
-						(RTMPFreeTXDRequest(pAd, QID_AC_BE, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS) ||
-						(RTMPFreeTXDRequest(pAd, QID_AC_VI, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS) ||
-						(RTMPFreeTXDRequest(pAd, QID_AC_VO, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS) ||
+				else if ((pAd->TxSwQueue[QID_AC_BK].Number != 0)													||
+						(pAd->TxSwQueue[QID_AC_BE].Number != 0)														||
+						(pAd->TxSwQueue[QID_AC_VI].Number != 0)														||
+						(pAd->TxSwQueue[QID_AC_VO].Number != 0)														||
+						(RTMPFreeTXDRequest(pAd, QID_AC_BK, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS)	||
+						(RTMPFreeTXDRequest(pAd, QID_AC_BE, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS)	||
+						(RTMPFreeTXDRequest(pAd, QID_AC_VI, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS)	||
+						(RTMPFreeTXDRequest(pAd, QID_AC_VO, TX_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS)	||
 						(RTMPFreeTXDRequest(pAd, QID_MGMT, MGMT_RING_SIZE - 1, &FreeNumber) != NDIS_STATUS_SUCCESS)) 
 				{
 					/* TODO: consider scheduled HCCA. might not be proper to use traditional DTIM-based power-saving scheme */
@@ -2676,7 +2708,10 @@ VOID ScanTimeoutAction(
 	}
 	else
 	{
-		pAd->MlmeAux.Channel = NextChannel(pAd, pAd->MlmeAux.Channel);
+		BOOLEAN skip = FALSE;
+		
+		if (!skip)
+			pAd->MlmeAux.Channel = NextChannel(pAd, pAd->MlmeAux.Channel);
 	}
 
 	/* Only one channel scanned for CISCO beacon request */

@@ -552,11 +552,9 @@ VOID CarrierDetectionStart(PRTMP_ADAPTER pAd)
 		AsicSendCommandToMcu(pAd, CD_ONOFF_MCU_CMD, 0xff, 0x01, 0x00, FALSE);
 		}
 #else 
-#ifndef MT760x
 		/* trun on interrupt polling for pcie device */
 		if (pAd->infType == RTMP_DEV_INF_PCIE)
 			AsicSendCommandToMcu(pAd, CD_INT_POLLING_CMD, 0xff, 0x01, 0x00, FALSE);
-#endif /* MT760x */
 #endif /* CARRIER_DETECTION_FIRMWARE_SUPPORT */	
 	}
 }
@@ -693,35 +691,6 @@ VOID ToneRadarProgram_v2(PRTMP_ADAPTER pAd, ULONG threshold)
 	/* ToneRadarEnable v2 */
 	RTMP_CARRIER_IO_WRITE8(pAd, 0, 1);
 }
-
-/* 
-    ==========================================================================
-    Description:
-	To program CS v3 related BBP registers (CS initialization)
-
-	Arguments:
-	    pAd			Pointer to our adapter
-	    
-    Return Value:
-        None
-
-    Note:
-    ==========================================================================
-*/
-VOID ToneRadarProgram_v3(PRTMP_ADAPTER pAd, ULONG threshold)
-{
-	UCHAR bbp;
-
-	/* 
-		Carrier Sense (Tone Radar) BBP initialization 
-		(MT7650 Carrier sense programming guide_v1_20120824.docx)
-	*/
-	RTMP_BBP_IO_WRITE32(pAd, TR_R2, 0x002d002d);
-	RTMP_BBP_IO_WRITE32(pAd, TR_R3, 0x0003002d);
-	RTMP_BBP_IO_WRITE32(pAd, TR_R5, 0x04e20000);
-	RTMP_BBP_IO_WRITE32(pAd, TR_R6, 0x8000abe0);
-}
-
 
 #endif /* CARRIER_DETECTION_SUPPORT */
 

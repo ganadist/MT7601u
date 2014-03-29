@@ -28,17 +28,6 @@
 #include <rt_config.h>
 
 
-VOID mgmt_tb_set_mcast_entry(RTMP_ADAPTER *pAd)
-{
-	MAC_TABLE_ENTRY *pEntry = &pAd->MacTab.Content[MCAST_WCID];
-	
-	pEntry->Sst = SST_ASSOC;
-	pEntry->Aid = MCAST_WCID;	/* Softap supports 1 BSSID and use WCID=0 as multicast Wcid index*/
-	pEntry->PsMode = PWR_ACTIVE;
-	pEntry->CurrTxRate = pAd->CommonCfg.MlmeRate; 
-}
-
-
 VOID set_entry_phy_cfg(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry)
 {
 
@@ -109,31 +98,13 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 /*	USHORT	offset;*/
 /*	ULONG	addr;*/
 	BOOLEAN Cancelled;
-	UINT32 MaxWcidNum = MAX_LEN_OF_MAC_TABLE;
-#ifdef MAC_REPEATER_SUPPORT
-	BOOLEAN bAPCLI = FALSE;
-#endif /* MAC_REPEATER_SUPPORT */
-
-#ifdef MAC_REPEATER_SUPPORT
-	if ((apidx >= MIN_NET_DEVICE_FOR_APCLI) && 
-		(apidx < MIN_NET_DEVICE_FOR_MESH) &&
-		(pAd->ApCfg.bMACRepeaterEn == TRUE))
-	{
-		MaxWcidNum = MAX_LEN_OF_MAC_TABLE + (MAX_EXT_MAC_ADDR_SIZE * MAX_APCLI_NUM);
-		bAPCLI = TRUE;
-	}
-#endif /* MAC_REPEATER_SUPPORT */
 
 	/* if FULL, return*/
-	if (pAd->MacTab.Size >= MaxWcidNum)
+	if (pAd->MacTab.Size >= MAX_LEN_OF_MAC_TABLE)
 		return NULL;
 
-#ifdef MAC_REPEATER_SUPPORT
-	if (bAPCLI)
-		FirstWcid = 3;
-	else
-#endif /* MAC_REPEATER_SUPPORT */
-	FirstWcid = 1;
+		FirstWcid = 1;
+
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	if (pAd->StaCfg.BssType == BSS_INFRA)
@@ -142,7 +113,7 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 
 	/* allocate one MAC entry*/
 	NdisAcquireSpinLock(&pAd->MacTabLock);
-	for (i = FirstWcid; i< MaxWcidNum; i++)   /* skip entry#0 so that "entry index == AID" for fast lookup*/
+	for (i = FirstWcid; i< MAX_LEN_OF_MAC_TABLE; i++)   /* skip entry#0 so that "entry index == AID" for fast lookup*/
 	{
 		/* pick up the first available vacancy*/
 		if (IS_ENTRY_NONE(&pAd->MacTab.Content[i]))
@@ -154,23 +125,6 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 			RTMPCancelTimer(&pEntry->EnqueueStartForPSKTimer, &Cancelled);
 
 			NdisZeroMemory(pEntry, sizeof(MAC_TABLE_ENTRY));
-
-#ifdef WFA_VHT_PF
-#ifdef IP_ASSEMBLY
-			if (pEntry->ip_queue_inited == 0) {
-				int q_idx, ac_idx;
-				struct ip_frag_q *fragQ = &pEntry->ip_fragQ[q_idx];
-				
-				for (ac_idx = 0; ac_idx < 4; ac_idx++) {
-					InitializeQueueHeader(&pEntry->ip_queue1[ac_idx]);
-					InitializeQueueHeader(&pEntry->ip_queue2[ac_idx]);
-					pEntry->ip_id1[ac_idx] = pEntry->ip_id2[ac_idx] = -1;
-					pEntry->ip_id1_FragSize[ac_idx] = pEntry->ip_id2_FragSize[ac_idx] = -1;
-				}
-				pEntry->ip_queue_inited = 1;
-			}
-#endif /* IP_ASSEMBLY */
-#endif /* WFA_VHT_PF */
 
 			if (CleanAll == TRUE)
 			{
@@ -451,31 +405,6 @@ BOOLEAN MacTableDeleteEntry(
 
 			/*RTMP_REMOVE_PAIRWISE_KEY_ENTRY(pAd, wcid);*/
 
-#ifdef WFA_VHT_PF
-#ifdef IP_ASSEMBLY
-			if (pAd->ip_assemble == TRUE)
-			{
-				if (pEntry->ip_queue_inited)
-				{
-					PQUEUE_ENTRY qe;
-					PNDIS_PACKET q_pkt;
-
-					qe = pEntry->ip_queue1;
-					while (qe->Head)
-					{
-						DBGPRINT(RT_DEBUG_TRACE, ("%s():%ld...\n", __FUNCTION__, qe->Number));
-
-						pEntry = RemoveHeadQueue(qe);
-						/*pPacket = CONTAINING_RECORD(pEntry, NDIS_PACKET, MiniportReservedEx); */
-						q_pkt = QUEUE_ENTRY_TO_PACKET(pEntry);
-						RELEASE_NDIS_PACKET(pAd, q_pkt, NDIS_STATUS_FAILURE);
-					}
-					pEntry->ip_queue_inited = 0;
-				}
-			}
-#endif /* IP_ASSEMBLY */
-#endif /* WFA_VHT_PF */
-
 #ifdef UAPSD_SUPPORT
 #endif /* UAPSD_SUPPORT */
 
@@ -523,7 +452,6 @@ BOOLEAN MacTableDeleteEntry(
 		RTMP_UPDATE_PROTECT(pAd, 0, ALLN_SETPROTECT, TRUE, 0);
 	}
 
-	pAd->chipCap.pWeakestEntry = NULL;
 	return TRUE;
 }
 
@@ -570,32 +498,4 @@ VOID MacTableReset(
 
 	return;
 }
-
-#ifdef MAC_REPEATER_SUPPORT
-MAC_TABLE_ENTRY *InsertMacRepeaterEntry(
-	IN  PRTMP_ADAPTER   pAd,
-	IN  PUCHAR			pAddr,
-	IN  UCHAR			IfIdx)
-{
-	MAC_TABLE_ENTRY *pEntry = NULL;
-	PAPCLI_STRUCT pApCliEntry = NULL;
-
-	os_alloc_mem(NULL, &pEntry, sizeof(MAC_TABLE_ENTRY));
-
-	if (pEntry)
-	{
-		pApCliEntry = &pAd->ApCfg.ApCliTab[IfIdx];
-		pEntry->Aid = pApCliEntry->MacTabWCID + 1; // TODO: We need to record count of STAs
-		COPY_MAC_ADDR(pEntry->Addr, pApCliEntry->ApCliMlmeAux.Bssid);
-		printk("sn - InsertMacRepeaterEntry: Aid = %d\n", pEntry->Aid);
-		hex_dump("sn - InsertMacRepeaterEntry pEntry->Addr", pEntry->Addr, 6);
-		/* Add this entry into ASIC RX WCID search table */
-		RTMP_STA_ENTRY_ADD(pAd, pEntry);
-		os_free_mem(NULL, pEntry);
-	}
-
-	return pEntry;
-}
-
-#endif /* MAC_REPEATER_SUPPORT */
 

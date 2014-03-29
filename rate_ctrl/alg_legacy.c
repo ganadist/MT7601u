@@ -97,6 +97,29 @@ VOID MlmeDynamicTxRateSwitching(
 		/* check if this entry need to switch rate automatically */
 		if (RTMPCheckEntryEnableAutoRateSwitch(pAd, pEntry) == FALSE)
 			continue;
+#ifdef CONFIG_MULTI_CHANNEL
+		if (IS_ENTRY_CLIENT(pEntry) && 
+			IS_P2P_ENTRY_NONE(pEntry) && (pAd->Multi_Channel_Enable == TRUE))
+		{
+			if (pAd->Mlme.StaStayTick == (pAd->ra_interval / 100))
+			{
+				pAd->Mlme.StaStayTick = 0;
+			}
+			else
+				continue;
+		}
+
+		if (IS_P2P_CLI_ENTRY(pEntry) && (pAd->Multi_Channel_Enable == TRUE))
+		{
+			if (pAd->Mlme.P2pStayTick == (pAd->ra_interval / 100))
+			{
+				pAd->Mlme.P2pStayTick = 0;
+			}
+			else
+				continue;
+		}
+#endif /* CONFIG_MULTI_CHANNEL */
+
 
 		MlmeSelectTxRateTable(pAd, pEntry, &pTable, &TableSize, &InitTxRateIdx);
 		pEntry->pTable = pTable;
@@ -111,6 +134,7 @@ VOID MlmeDynamicTxRateSwitching(
 
 		if ((pAd->MacTab.Size == 1) || IS_ENTRY_DLS(pEntry))
 		{
+			/* Rssi = RTMPMaxRssi(pAd, pRssi->AvgRssi0, pRssi->AvgRssi1, pRssi->AvgRssi2); */
 			Rssi = RTMPAvgRssi(pAd, pRssi);
 
 			if (TxTotalCnt)
@@ -165,7 +189,7 @@ VOID MlmeDynamicTxRateSwitching(
 #endif /* AGS_SUPPORT */
 		}
 		else
-		{
+		{		
 			if (INFRA_ON(pAd) && (i == 1))
 				Rssi = RTMPAvgRssi(pAd, pRssi);
 			else
@@ -257,7 +281,7 @@ VOID MlmeDynamicTxRateSwitching(
 #ifdef AGS_SUPPORT
 		if (AGS_IS_USING(pAd, pTable))
 		{
-			/* The dynamic Tx rate switching for AGS (Adaptive Group Switching)*/
+			/* The dynamic Tx rate switching for AGS (Adaptive Group Switching)*/	
 			MlmeDynamicTxRateSwitchingAGS(pAd, pEntry, pTable, TableSize, &AGSStatisticsInfo, InitTxRateIdx);
 
 			continue;
@@ -571,6 +595,10 @@ VOID StaQuickResponeForRateUpExec(
 #ifdef AGS_SUPPORT
 	AGS_STATISTICS_INFO		AGSStatisticsInfo = {0};
 #endif /* AGS_SUPPORT */
+#ifdef CONFIG_MULTI_CHANNEL
+	BOOLEAN					bDoRateTune = FALSE;
+#endif /* CONFIG_MULTI_CHANNEL */
+
 
 	pAd->StaCfg.StaQuickResponeForRateUpTimerRunning = FALSE;
 
@@ -578,6 +606,11 @@ VOID StaQuickResponeForRateUpExec(
 	for (i = 1; i < MAX_LEN_OF_MAC_TABLE; i++) 
 	{
 		pEntry = &pAd->MacTab.Content[i];
+
+#ifdef CONFIG_MULTI_CHANNEL
+		bDoRateTune = pEntry->bDoRateTune;
+		pEntry->bDoRateTune = FALSE;
+#endif /* CONFIG_MULTI_CHANNEL */
 
 		if (IS_ENTRY_NONE(pEntry))
 			continue;
@@ -593,6 +626,19 @@ VOID StaQuickResponeForRateUpExec(
 #endif /* DBG_CTRL_SUPPORT */
 		)
 			continue;
+
+#ifdef CONFIG_MULTI_CHANNEL
+		if (IS_ENTRY_CLIENT(pEntry) && 
+			IS_P2P_ENTRY_NONE(pEntry) &&
+			(bDoRateTune) &&
+			((pAd->MultiChannelFlowCtl & HCCA_DEQUEUE_DISABLE) == 1) && (pAd->Multi_Channel_Enable == TRUE))
+			continue;
+
+		if (IS_P2P_CLI_ENTRY(pEntry) &&
+			(bDoRateTune) &&
+			((pAd->MultiChannelFlowCtl & EDCA_AC0_DEQUEUE_DISABLE) == 1) && (pAd->Multi_Channel_Enable == TRUE))
+			continue;
+#endif /* CONFIG_MULTI_CHANNEL */
 
 		if (INFRA_ON(pAd) && (i == 1))
 			Rssi = RTMPAvgRssi(pAd, &pAd->StaCfg.RssiSample);
@@ -1065,6 +1111,10 @@ VOID MlmeOldRateAdapt(
 		{
 			if (!pAd->StaCfg.StaQuickResponeForRateUpTimerRunning)
 			{
+#ifdef CONFIG_MULTI_CHANNEL
+				pEntry->bDoRateTune = TRUE;
+#endif /* CONFIG_MULTI_CHANNEL */			
+	
 				RTMPSetTimer(&pAd->StaCfg.StaQuickResponeForRateUpTimer, pAd->ra_fast_interval);
 				pAd->StaCfg.StaQuickResponeForRateUpTimerRunning = TRUE;
 			}

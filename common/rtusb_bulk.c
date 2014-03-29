@@ -30,7 +30,13 @@
 
 #include	"rt_config.h"
 /* Match total 6 bulkout endpoint to corresponding queue.*/
+
+#ifdef CONFIG_MULTI_CHANNEL
+UCHAR 	EpToQueue[6]={FIFO_EDCA, FIFO_EDCA, FIFO_EDCA, FIFO_EDCA, FIFO_HCCA, FIFO_MGMT};
+#else
 UCHAR	EpToQueue[6]={FIFO_EDCA, FIFO_EDCA, FIFO_EDCA, FIFO_EDCA, FIFO_EDCA, FIFO_MGMT};
+#endif /* CONFIG_MULTI_CHANNEL */
+
 
 
 
@@ -128,7 +134,7 @@ pAd->RunningQueueNoCount=0;
 #endif /* INF_AMAZON_SE */
 
 
-VOID RTUSBInitTxDesc(
+VOID	RTUSBInitTxDesc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PTX_CONTEXT		pTxContext,
 	IN	UCHAR			BulkOutPipeId,
@@ -149,6 +155,7 @@ VOID RTUSBInitTxDesc(
 	{
 		pSrc = &pTxContext->TransferBuffer->Aggregation[2];
 
+		/*Initialize a tx bulk urb*/
 		RTUSB_FILL_TX_BULK_URB(pUrb,
 						pObj->pUsb_Dev,
 						pChipCap->WMM0ACBulkOutAddr[BulkOutPipeId],
@@ -162,6 +169,21 @@ VOID RTUSBInitTxDesc(
 	{
 		pSrc = (PUCHAR) pTxContext->TransferBuffer->field.WirelessPacket;
 
+		/*Initialize a tx bulk urb*/
+		if (BulkOutPipeId == MGMTPIPEIDX) //Use EP9
+		{
+			RTUSB_FILL_TX_BULK_URB(pUrb,
+					pObj->pUsb_Dev,
+					pChipCap->CommandBulkOutAddr,
+					pSrc,
+					pTxContext->BulkOutSize,
+					Func,
+					pTxContext,
+					pTxContext->data_dma);
+
+		}
+		else
+		{
 		RTUSB_FILL_TX_BULK_URB(pUrb,
 						pObj->pUsb_Dev,
 						pChipCap->WMM0ACBulkOutAddr[BulkOutPipeId],
@@ -170,6 +192,7 @@ VOID RTUSBInitTxDesc(
 						Func,
 						pTxContext,
 						pTxContext->data_dma);
+		}
 	}
 }
 
@@ -193,6 +216,21 @@ VOID	RTUSBInitHTTxDesc(
 
 	pSrc = &pTxContext->TransferBuffer->field.WirelessPacket[pTxContext->NextBulkOutPosition];
 
+	/*Initialize a tx bulk urb*/
+	if (BulkOutPipeId == 4) //Use EP9
+	{
+
+		RTUSB_FILL_HTTX_BULK_URB(pUrb,
+						pObj->pUsb_Dev,
+						pChipCap->WMM1ACBulkOutAddr,
+						pSrc,
+						BulkOutSize,
+						Func,
+						pTxContext,
+						(pTxContext->data_dma + pTxContext->NextBulkOutPosition));
+	}
+	else
+	{
 	RTUSB_FILL_HTTX_BULK_URB(pUrb,
 						pObj->pUsb_Dev,
 						pChipCap->WMM0ACBulkOutAddr[BulkOutPipeId],
@@ -201,6 +239,7 @@ VOID	RTUSBInitHTTxDesc(
 						Func,
 						pTxContext,
 						(pTxContext->data_dma + pTxContext->NextBulkOutPosition));
+	}
 }
 
 VOID	RTUSBInitRxDesc(
@@ -220,6 +259,8 @@ VOID	RTUSBInitRxDesc(
 	else
 		RX_bulk_size = MAX_RXBULK_SIZE;
 		
+
+	/*Initialize a rx bulk urb*/
 	RTUSB_FILL_RX_BULK_URB(pUrb,
 					pObj->pUsb_Dev,
 					pChipCap->DataBulkInAddr,
@@ -231,6 +272,26 @@ VOID	RTUSBInitRxDesc(
 }
 
 
+VOID RTUSBInitCmdRspEventDesc(
+	PRTMP_ADAPTER pAd,
+	PCMD_RSP_CONTEXT pCmdRspEventContext)
+{
+	PURB pUrb = pCmdRspEventContext->pUrb;
+	POS_COOKIE pObj = (POS_COOKIE)pAd->OS_Cookie;
+	RTMP_CHIP_CAP *pChipCap = &pAd->chipCap;
+	 
+	//printk("%s, Bulk In add = 0x%x\n", __FUNCTION__, pAd->BulkInEpAddr[1]);
+	/* Initialize command response event URB */
+	RTUSB_FILL_RX_BULK_URB(pUrb,
+						   pObj->pUsb_Dev,
+						   pChipCap->CommandRspBulkInAddr,
+						   pCmdRspEventContext->CmdRspBuffer,
+						   CMD_RSP_BULK_SIZE,
+						   RTUSBBulkCmdRspEventComplete,
+						   (void *)pCmdRspEventContext,
+						   pCmdRspEventContext->data_dma);
+
+}
 
 
 /*
@@ -442,7 +503,11 @@ VOID	RTUSBBulkOutDataPacket(
 		{
 
 
+#ifdef RT65xx
 		if (((ThisBulkSize&0xfffe0000) != 0) || ((ThisBulkSize&0x10000) == 0x10000))
+#else
+		if (((ThisBulkSize&0xffff8000) != 0) || ((ThisBulkSize&0x6000) == 0x6000))
+#endif /* RT65xx */
 		{	/* Limit BulkOut size to about 24k bytes.*/
 			pHTTXContext->ENextBulkOutPosition = TmpBulkEndPos;
 #ifdef USB_BULK_BUF_ALIGMENT
@@ -494,7 +559,8 @@ VOID	RTUSBBulkOutDataPacket(
 			pHTTXContext->ENextBulkOutPosition = TmpBulkEndPos;
 			break;
 		}
-		
+
+#ifndef CONFIG_MULTI_CHANNEL
 		if (pTxInfo->TxInfoQSEL != FIFO_EDCA)
 		{
 			DBGPRINT(RT_DEBUG_ERROR, ("%s(): ====> pTxInfo->QueueSel(%d)!= FIFO_EDCA!!!!\n", 
@@ -504,7 +570,8 @@ VOID	RTUSBBulkOutDataPacket(
 										pHTTXContext->ENextBulkOutPosition, pHTTXContext->bCopySavePad));
 			hex_dump("Wrong QSel Pkt:", (PUCHAR)&pWirelessPkt[TmpBulkEndPos], (pHTTXContext->CurWritePosition - pHTTXContext->NextBulkOutPosition));
 		}
-		
+#endif /* !CONFIG_MULTI_CHANNEL */		
+
 		if (pTxInfo->TxInfoPktLen <= 8)
 		{
 			BULK_OUT_UNLOCK(&pAd->TxContextQueueLock[BulkOutPipeId], IrqFlags2);
@@ -530,7 +597,9 @@ VOID	RTUSBBulkOutDataPacket(
 		pLastTxInfo = pTxInfo;
 		
 		/* Make sure we use EDCA QUEUE.  */
+#ifndef CONFIG_MULTI_CHANNEL
 		pTxInfo->TxInfoQSEL = FIFO_EDCA;
+#endif /* !CONFIG_MULTI_CHANNEL */
 		ThisBulkSize += (pTxInfo->TxInfoPktLen+4);
 		TmpBulkEndPos += (pTxInfo->TxInfoPktLen+4);
 		
@@ -747,7 +816,7 @@ USBHST_STATUS RTUSBBulkOutDataPacketComplete(URBCompleteStatus Status, purbb_t p
 VOID	RTUSBBulkOutNullFrame(
 	IN	PRTMP_ADAPTER	pAd)
 {
-	PTX_CONTEXT		pNullContext = &(pAd->NullContext);
+	PTX_CONTEXT		pNullContext = &(pAd->NullContext[0]);
 	PURB			pUrb;
 	int				ret = 0;
 	unsigned long	IrqFlags;
@@ -810,6 +879,29 @@ USBHST_STATUS RTUSBBulkOutNullFrameComplete(URBCompleteStatus Status, purbb_t pU
 	RTMP_OS_TASKLET_SCHE(&pObj->null_frame_complete_task);
 
 }
+
+
+#ifdef CONFIG_MULTI_CHANNEL
+
+USBHST_STATUS RTUSBBulkOutHCCANullFrameComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs)
+{
+	PRTMP_ADAPTER		pAd;
+	PTX_CONTEXT			pNullContext;
+	NTSTATUS			Status;
+	POS_COOKIE			pObj;
+	
+	pNullContext	= (PTX_CONTEXT)RTMP_OS_USB_CONTEXT_GET(pURB);
+	pAd 			= pNullContext->pAd;
+	Status 			= RTMP_OS_USB_STATUS_GET(pURB); /*->rtusb_urb_status;*/
+
+	pObj = (POS_COOKIE) pAd->OS_Cookie;
+	RTMP_NET_TASK_DATA_ASSIGN(&pObj->hcca_null_frame_complete_task, (unsigned long)pURB);
+	RTMP_OS_TASKLET_SCHE(&pObj->hcca_null_frame_complete_task);
+
+}
+
+#endif /* CONFIG_MULTI_CHANNEL */
+
 
 
 /*
@@ -954,7 +1046,12 @@ VOID	RTUSBBulkOutPsPoll(
 #endif /* RT_BIG_ENDIAN */
 
 	/* Init Tx context descriptor*/
-	RTUSBInitTxDesc(pAd, pPsPollContext, MGMTPIPEIDX, (usb_complete_t)RtmpUsbBulkOutPsPollComplete);
+#ifdef CONFIG_MULTI_CHANNEL
+	if (pAd->Multi_Channel_Enable == TRUE)
+		RTUSBInitTxDesc(pAd, pPsPollContext, 0, (usb_complete_t)RtmpUsbBulkOutPsPollComplete);
+	else
+#endif /* CONFIG_MULTI_CHANNEL */
+		RTUSBInitTxDesc(pAd, pPsPollContext, MGMTPIPEIDX, (usb_complete_t)RtmpUsbBulkOutPsPollComplete);
 	
 	pUrb = pPsPollContext->pUrb;
 	if((ret = RTUSB_SUBMIT_URB(pUrb))!=0)
@@ -1034,6 +1131,41 @@ VOID DoBulkIn(IN RTMP_ADAPTER *pAd)
 }
 
 
+VOID BulkInCmdRspEvent(RTMP_ADAPTER *pAd)
+{
+	PCMD_RSP_CONTEXT pCmdRspEventContext = &pAd->CmdRspEventContext;
+	PURB pURB;
+	int ret = 0;
+	unsigned long	IrqFlags;
+
+	RTMP_IRQ_LOCK(&pAd->CmdRspLock, IrqFlags);
+	if ( (pCmdRspEventContext->Readable == TRUE) || (pCmdRspEventContext->InUse == TRUE))
+	{
+		RTMP_IRQ_UNLOCK(&pAd->CmdRspLock, IrqFlags);
+		return;
+	}
+	pCmdRspEventContext->InUse = TRUE;
+	pCmdRspEventContext->IRPPending = TRUE;
+	RTMP_IRQ_UNLOCK(&pAd->CmdRspLock, IrqFlags);
+
+	RTUSBInitCmdRspEventDesc(pAd, pCmdRspEventContext);
+	pURB = pCmdRspEventContext->pUrb;
+
+	if ((ret = RTUSB_SUBMIT_URB(pURB)) != 0)
+	{
+		RTMP_IRQ_LOCK(&pAd->CmdRspLock, IrqFlags);
+		pCmdRspEventContext->InUse = FALSE;
+		pCmdRspEventContext->IRPPending = FALSE;
+		RTMP_IRQ_UNLOCK(&pAd->CmdRspLock, IrqFlags);
+
+	}
+	else
+	{
+		DBGPRINT(RT_DEBUG_INFO, ("%s success\n", __FUNCTION__));
+	}
+
+} 
+
 
 /*
 	========================================================================
@@ -1070,7 +1202,8 @@ VOID	RTUSBBulkReceive(
 {
 	PRX_CONTEXT		pRxContext;
 	unsigned long	IrqFlags;
-	
+
+
 	/* sanity check */
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NEED_STOP_HANDLE_RX) 
 					&& !RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_POLL_IDLE))
@@ -1114,7 +1247,7 @@ VOID	RTUSBBulkReceive(
 						&& (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_POLL_IDLE)))))
 	{
 #ifdef CONFIG_STA_SUPPORT
-		if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF) )
+		if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF))
 			return;
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -1123,7 +1256,32 @@ VOID	RTUSBBulkReceive(
 	
 }
 
+#ifdef RLT_MAC
+VOID RTUSBBulkCmdRspEventReceive(PRTMP_ADAPTER pAd)
+{
+	unsigned long	IrqFlags;
+	PCMD_RSP_CONTEXT pCmdRspEventContext = &pAd->CmdRspEventContext;
 
+	RTMP_IRQ_LOCK(&pAd->CmdRspLock, IrqFlags);
+	if ((pCmdRspEventContext->InUse) == FALSE && (pCmdRspEventContext->Readable == TRUE))
+	{
+		RTMP_IRQ_UNLOCK(&pAd->CmdRspLock, IrqFlags);
+		CmdRspEventHandle(pAd);
+
+		
+		RTMP_IRQ_LOCK(&pAd->CmdRspLock, IrqFlags);
+		pCmdRspEventContext->Readable = FALSE;
+		RTMP_IRQ_UNLOCK(&pAd->CmdRspLock, IrqFlags);
+	}
+	else
+	{
+		RTMP_IRQ_UNLOCK(&pAd->CmdRspLock, IrqFlags);
+	}
+
+	if ( !RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF) )
+	BulkInCmdRspEvent(pAd);
+}
+#endif /* RTL_MAC */
 
 /*
 	========================================================================
@@ -1166,6 +1324,21 @@ USBHST_STATUS RTUSBBulkRxComplete(URBCompleteStatus Status, purbb_t pURB, pregs 
 	
 }
 
+//void RTUSBBulkCmdRspEventComplete(purbb_t pURB)
+USBHST_STATUS RTUSBBulkCmdRspEventComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs)
+{
+
+	PRX_CONTEXT		pCmdRspEventContext;
+	PRTMP_ADAPTER	pAd;
+	POS_COOKIE 		pObj;
+
+	pCmdRspEventContext	= (PRX_CONTEXT)RTMP_OS_USB_CONTEXT_GET(pURB);
+	pAd = pCmdRspEventContext->pAd;
+	pObj = (POS_COOKIE)pAd->OS_Cookie;
+
+	RTMP_NET_TASK_DATA_ASSIGN(&pObj->cmd_rsp_event_task, (unsigned long)pURB);
+	RTMP_OS_TASKLET_SCHE(&pObj->cmd_rsp_event_task);
+}
 
 /*
 	========================================================================
@@ -1241,15 +1414,42 @@ VOID	RTUSBKickBulkOut(
 				RTUSBBulkOutDataPacket(pAd, EDCA_AC3_PIPE, pAd->NextBulkOutIndex[EDCA_AC3_PIPE]);
 			}
 		}
+#ifdef CONFIG_MULTI_CHANNEL	
+		if (RTUSB_TEST_BULK_FLAG(pAd, fRTUSB_BULK_OUT_DATA_HCCA))
+		{
+			if (((!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS)) || 
+				(!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED))
+				|| P2P_GO_ON(pAd) || P2P_CLI_ON(pAd)
+				))
+			{
+				RTUSBBulkOutDataPacket(pAd, HCCA_PIPE, pAd->NextBulkOutIndex[HCCA_PIPE]);
+			}
+		}	
+#endif /*CONFIG_MULTI_CHANNEL*/
 
 		/* 7. Null frame is the last*/
 		else if (RTUSB_TEST_BULK_FLAG(pAd, fRTUSB_BULK_OUT_DATA_NULL))
 		{
+#ifdef CONFIG_MULTI_CHANNEL
+			if ((INFRA_ON(pAd) && (pAd->CommonCfg.Channel == pAd->LatchRfRegs.Channel ||
+				pAd->CommonCfg.CentralChannel== pAd->LatchRfRegs.Channel )) && (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS)))
+#else
 			if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BSS_SCAN_IN_PROGRESS))
+#endif /* CONFIG_MULTI_CHANNEL */
 			{
 				RTUSBBulkOutNullFrame(pAd);
 			}
 		}
+#ifdef CONFIG_MULTI_CHANNEL	
+		else if (RTUSB_TEST_BULK_FLAG(pAd, fRTUSB_BULK_OUT_DATA_NULL_HCCA))
+		{
+			if (INFRA_ON(pAd) && (pAd->CommonCfg.Channel == pAd->LatchRfRegs.Channel ||
+				pAd->CommonCfg.CentralChannel== pAd->LatchRfRegs.Channel ))
+				RTUSBBulkOutNullFrame(pAd);
+		}
+#endif /*CONFIG_MULTI_CHANNEL*/
+
+
 
 		/* 8. No data avaliable*/
 		else
@@ -1365,10 +1565,9 @@ VOID	RTUSBCancelPendingIRPs(
 VOID	RTUSBCancelPendingBulkInIRP(
 	IN	PRTMP_ADAPTER	pAd)
 {
-	PRX_CONTEXT pRxContext;
+	PRX_CONTEXT		pRxContext;
 	PCMD_RSP_CONTEXT pCmdRspEventContext = &pAd->CmdRspEventContext;
-	UINT i;
-	ULONG IrqFlags;
+	UINT			i;
 
 	DBGPRINT_RAW(RT_DEBUG_TRACE, ("--->RTUSBCancelPendingBulkInIRP\n"));
 	for ( i = 0; i < (RX_RING_SIZE); i++)
@@ -1386,7 +1585,7 @@ VOID	RTUSBCancelPendingBulkInIRP(
 
 	if (pCmdRspEventContext->IRPPending == TRUE)
 	{
-		DBGPRINT(RT_DEBUG_TRACE, ("Unlink cmd rsp urb\n"));
+		printk("unlink cmd rsp urb\n");
 		RTUSB_UNLINK_URB(pCmdRspEventContext->pUrb);
 		pCmdRspEventContext->IRPPending = FALSE;
 		pCmdRspEventContext->InUse = FALSE;

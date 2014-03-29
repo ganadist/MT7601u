@@ -84,9 +84,8 @@ void dump_urb(VOID *purb_org)
 
 #ifdef CONFIG_STA_SUPPORT
 #ifdef CONFIG_PM
-#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 
-
+/*
 void rausb_autopm_put_interface( void *intf)
 {
 	usb_autopm_put_interface((struct usb_interface *)intf);
@@ -96,7 +95,7 @@ int  rausb_autopm_get_interface( void *intf)
 {
 	return usb_autopm_get_interface((struct usb_interface *)intf);
 }
-
+*/
 
 
 /*
@@ -114,30 +113,21 @@ Note:
 ========================================================================
 */
 
-int RTMP_Usb_AutoPM_Put_Interface (
-	IN	VOID			*pUsb_Devsrc,
+int rausb_autopm_put_interface (
 	IN	VOID			*intfsrc)
 {
 
 	INT	 pm_usage_cnt;
 	struct usb_interface	*intf =(struct usb_interface *)intfsrc;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
-		pm_usage_cnt = atomic_read(&intf->pm_usage_cnt);	
-#else
-		pm_usage_cnt = intf->pm_usage_cnt;
-#endif
-		
-		if (pm_usage_cnt == 1)
-		{
-			rausb_autopm_put_interface(intf);
 
-              }
+	usb_autopm_put_interface(intf);
 
-			return 0;
+
+	return 0;
 }
 
-EXPORT_SYMBOL(RTMP_Usb_AutoPM_Put_Interface);
+EXPORT_SYMBOL(rausb_autopm_put_interface);
 
 /*
 ========================================================================
@@ -154,40 +144,20 @@ Note:
 ========================================================================
 */
 
-int RTMP_Usb_AutoPM_Get_Interface (
-	IN	VOID			*pUsb_Devsrc,
+int rausb_autopm_get_interface (
 	IN	VOID			*intfsrc)
 {
 
 	INT	 pm_usage_cnt;
 	struct usb_interface	*intf =(struct usb_interface *)intfsrc;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
-	pm_usage_cnt = (INT)atomic_read(&intf->pm_usage_cnt);	
-#else
-	pm_usage_cnt = intf->pm_usage_cnt;
-#endif
 
-	if (pm_usage_cnt == 0)
-	{
-		int res=1;
-		
-		res = rausb_autopm_get_interface(intf);
-		if (res)
-		{
-			DBGPRINT(RT_DEBUG_ERROR, ("AsicSwitchChannel autopm_resume fail ------\n"));
-			return (-1);
-		}			
-			
-	}
-	return 2;
-
+	usb_autopm_get_interface(intf);
 
 }
 
-EXPORT_SYMBOL(RTMP_Usb_AutoPM_Get_Interface);
+EXPORT_SYMBOL(rausb_autopm_get_interface);
 
-#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
 #endif /* CONFIG_PM */
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -427,20 +397,6 @@ void rausb_buffer_free(VOID *dev,
 }
 EXPORT_SYMBOL(rausb_buffer_free);
 
-void rausb_fill_bulk_urb(void *urb,
-						 void *dev,
-						 unsigned int pipe,
-						 void *transfer_buffer,
-						 int buffer_length,
-						 USB_COMPLETE_HANDLER complete_fn,
-						 void *context)
-{
-	usb_fill_bulk_urb(urb, dev, pipe, transfer_buffer, buffer_length, complete_fn, context);
-
-}
-EXPORT_SYMBOL(rausb_fill_bulk_urb);
-
-
 /*
 ========================================================================
 Routine Description:
@@ -489,18 +445,6 @@ unsigned int rausb_rcvctrlpipe(VOID *dev, ULONG address)
 	return usb_rcvctrlpipe(dev, address);
 }
 EXPORT_SYMBOL(rausb_rcvctrlpipe);
-
-unsigned int rausb_sndbulkpipe(void *dev, ULONG address)
-{
-	return usb_sndbulkpipe(dev, address);
-}
-EXPORT_SYMBOL(rausb_sndbulkpipe);
-
-unsigned int rausb_rcvbulkpipe(void *dev, ULONG address)
-{
-	return usb_rcvbulkpipe(dev, address);
-}
-EXPORT_SYMBOL(rausb_rcvbulkpipe);
 
 
 /*

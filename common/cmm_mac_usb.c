@@ -88,7 +88,7 @@ VOID RTMPResetTxRxRingMemory(
 	IN RTMP_ADAPTER * pAd)
 {
 	UINT index, i, acidx;
-	PTX_CONTEXT pNullContext   = &pAd->NullContext;
+	PTX_CONTEXT pNullContext   = &pAd->NullContext[0];
 	PTX_CONTEXT pPsPollContext = &pAd->PsPollContext;
 	PCMD_RSP_CONTEXT pCmdRspEventContext = &pAd->CmdRspEventContext;
 	unsigned int IrqFlags;
@@ -215,7 +215,7 @@ VOID	RTMPFreeTxRxRingMemory(
 	IN	PRTMP_ADAPTER	pAd)
 {
 	UINT                i, acidx;
-	PTX_CONTEXT			pNullContext   = &pAd->NullContext;
+	PTX_CONTEXT			pNullContext   = &pAd->NullContext[0];
 	PTX_CONTEXT			pPsPollContext = &pAd->PsPollContext;
 	PCMD_RSP_CONTEXT pCmdRspEventContext = &pAd->CmdRspEventContext;
 
@@ -385,7 +385,7 @@ NDIS_STATUS	NICInitTransmit(
 {
 	UCHAR			i, acidx;
 	NDIS_STATUS     Status = NDIS_STATUS_SUCCESS;
-	PTX_CONTEXT		pNullContext   = &(pAd->NullContext);
+	PTX_CONTEXT		pNullContext   = &(pAd->NullContext[0]);
 	PTX_CONTEXT		pPsPollContext = &(pAd->PsPollContext);
 	PTX_CONTEXT		pMLMEContext = NULL;
 	PVOID			RingBaseVa;
@@ -414,7 +414,7 @@ NDIS_STATUS	NICInitTransmit(
 		
 		/* TX_RING_SIZE, 4 ACs*/
 		
-		for(acidx=0; acidx<4; acidx++)
+		for(acidx=0; acidx<NUM_OF_TX_RING; acidx++)
 		{
 			PHT_TX_CONTEXT	pHTTXContext = &(pAd->TxContext[acidx]);
 
@@ -574,7 +574,7 @@ NDIS_STATUS	RTMPAllocTxRxRingMemory(
 		
 		/* TX_RING_SIZE, 4 ACs*/
 		
-		for(acidx=0; acidx<4; acidx++)
+		for(acidx=0; acidx<NUM_OF_TX_RING; acidx++)
 		{
 			PHT_TX_CONTEXT	pHTTXContext = &(pAd->TxContext[acidx]);
 
@@ -847,7 +847,7 @@ NDIS_STATUS	NICInitTransmit(
 {
 	UCHAR			i, acidx;
 	NDIS_STATUS     Status = NDIS_STATUS_SUCCESS;
-	PTX_CONTEXT		pNullContext   = &(pAd->NullContext);
+	PTX_CONTEXT		pNullContext   = &(pAd->NullContext[0]);
 	PTX_CONTEXT		pPsPollContext = &(pAd->PsPollContext);
 	PTX_CONTEXT		pMLMEContext = NULL;
 	POS_COOKIE		pObj = (POS_COOKIE) pAd->OS_Cookie;
@@ -874,7 +874,7 @@ NDIS_STATUS	NICInitTransmit(
 		
 		/* TX_RING_SIZE, 4 ACs*/
 		
-		for(acidx=0; acidx<4; acidx++)
+		for(acidx=0; acidx<NUM_OF_TX_RING; acidx++)
 		{
 			PHT_TX_CONTEXT	pHTTXContext = &(pAd->TxContext[acidx]);
 
@@ -1319,13 +1319,36 @@ NDIS_STATUS	RTUSBWriteHWMACAddress(
 
 	RTUSBWriteMACRegister(pAd, MAC_ADDR_DW0, StaMacReg0.word, FALSE);
 	RTUSBWriteMACRegister(pAd, MAC_ADDR_DW1, StaMacReg1.word, FALSE);
+#ifdef HDR_TRANS_SUPPORT
+	RTUSBWriteMACRegister(pAd, HT_MAC_ADDR_DW0, StaMacReg0.word, FALSE);
+	StaMacReg1.word &= 0xff00ffff;
+	StaMacReg1.word |= 0x00410000;
+	RTUSBWriteMACRegister(pAd, HT_MAC_ADDR_DW1, StaMacReg1.word, FALSE);
+#endif /* HDR_TRANS_SUPPORT */
 	return Status;
 }
 
+
+/*
+========================================================================
+Routine Description:
+    Disable DMA.
+
+Arguments:
+	*pAd				the raxx interface data pointer
+
+Return Value:
+	None
+
+Note:
+========================================================================
+*/
 VOID RT28XXDMADisable(
-	IN RTMP_ADAPTER *pAd)
+	IN RTMP_ADAPTER 		*pAd)
 {
+	/* no use*/
 }
+
 
 /*
 ========================================================================
@@ -1355,22 +1378,18 @@ VOID RT28XXDMAEnable(
 			return;
 	}
 
+/*
+	// USB not support WPDMA
 	RTMPusecDelay(50);
+	RTMP_IO_READ32(pAd, WPDMA_GLO_CFG, &GloCfg.word);
+	GloCfg.field.EnTXWriteBackDDONE = 1;
+	GloCfg.field.EnableRxDMA = 1;
+	GloCfg.field.EnableTxDMA = 1;
+	RTMP_IO_WRITE32(pAd, WPDMA_GLO_CFG, GloCfg.word);
+	DBGPRINT(RT_DEBUG_TRACE, ("<== WRITE DMA offset 0x208 = 0x%x\n", GloCfg.word));
+*/
 
-	USB_CFG_READ(pAd, &UsbCfg.word);
 
-	UsbCfg.field.UDMA_TX_WL_DROP = 0;
-	/* usb version is 1.1,do not use bulk in aggregation */
-	if (pAd->BulkInMaxPacketSize == 512)
-			UsbCfg.field.RxBulkAggEn = 1;
-	/* for last packet, PBF might use more than limited, so minus 2 to prevent from error */
-	UsbCfg.field.RxBulkAggLmt = (MAX_RXBULK_SIZE /1024)-3;
-	UsbCfg.field.RxBulkAggTOut = 0x80; /* 2006-10-18 */
-	UsbCfg.field.RxBulkEn = 1;
-	UsbCfg.field.TxBulkEn = 1;
-
-	USB_CFG_WRITE(pAd, UsbCfg.word);
-	//RTUSBWriteMACRegister(pAd, USB_DMA_CFG, UsbCfg.word, FALSE);
 }
 
 /********************************************************************
@@ -1742,19 +1761,20 @@ VOID BeaconUpdateExec(
 
 /********************************************************************
   *
-  *	Radio on/off Related functions.
+  *	2870 Radio on/off Related functions.
   *
   ********************************************************************/
 VOID RT28xxUsbMlmeRadioOn(
 	IN PRTMP_ADAPTER pAd)
 {
+	
     DBGPRINT(RT_DEBUG_TRACE,("RT28xxUsbMlmeRadioOn()\n"));
 
 	if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF))
 		return;
-	
+
 	ASIC_RADIO_ON(pAd, MLME_RADIO_ON);
-	
+
 	/* Clear Radio off flag*/
 	RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF);
 
@@ -1812,7 +1832,7 @@ VOID RT28xxUsbMlmeRadioOFF(
 		}
 	}
 #endif /* CONFIG_STA_SUPPORT */
-	
+		
 	/* Set Radio off flag*/
 	RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF);
 
@@ -1841,6 +1861,188 @@ VOID RT28xxUsbMlmeRadioOFF(
 #endif /* LED_CONTROL_SUPPORT */
 
 	ASIC_RADIO_OFF(pAd, MLME_RADIO_OFF);
+}
+
+
+VOID RT28xxUsbAsicRadioOff(RTMP_ADAPTER *pAd)
+{
+	WPDMA_GLO_CFG_STRUC GloCfg;
+	UINT32 Value;
+
+
+	DBGPRINT(RT_DEBUG_TRACE, ("--> %s\n", __FUNCTION__));
+
+	if (pAd->CommonCfg.CentralChannel)
+		AsicTurnOffRFClk(pAd, pAd->CommonCfg.CentralChannel);
+	else
+		AsicTurnOffRFClk(pAd, pAd->CommonCfg.Channel);
+
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+	{
+		//MT7601DisableTxRx(pAd, GUIRADIO_OFF);
+		MT7601DisableTxRx(pAd, GUIRADIO_OFF);
+
+		AndesPwrSavingOP(pAd, RADIO_OFF, 0x01, 0, 0, 0, 0);
+		RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD);
+	}
+	else
+#endif /* MT7601 */
+	{
+	/* Disable Tx/Rx DMA*/
+	RTUSBReadMACRegister(pAd, WPDMA_GLO_CFG, &GloCfg.word); /* disable DMA */
+	GloCfg.field.EnableTxDMA = 0;
+	GloCfg.field.EnableRxDMA = 0;
+	RTUSBWriteMACRegister(pAd, WPDMA_GLO_CFG, GloCfg.word, FALSE); /* abort all TX rings*/
+
+	/* Waiting for DMA idle*/
+	AsicWaitPDMAIdle(pAd, 100, 1000);
+
+	/* Disable MAC Tx/Rx*/
+	RTUSBReadMACRegister(pAd, MAC_SYS_CTRL, &Value);
+	Value &= (0xfffffff3);
+	RTUSBWriteMACRegister(pAd, MAC_SYS_CTRL, Value, FALSE);
+	}
+#ifdef CONFIG_STA_SUPPORT
+
+	RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF);
+
+	AsicSendCommandToMcu(pAd, 0x30, 0xff, 0xff, 0x02, FALSE);   /* send POWER-SAVE command to MCU. Timeout 40us.*/
+
+	/* Stop bulkin pipe*/
+	if((pAd->PendingRx > 0) && (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
+	{
+		RTUSBCancelPendingBulkInIRP(pAd);
+		pAd->PendingRx = 0;
+	}
+#endif /* CONFIG_STA_SUPPORT */
+
+	DBGPRINT(RT_DEBUG_TRACE, ("<== %s\n", __FUNCTION__));
+
+}
+
+
+VOID RT28xxUsbAsicRadioOn(RTMP_ADAPTER *pAd)
+{
+	UINT32 MACValue = 0;
+	BOOLEAN brc;
+	UINT RetryRound = 0;
+	UINT32 rx_filter_flag;
+	WPDMA_GLO_CFG_STRUC GloCfg;
+	RTMP_CHIP_OP *pChipOps = &pAd->chipOps;
+
+
+#ifdef CONFIG_PM
+#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
+	POS_COOKIE  pObj = (POS_COOKIE) pAd->OS_Cookie;
+
+
+	DBGPRINT(RT_DEBUG_TRACE, ("--> %s\n", __FUNCTION__));
+	
+	if( (RTMP_Usb_AutoPM_Get_Interface(pObj->pUsb_Dev,pObj->intf)) == 1)
+	{
+		DBGPRINT(RT_DEBUG_TRACE, ("RT28xxUsbAsicRadioOn: autopm_resume success\n"));
+		RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_SUSPEND);
+	}
+	else if ((RTMP_Usb_AutoPM_Get_Interface(pObj->pUsb_Dev,pObj->intf)) == (-1))
+	{
+		DBGPRINT(RT_DEBUG_ERROR, ("RT28xxUsbAsicRadioOn autopm_resume fail ------\n"));
+		RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_SUSPEND);
+		return;
+	}
+	else
+		DBGPRINT(RT_DEBUG_TRACE, ("RT28xxUsbAsicRadioOn: autopm_resume do nothing \n"));
+
+#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
+#endif /* CONFIG_PM */
+
+	
+	/* make some traffic to invoke EvtDeviceD0Entry callback function*/
+	
+
+	RTUSBReadMACRegister(pAd,0x1000,&MACValue);
+	DBGPRINT(RT_DEBUG_TRACE,("A MAC query to invoke EvtDeviceD0Entry, MACValue = 0x%x\n",MACValue));
+
+	/* 1. Send wake up command.*/
+
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+	{
+		RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD);
+		AndesPwrSavingOP(pAd, RADIO_ON, 0, 0, 0, 0, 0);
+		
+		//pAd->hw_cfg.cent_ch = pAd->CommonCfg.CentralChannel;
+
+		//AsicSwitchChannel(pAd, pAd->hw_cfg.cent_ch, FALSE);
+		//AsicLockChannel(pAd, pAd->hw_cfg.cent_ch);
+
+	}
+	else
+#endif /* MT7601 */
+	{
+	RetryRound = 0;
+
+	do
+	{
+		brc = AsicSendCommandToMcu(pAd, 0x31, PowerWakeCID, 0x00, 0x02, FALSE);   
+		if (brc)
+		{
+			/* Wait command ok.*/
+			brc = AsicCheckCommandOk(pAd, PowerWakeCID);
+		}
+		if(brc){
+			break;      /* PowerWakeCID cmd successed*/
+		}
+		DBGPRINT(RT_DEBUG_WARN, ("PSM :WakeUp Cmd Failed, retry %d\n", RetryRound));
+
+		/* try 10 times at most*/
+		if ((RetryRound++) > 10)
+			break;
+		/* delay and try again*/
+		RTMPusecDelay(200);
+	} while (TRUE);
+	if (RetryRound > 10)
+		DBGPRINT(RT_DEBUG_WARN, ("PSM :ASIC 0x31 WakeUp Cmd may Fail %d*******\n", RetryRound));
+
+	}
+
+
+	/* 2. Enable Tx/Rx DMA.*/
+	RTMP_IO_WRITE32(pAd, MAC_SYS_CTRL, 0x4);
+
+
+	/* enable RX of MAC block*/
+
+#ifdef XLINK_SUPPORT
+		if (pAd->StaCfg.PSPXlink)
+			rx_filter_flag = PSPXLINK;
+		else
+#endif /* XLINK_SUPPORT */	
+			rx_filter_flag = STANORMAL;     /* Staion not drop control frame will fail WiFi Certification.*/
+		RTMP_IO_WRITE32(pAd, RX_FILTR_CFG, rx_filter_flag);
+		RTMP_IO_WRITE32(pAd, MAC_SYS_CTRL, 0xc);
+
+	/* 3. Turn on RF*/
+/*	RT28xxUsbAsicRFOn(pAd);*/
+	if (pChipOps->AsicReverseRfFromSleepMode)
+		pChipOps->AsicReverseRfFromSleepMode(pAd, FALSE);
+
+
+	/* 4. Clear idle flag*/
+	RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_IDLE_RADIO_OFF);
+	
+	/* Send Bulkin IRPs after flag fRTMP_ADAPTER_IDLE_RADIO_OFF is cleared.*/
+	/*	*/
+#ifdef CONFIG_STA_SUPPORT
+	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+	{
+		RTUSBBulkReceive(pAd);
+		RTUSBBulkCmdRspEventReceive(pAd);
+	}
+#endif /* CONFIG_STA_SUPPORT */
+	DBGPRINT(RT_DEBUG_TRACE, ("<== %s\n", __FUNCTION__));
+
+
 }
 
 

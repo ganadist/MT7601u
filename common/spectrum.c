@@ -2036,9 +2036,9 @@ static VOID PeerTpcReqAction(
 	/*				STA may incorporate rate information and channel conditions, including interference, into its computation*/
 	/*				of link margin.*/
 
-	RealRssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0),
-								ConvertToRssi(pAd, Elem->Rssi1, RSSI_1),
-								ConvertToRssi(pAd, Elem->Rssi2, RSSI_2));
+	RealRssi = RTMPMaxRssi(pAd, ConvertToRssi(pAd, Elem->Rssi0, RSSI_0, Elem->AntSel, BW_20),
+								ConvertToRssi(pAd, Elem->Rssi1, RSSI_1, Elem->AntSel, BW_20),
+								ConvertToRssi(pAd, Elem->Rssi2, RSSI_2, Elem->AntSel, BW_20));
 
 	/* skip Category and action code.*/
 	pFramePtr += 2;

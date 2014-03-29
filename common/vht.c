@@ -155,41 +155,6 @@ VOID dump_vht_op(RTMP_ADAPTER *pAd, VHT_OP_IE *vht_ie)
 
 
 /*
-	Get BBP Channel Index by RF channel info
-	return value: 0~3
-*/
-UCHAR vht_prim_ch_idx(UCHAR vht_cent_ch, UCHAR prim_ch)
-{
-	INT idx = 0;
-	UCHAR bbp_idx = 0;
-
-	if (vht_cent_ch == prim_ch)
-		goto done;
-
-	while (vht_ch_80M[idx].ch_up_bnd != 0)
-	{
-		if (vht_cent_ch == vht_ch_80M[idx].cent_freq_idx)
-		{
-			if (prim_ch == vht_ch_80M[idx].ch_up_bnd)
-				bbp_idx = 3;
-			else if (prim_ch == vht_ch_80M[idx].ch_low_bnd)
-				bbp_idx = 0;
-			else {
-				bbp_idx = prim_ch > vht_cent_ch ? 2 : 1;
-			}
-			break;
-		}
-		idx++;
-	}
-
-done:
-	DBGPRINT(RT_DEBUG_TRACE, ("%s():(VhtCentCh=%d, PrimCh=%d) =>BbpChIdx=%d\n",
-				__FUNCTION__, vht_cent_ch, prim_ch, bbp_idx));
-	return bbp_idx;
-}
-
-
-/*
 	Currently we only consider about VHT 80MHz!
 */
 UCHAR vht_cent_ch_freq(RTMP_ADAPTER *pAd, UCHAR prim_ch)
@@ -341,19 +306,9 @@ INT build_vht_op_ie(RTMP_ADAPTER *pAd, UCHAR *buf)
 	switch  (pAd->CommonCfg.RxStream)
 	{
 		case 2:
-			vht_op.basic_mcs_set.mcs_ss2 = VHT_MCS_CAP_7;
+			vht_op.basic_mcs_set.mcs_ss2 = 0;
 		case 1:
-#if	defined(MT76x0) || defined(MT76x2)
-			if (IS_MT76x0(pAd) || IS_MT76x2(pAd))
-			{
-				/*
-					MT7650E2 support VHT_MCS8 & VHT_MCS9.
-				*/
-				vht_op.basic_mcs_set.mcs_ss1 = VHT_MCS_CAP_9;
-			}
-			else
-#endif
-			vht_op.basic_mcs_set.mcs_ss1 = VHT_MCS_CAP_7;
+			vht_op.basic_mcs_set.mcs_ss1 = 0;
 			break;			
 	}
 
@@ -375,26 +330,11 @@ INT build_vht_cap_ie(RTMP_ADAPTER *pAd, UCHAR *buf)
 	NdisZeroMemory((UCHAR *)&vht_cap_ie,  sizeof(VHT_CAP_IE));
 	vht_cap_ie.vht_cap.max_mpdu_len = 0; // TODO: Ask Jerry about hardware limitation.
 	vht_cap_ie.vht_cap.ch_width = 0; /* not support 160 or 80 + 80 MHz */
-	vht_cap_ie.vht_cap.sgi_80M = pAd->CommonCfg.vht_sgi_80;
+	vht_cap_ie.vht_cap.sgi_80M = 1;
 	vht_cap_ie.vht_cap.htc_vht_cap = 1;
 	vht_cap_ie.vht_cap.max_ampdu_exp = 3; // TODO: Ask Jerry about the hardware limitation, currently set as 64K
-
-
-	vht_cap_ie.vht_cap.tx_stbc = 0;
-	vht_cap_ie.vht_cap.rx_stbc = 0;
-	if (pAd->CommonCfg.vht_stbc)
-	{
-		if (pAd->CommonCfg.TxStream >= 2)
-			vht_cap_ie.vht_cap.tx_stbc = 1;
-		else
-			vht_cap_ie.vht_cap.tx_stbc = 0;
-		
-		if (pAd->CommonCfg.RxStream >= 1)
-			vht_cap_ie.vht_cap.rx_stbc = 1; // TODO: is it depends on the number of our antennas?
-		else
-			vht_cap_ie.vht_cap.rx_stbc = 0;
-	}
-
+	vht_cap_ie.vht_cap.tx_stbc = 1;
+	vht_cap_ie.vht_cap.rx_stbc = 2; // TODO: is it depends on the number of our antennas?
 	vht_cap_ie.vht_cap.tx_ant_consistency = 1;
 	vht_cap_ie.vht_cap.rx_ant_consistency = 1;
 
@@ -421,16 +361,6 @@ INT build_vht_cap_ie(RTMP_ADAPTER *pAd, UCHAR *buf)
 	{
 		case 1:
 			vht_cap_ie.mcs_set.rx_high_rate = 292;
-#if	defined(MT76x0) || defined(MT76x2)
-			if (IS_MT76x0(pAd) || IS_MT76x2(pAd))
-			{
-				/*
-					MT7650E2 support VHT_MCS8 & VHT_MCS9.
-				*/
-				vht_cap_ie.mcs_set.rx_mcs_map.mcs_ss1 = VHT_MCS_CAP_9;
-			}
-			else
-#endif /* MT76x0 */
 			vht_cap_ie.mcs_set.rx_mcs_map.mcs_ss1 = VHT_MCS_CAP_7;
 			break;
 		case 2:
@@ -447,16 +377,6 @@ INT build_vht_cap_ie(RTMP_ADAPTER *pAd, UCHAR *buf)
 	{
 		case 1:
 			vht_cap_ie.mcs_set.tx_high_rate = 292;
-#if	defined(MT76x0) || defined(MT76x2)
-			if (IS_MT76x0(pAd) || IS_MT76x2(pAd))
-			{
-				/*
-					MT7650E2 support VHT_MCS8 & VHT_MCS9.
-				*/
-				vht_cap_ie.mcs_set.tx_mcs_map.mcs_ss1 = VHT_MCS_CAP_9;
-			}
-			else
-#endif /* MT76x0 */
 			vht_cap_ie.mcs_set.tx_mcs_map.mcs_ss1 = VHT_MCS_CAP_7;
 			break;
 		case 2:

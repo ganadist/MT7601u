@@ -911,9 +911,8 @@ BOOLEAN PeerBeaconAndProbeRspSanity(
 	SubType = (UCHAR)pFrame->Hdr.FC.SubType;
 
     /* get Addr2 and BSSID from header*/
-	COPY_MAC_ADDR(&ie_list->Addr1[0], pFrame->Hdr.Addr1);
-	COPY_MAC_ADDR(&ie_list->Addr2[0], pFrame->Hdr.Addr2);
-	COPY_MAC_ADDR(&ie_list->Bssid[0], pFrame->Hdr.Addr3);
+    COPY_MAC_ADDR(&ie_list->Addr2[0], pFrame->Hdr.Addr2);
+    COPY_MAC_ADDR(&ie_list->Bssid[0], pFrame->Hdr.Addr3);
 
     Ptr = pFrame->Octet;
     Length += LENGTH_802_11;
@@ -1259,7 +1258,6 @@ BOOLEAN PeerBeaconAndProbeRspSanity(
 				NdisMoveMemory(pPeerWscIe+PeerWscIeLen, pEid->Octet+4, pEid->Len-4);
 				PeerWscIeLen += (pEid->Len - 4);
 				}
-
 
 			}
 

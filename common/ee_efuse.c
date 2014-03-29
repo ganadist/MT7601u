@@ -29,21 +29,21 @@
 
 #include	"rt_config.h"
 
-#ifdef RT65xx
+#if defined(RT65xx) || defined(MT7601)
 /* eFuse registers */
-#define EFUSE_CTRL				0x24
+#define EFUSE_CTRL					0x24
 #define EFUSE_DATA0				0x28
 #define EFUSE_DATA1				0x2c
 #define EFUSE_DATA2				0x30
 #define EFUSE_DATA3				0x34
 #else
 /* eFuse registers */
-#define EFUSE_CTRL				0x0580
+#define EFUSE_CTRL					0x0580
 #define EFUSE_DATA0				0x0590
 #define EFUSE_DATA1				0x0594
 #define EFUSE_DATA2				0x0598
 #define EFUSE_DATA3				0x059c
-#endif /* !RT65xx */
+#endif /* RT65xx */
 
 
 #define EFUSE_CTRL_3290		0x24
@@ -52,10 +52,23 @@
 #define EFUSE_DATA2_3290		0x30
 #define EFUSE_DATA3_3290		0x34
 
-
+#ifdef RT65xx
 #define EFUSE_EEPROM_DEFULT_FILE	"RT30xxEEPROM.bin"
-#define EFUSE_BUFFER_PATH		"/var/lib/share/MT7650/bin/MT7610U_ePA_V0_3.bin"
+#define EFUSE_BUFFER_PATH			"/var/lib/share/MT7650/RT30xxEEPROM.bin"
 #define MAX_EEPROM_BIN_FILE_SIZE	512
+#endif /* RT65xx */
+
+#ifdef MT7601
+#define EFUSE_EEPROM_DEFULT_FILE	"MT7601EEPROM.bin"
+#define EFUSE_BUFFER_PATH			"/var/lib/share/MT7601/MT7601EEPROM.bin"
+#define MAX_EEPROM_BIN_FILE_SIZE	512
+#endif /* MT7601 */
+
+#ifdef RTMP_MAC
+#define EFUSE_EEPROM_DEFULT_FILE	"RT30xxEEPROM.bin"
+#define EFUSE_BUFFER_PATH			"/var/lib/share/RT2870/RT30xxEEPROM.bin"
+#define MAX_EEPROM_BIN_FILE_SIZE	512
+#endif /* RTMP_MAC */
 
 #define EFUSE_TAG				0x2fe
 
@@ -154,10 +167,10 @@ UCHAR eFuseReadRegisters(
 	UINT32	data;
 	UINT32 efuse_ctrl_reg = EFUSE_CTRL;
 	
-#if defined(RT3290) || defined(RT65xx)
-	if (IS_RT3290(pAd) || IS_RT65XX(pAd))
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 		efuse_ctrl_reg = EFUSE_CTRL_3290;
-#endif /* defined(RT3290) || defined(RT65xx) */
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
 	
 	RTMP_IO_READ32(pAd, efuse_ctrl_reg, &eFuseCtrlStruc.word);
 
@@ -200,12 +213,12 @@ UCHAR eFuseReadRegisters(
 	else
 	{
 		/*Step4. Read 16-byte of data from EFUSE_DATA0-3 (0x590-0x59C)*/
-#if defined(RT3290) || defined(RT65xx)
-		if (IS_RT3290(pAd) || IS_RT65XX(pAd))
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+		if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 			efuseDataOffset =  EFUSE_DATA0_3290 + (Offset & 0xC);
 		else
-#endif /* defined(RT3290) || defined(RT65xx) */
-		efuseDataOffset =  EFUSE_DATA3 - (Offset & 0xC);
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
+		efuseDataOffset =  EFUSE_DATA3 - (Offset & 0xC);	
 		/*data hold 4 bytes data.*/
 		/*In RTMP_IO_READ32 will automatically execute 32-bytes swapping*/
 		RTMP_IO_READ32(pAd, efuseDataOffset, &data);
@@ -256,10 +269,10 @@ VOID eFusePhysicalReadRegisters(
 	UINT32	data;
 	UINT32 efuse_ctrl_reg = EFUSE_CTRL;
 
-#if defined(RT3290) || defined(RT65xx)
-	if (IS_RT3290(pAd) || IS_RT65XX(pAd))
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 		efuse_ctrl_reg = EFUSE_CTRL_3290;
-#endif /* defined(RT3290) || defined(RT65xx) */
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
 
 	RTMP_IO_READ32(pAd, efuse_ctrl_reg, &eFuseCtrlStruc.word);
 
@@ -298,11 +311,11 @@ VOID eFusePhysicalReadRegisters(
 	/*594:B A 9 8 */
 	/*598:7 6 5 4*/
 	/*59C:3 2 1 0*/
-#if defined(RT3290) || defined(RT65xx)
-	if (IS_RT3290(pAd) || IS_RT65XX(pAd))
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 		efuseDataOffset =  EFUSE_DATA0_3290 + (Offset & 0xC)  ;
 	else
-#endif /* defined(RT3290) || defined(RT65xx) */
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
 	efuseDataOffset =  EFUSE_DATA3 - (Offset & 0xC)  ;	
 
 	RTMP_IO_READ32(pAd, efuseDataOffset, &data);
@@ -405,20 +418,11 @@ static VOID eFusePhysicalWriteRegisters(
 	USHORT	efuseDataOffset;
 	UINT32	data, eFuseDataBuffer[4];
 	UINT32 efuse_ctrl_reg = EFUSE_CTRL;
-	USHORT efuse_data = EFUSE_DATA3;
 
-#ifdef RT3290
-	if (IS_RT3290(pAd))
-	{
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 		efuse_ctrl_reg = EFUSE_CTRL_3290;
-		efuse_data = EFUSE_DATA0_3290;
-	}
-#endif /* RT3290 */
-
-#ifdef RT65xx
-	if (IS_RT65XX(pAd))
-		efuse_data = EFUSE_DATA0;
-#endif /* RT65xx */
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
 
 	/*Step0. Write 16-byte of data to EFUSE_DATA0-3 (0x590-0x59C), where EFUSE_DATA0 is the LSB DW, EFUSE_DATA3 is the MSB DW.*/
 
@@ -439,7 +443,7 @@ static VOID eFusePhysicalWriteRegisters(
 
 	/*Step3. Polling EFSROM_KICK(0x580, bit30) until it become 0 again.*/
 	i = 0;
-	while (i < 500)
+	while(i < 500)
 	{	
 		RTMP_IO_READ32(pAd, efuse_ctrl_reg, &eFuseCtrlStruc.word);
 
@@ -450,15 +454,20 @@ static VOID eFusePhysicalWriteRegisters(
 	}
 
 	/*Step4. Read 16-byte of data from EFUSE_DATA0-3 (0x59C-0x590)*/
-	efuseDataOffset =  efuse_data;
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
+		efuseDataOffset = EFUSE_DATA0_3290;
+	else
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
+		efuseDataOffset =  EFUSE_DATA3;
 	for(i=0; i< 4; i++)
 	{
 		RTMP_IO_READ32(pAd, efuseDataOffset, (PUINT32) &eFuseDataBuffer[i]);
-#if defined(RT3290) || defined(RT65xx)
-		if (IS_RT3290(pAd) || IS_RT65XX(pAd))
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 			efuseDataOffset += 4;
 		else
-#endif /* defined(RT3290) || defined(RT65xx) */
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
 			efuseDataOffset -= 4;
 	}
 
@@ -475,15 +484,20 @@ static VOID eFusePhysicalWriteRegisters(
 		eFuseDataBuffer[efuseDataOffset] = (eFuseDataBuffer[efuseDataOffset] & 0xffff0000) | data;
 	}
 
-	efuseDataOffset =  efuse_data;
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	efuseDataOffset =  EFUSE_DATA0;
+#else
+	efuseDataOffset =  EFUSE_DATA3;
+#endif
+	
 	for(i=0; i< 4; i++)
 	{
 		RTMP_IO_WRITE32(pAd, efuseDataOffset, eFuseDataBuffer[i]);
-#if defined(RT3290) || defined(RT65xx)
-		if (IS_RT3290(pAd) || IS_RT65XX(pAd))
+#if defined(RT3290) || defined(RT65xx) || defined(MT7601)
+	if (IS_RT3290(pAd) || IS_RT65XX(pAd) || IS_MT7601(pAd))
 			efuseDataOffset += 4;
 		else
-#endif /* defined(RT3290) || defined(RT65xx) */
+#endif /* defined(RT3290) || defined(RT65xx) || defined(MT7601) */
 			efuseDataOffset -= 4;		
 	}
 
@@ -505,7 +519,7 @@ static VOID eFusePhysicalWriteRegisters(
 	/*Step4. Polling EFSROM_KICK(0x580, bit30) until it become 0 again. It¡¦s done.*/
 	i = 0;
 
-	while (i < 500)
+	while(i < 500)
 	{	
 		RTMP_IO_READ32(pAd, efuse_ctrl_reg, &eFuseCtrlStruc.word);
 
@@ -536,14 +550,14 @@ static NTSTATUS eFuseWriteRegisters(
 	IN	USHORT Length, 
 	IN	USHORT* pData)
 {
-	USHORT	i, Loop=0, StartBlock=0, EndBlock=0;
+	USHORT	i,Loop=0, StartBlock=0, EndBlock=0;
 	USHORT	eFuseData;
 	USHORT	LogicalAddress, BlkNum = 0xffff;
 	UCHAR	EFSROM_AOUT;
 
 	USHORT addr,tmpaddr, InBuf[3], tmpOffset;
 	USHORT buffer[8];
-	BOOLEAN	bWriteSuccess = TRUE;
+	BOOLEAN		bWriteSuccess = TRUE;
 
 	DBGPRINT(RT_DEBUG_TRACE, ("eFuseWriteRegisters Offset=%x, pData=%x\n", Offset, *pData));
 	/*set start block and end block number, start from tail of mapping table*/
@@ -637,8 +651,7 @@ static NTSTATUS eFuseWriteRegisters(
 	buffer[ (Offset >> 1) % 8] = pData[0];
 
 	do
-	{
-		Loop++;
+	{	Loop++;
 		/*Step 3. Write the data to Efuse*/
 		if(!bWriteSuccess)
 		{
@@ -713,7 +726,7 @@ static NTSTATUS eFuseWriteRegisters(
 			DBGPRINT(RT_DEBUG_TRACE, ("Not bWriteSuccess BlkNum = %d\n", BlkNum));
 
 			/* the offset of current mapping entry*/
-			addr = pAd->chipCap.EFUSE_USAGE_MAP_START+BlkNum;
+			addr = pAd->chipCap.EFUSE_USAGE_MAP_START+BlkNum;			
 
 			/*find a new mapping entry*/
 			BlkNum = 0xffff;
@@ -830,7 +843,7 @@ static VOID eFuseWritePhysical(
 		/* Therefore, we only need swap data when read the data.*/
 		for (i=0; i<Length; i+=2)
 		{
-			eFusePhysicalWriteRegisters(pAd, Offset+i, 2, &pValueX[i/2]);
+			eFusePhysicalWriteRegisters(pAd, Offset+i, 2, &pValueX[i/2]);	
 		}	
 	}
 }
@@ -857,8 +870,7 @@ NTSTATUS eFuseWrite(
 {
 	int i;
 	USHORT* pValueX = (PUSHORT) pData;				/*value ...		*/
-	PUSHORT OddWriteByteBuf = NULL;
-
+	PUSHORT OddWriteByteBuf;
 /*	OddWriteByteBuf=(PUSHORT)kmalloc(sizeof(USHORT)*2, MEM_ALLOC_FLAG);*/
 	os_alloc_mem(NULL, (UCHAR **)&OddWriteByteBuf, sizeof(USHORT)*2);
 	/* The input value=3070 will be stored as following*/
@@ -1159,11 +1171,7 @@ static NTSTATUS eFuseWriteRegistersFromBin(
 	if(bAllocateNewBlk)
 	{
 		DBGPRINT(RT_DEBUG_TRACE, ("Allocate New Blk\n"));
-#if defined(RT3290) || defined(RT65xx)
-		efuseDataOffset =  EFUSE_DATA0_3290;
-#else
 		efuseDataOffset =  EFUSE_DATA3;
-#endif
 		for(i=0; i< 4; i++)
 		{
 			DBGPRINT(RT_DEBUG_TRACE, ("Allocate New Blk, Data%d=%04x%04x\n",3-i,pData[2*i+1],pData[2*i]));
@@ -1235,11 +1243,7 @@ static NTSTATUS eFuseWriteRegistersFromBin(
 		}
 
 		/*Step1.2.4. Read 16-byte of data from EFUSE_DATA0-3 (0x59C-0x590)*/
-#if defined(RT3290) || defined(RT65xx)
-		efuseDataOffset =  EFUSE_DATA0_3290;
-#else
 		efuseDataOffset =  EFUSE_DATA3;		
-#endif
 		for(i=0; i< 4; i++)
 		{
 			RTMP_IO_READ32(pAd, efuseDataOffset, (PUINT32) &buffer[i]);
@@ -1417,7 +1421,12 @@ int rtmp_ee_efuse_read16(
 	IN USHORT Offset,
 	OUT USHORT *pValue)
 {
-	if (pAd->bFroceEEPROMBuffer || pAd->bEEPROMFile)
+
+	if (pAd->bFroceEEPROMBuffer
+#ifdef RALINK_ATE
+			||pAd->bEEPROMFile
+#endif /* RALINK_ATE */
+		)
 	{
 	    DBGPRINT(RT_DEBUG_TRACE,  ("Read from EEPROM Buffer\n"));
 	    NdisMoveMemory(pValue, &(pAd->EEPROMImage[Offset]), 2);
@@ -1434,7 +1443,11 @@ int rtmp_ee_efuse_write16(
 	IN USHORT Offset, 
 	IN USHORT data)
 {
-    if (pAd->bFroceEEPROMBuffer || pAd->bEEPROMFile)
+    if (pAd->bFroceEEPROMBuffer
+#ifdef RALINK_ATE
+			||pAd->bEEPROMFile
+#endif /* RALINK_ATE */
+		)
     {
     	data = le2cpu16(data);
         DBGPRINT(RT_DEBUG_TRACE,  ("Write to EEPROM Buffer\n"));
@@ -1511,8 +1524,8 @@ INT eFuseLoadEEPROM(
 	RTMP_OS_FD				srcf;
 	RTMP_OS_FS_INFO			osFSInfo;
 
-	src = EFUSE_BUFFER_PATH;
-
+	
+	src=EFUSE_BUFFER_PATH;
 	DBGPRINT(RT_DEBUG_TRACE, ("FileName=%s\n",src));
 
 
@@ -1732,8 +1745,6 @@ VOID eFuseGetFreeBlockCount(IN PRTMP_ADAPTER pAd,
 INT eFuse_init(RTMP_ADAPTER *pAd)
 {
 	UINT EfuseFreeBlock=0;
-	EFUSE_CTRL_STRUC eFuseCtrlStruc;
-	UINT32 efuse_ctrl_reg = EFUSE_CTRL;
 
 	/*RT3572 means 3062/3562/3572*/
 	/*3593 means 3593*/
@@ -1743,20 +1754,68 @@ INT eFuse_init(RTMP_ADAPTER *pAd)
 	/* of this efuse is empty and change to the buffer mode in odrder to */
 	/*bring up interfaces successfully.*/
 	
-	RTMP_IO_READ32(pAd, efuse_ctrl_reg, &eFuseCtrlStruc.word);
-
-	DBGPRINT(RT_DEBUG_TRACE, ("EFUSE_CTRL=0x%x:: (0x%x) on_time = %d, off_time = %d \n",
-		efuse_ctrl_reg, eFuseCtrlStruc.word, eFuseCtrlStruc.field.EFSROM_LDO_ON_TIME, eFuseCtrlStruc.field.EFSROM_LDO_OFF_TIME));
 	
 	if(EfuseFreeBlock > (pAd->chipCap.EFUSE_USAGE_MAP_SIZE-5))
 	{
+		int ret;
 		DBGPRINT(RT_DEBUG_ERROR, ("NVM is Efuse and the information is too less to bring up interface. Force to use EEPROM Buffer Mode\n"));
 		pAd->bFroceEEPROMBuffer = TRUE;
-		eFuseLoadEEPROM(pAd);
+		ret = eFuseLoadEEPROM(pAd);
+
+		if ( ret == FALSE )
+		{
+			if ( pAd->chipCap.EFUSE_DEFAULT_BIN != NULL )
+			{
+				NdisMoveMemory(pAd->EEPROMImage, pAd->chipCap.EFUSE_DEFAULT_BIN, pAd->chipCap.EFUSE_DEFAULT_BIN_SIZE);
+			}
+		}
+
+#ifdef MT7601
+		if ( IS_MT7601(pAd) )
+		{
+			UINT16	NicConfig, FrequencyOffset;
+			UINT16	EfuseValue;
+
+			eFuseReadRegisters(pAd, EEPROM_FREQ_OFFSET, 2, &FrequencyOffset);
+			eFuseReadRegisters(pAd, EEPROM_NIC1_OFFSET, 2, &NicConfig);
+
+			if ( (NicConfig == 0x0) && ( FrequencyOffset != 0xFFFF ) )
+			{
+				/* Calibration Free IC, but E-Fuse is empty */
+				DBGPRINT(RT_DEBUG_OFF, ("Calibration Free IC, Load calibration data...\n"));
+				
+				pAd->EEPROMImage[EEPROM_FREQ_OFFSET] = (UCHAR)(FrequencyOffset & 0xFF);
+
+				eFuseReadRegisters(pAd, EEPROM_TX0_TSSI_SLOPE, 2, &EfuseValue);
+				*(UINT16 *)(&pAd->EEPROMImage[EEPROM_TX0_TSSI_SLOPE]) = EfuseValue;
+				eFuseReadRegisters(pAd, EEPROM_TX0_TSSI_OFFSET_GROUP1, 2, &EfuseValue);
+				*(UINT16 *)(&pAd->EEPROMImage[EEPROM_TX0_TSSI_OFFSET_GROUP1]) = EfuseValue;
+				eFuseReadRegisters(pAd, EEPROM_TX0_TSSI_OFFSET, 2, &EfuseValue);
+				pAd->EEPROMImage[EEPROM_TX0_TSSI_OFFSET] = (UCHAR)(EfuseValue & 0xFF);;
+
+				eFuseReadRegisters(pAd, EEPROM_G_TARGET_POWER, 2, &EfuseValue);
+				pAd->EEPROMImage[EEPROM_G_TARGET_POWER + 1] = (UCHAR)(EfuseValue >> 8);
+
+				pAd->bCalFreeIC = TRUE;
+			}
+			else
+			{
+				pAd->bCalFreeIC = FALSE;
+			}
+		}
+#endif /* MT7601 */
+
 	}
 	else
+	{
 		pAd->bFroceEEPROMBuffer = FALSE;
+		pAd->bCalFreeIC = FALSE;
+	}
 	DBGPRINT(RT_DEBUG_TRACE, ("NVM is Efuse and force to use EEPROM Buffer Mode=%x\n",pAd->bFroceEEPROMBuffer));
+
+	// alan debug
+	//pAd->bFroceEEPROMBuffer = TRUE;
+	//eFuseLoadEEPROM(pAd);
 
 	return 0;
 }
@@ -1777,18 +1836,57 @@ INT efuse_probe(RTMP_ADAPTER *pAd)
 		ctrl_reg = EFUSE_CTRL_3290;
 	else
 #endif /* RT65xx */
+#ifdef MT7601
+	if (IS_MT7601(pAd))
+		ctrl_reg = EFUSE_CTRL_3290;
+	else
+#endif /* MT7601 */
 #ifdef RT3290
 	if (IS_RT3290(pAd))
 		ctrl_reg = EFUSE_CTRL_3290;
 	else
 #endif /* RT3290 */
 		ctrl_reg = EFUSE_CTRL;
-
 	RTMP_IO_READ32(pAd, ctrl_reg, &eFuseCtrl);
 
-	pAd->bUseEfuse = ( (eFuseCtrl & 0x80000000) == 0x80000000) ? 1 : 0;
+	//pAd->bUseEfuse = ( (eFuseCtrl & 0x80000000) == 0x80000000) ? 1 : 0;
+
+	pAd->bUseEfuse = TRUE;
+
 	return 0;
 }
+
+
+#ifdef RALINK_ATE
+INT Set_LoadEepromBufferFromEfuse_Proc(
+	IN PRTMP_ADAPTER	pAd,
+	IN PSTRING			arg)
+{
+	UINT bEnable = simple_strtol(arg, 0, 10);
+	UINT free_blk = 0;
+	
+	if (bEnable < 0)
+		return FALSE;
+	else
+	{	
+		DBGPRINT(RT_DEBUG_TRACE, ("Load EEPROM buffer from efuse, and change to BIN buffer mode\n"));	
+
+		/* If the number of the used block is less than 5, assume the efuse is not well-calibrated, and force to use buffer mode */
+		eFuseGetFreeBlockCount(pAd, &free_blk);
+		if (free_blk > (pAd->chipCap.EFUSE_USAGE_MAP_SIZE - 5))
+			return FALSE;
+		
+		NdisZeroMemory(pAd->EEPROMImage, MAX_EEPROM_BIN_FILE_SIZE);
+		eFuseRead(pAd, 0, (PUSHORT)&pAd->EEPROMImage[0], MAX_EEPROM_BIN_FILE_SIZE);		
+
+		/* Change to BIN eeprom buffer mode */
+		pAd->bFroceEEPROMBuffer = TRUE;
+		
+		return TRUE;
+	}
+}
+#endif /* RALINK_ATE */
+
 
 #endif /* RTMP_EFUSE_SUPPORT */
 

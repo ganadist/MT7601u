@@ -41,7 +41,7 @@
 #define BBP_DFS		0x2a00
 #define BBP_TR		0x2b00
 #define BBP_CAL		0x2c00
-#define BBP_DSC		0x2e00
+#define BBP_DSC		0x2d00
 #define BBP_PFMU	0x2f00
 
 
@@ -51,7 +51,6 @@
 #define CORE_R4		(BBP_CORE + 0x10)
 #define CORE_R24	(BBP_CORE + 0x60)
 #define CORE_R32	(BBP_CORE + 0x80)
-#define CORE_R34	(BBP_CORE + 0x88)
 #define CORE_R35	(BBP_CORE + 0x8c)
 #define CORE_R42	(BBP_CORE + 0xa8)
 #define CORE_R44	(BBP_CORE + 0xb0)
@@ -74,13 +73,11 @@
 #define AGC1_R2		(BBP_AGC1 + 0x08)
 #define AGC1_R4		(BBP_AGC1 + 0x10)
 #define AGC1_R5		(BBP_AGC1 + 0x14)
-#define AGC1_R6		(BBP_AGC1 + 0x18)
 #define AGC1_R8		(BBP_AGC1 + 0x20)
 #define AGC1_R9		(BBP_AGC1 + 0x24)
 #define AGC1_R12	(BBP_AGC1 + 0x30)
 #define AGC1_R13	(BBP_AGC1 + 0x34)
 #define AGC1_R14	(BBP_AGC1 + 0x38)
-#define AGC1_R15	(BBP_AGC1 + 0x3C)
 #define AGC1_R16	(BBP_AGC1 + 0x40)
 #define AGC1_R18	(BBP_AGC1 + 0x48)
 #define AGC1_R19	(BBP_AGC1 + 0x4c)
@@ -120,7 +117,6 @@
 /* 0x2400 ~ */
 #define TXC_R0		(BBP_TXC + 0x00)
 #define TXC_R1		(BBP_TXC + 0x04)
-#define TXC_R2		(BBP_TXC + 0x08)
 
 /* 0x2500 ~ */
 #define RXC_R0		(BBP_RXC + 0x00)
@@ -128,8 +124,6 @@
 #define RXC_R2		(BBP_RXC + 0x08)
 #define RXC_R3		(BBP_RXC + 0x0c)
 #define RXC_R4		(BBP_RXC + 0x10)
-#define RXC_R5		(BBP_RXC + 0x14)
-#define RXC_R7		(BBP_RXC + 0x1C)
 
 /* 0x2600 ~ */
 #define TXO_R0		(BBP_TXO + 0x00)
@@ -162,7 +156,6 @@
 
 /* 0x2800 ~ */
 #define RXFE_R0		(BBP_RXFE + 0x00)
-#define RXFE_R1		(BBP_RXFE + 0x04)
 #define RXFE_R2		(BBP_RXFE + 0x08)
 #define RXFE_R3		(BBP_RXFE + 0x0c)
 #define RXFE_R4		(BBP_RXFE + 0x10)
@@ -174,9 +167,6 @@
 #define RXO_R15		(BBP_RXO + 0x3c)
 #define RXO_R16		(BBP_RXO + 0x40)
 #define RXO_R17		(BBP_RXO + 0x44)
-#define RXO_R18		(BBP_RXO + 0x48)
-#define RXO_R19		(BBP_RXO + 0x4C)
-#define RXO_R20		(BBP_RXO + 0x50)
 #define RXO_R21		(BBP_RXO + 0x54)
 #define RXO_R24		(BBP_RXO + 0x60)
 #define RXO_R28		(BBP_RXO + 0x70)
@@ -205,18 +195,6 @@
 #define DFS_R28		(BBP_DFS + 0x70)
 #define DFS_R30		(BBP_DFS + 0x78)
 #define DFS_R31		(BBP_DFS + 0x7c)
-#define DFS_R32		(BBP_DFS + 0x80)
-#define DFS_R36		(BBP_DFS + 0x90)
-#define DFS_R37		(BBP_DFS + 0x94)
-
-/* 0x2b00 ~ */
-#define TR_R0		(BBP_TR + 0x00)
-#define TR_R1		(BBP_TR + 0x04)
-#define TR_R2		(BBP_TR + 0x08)
-#define TR_R3		(BBP_TR + 0x0c)
-#define TR_R4		(BBP_TR + 0x10)
-#define TR_R5		(BBP_TR + 0x14)
-#define TR_R6		(BBP_TR + 0x18)
 
 /* 0x2c00 ~ */
 #define CAL_R0		(BBP_CAL + 0x00)
@@ -291,9 +269,6 @@
 #define CAL_R69		(BBP_CAL + 0x114)
 #define CAL_R70		(BBP_CAL + 0x118)
 
-/* 0x2e00 ~ */
-#define DSC_R0		(BBP_DSC + 0x00)
-#define DSC_R8		(BBP_DSC + 0x20)
 
 #define RTMP_BBP_IO_READ32(_p, _i, _pV)	RTMP_IO_READ32(_p, _i, _pV)
 #define RTMP_BBP_IO_WRITE32(_p, _i, _v)	RTMP_IO_WRITE32(_p, _i, _v)

@@ -133,7 +133,9 @@ VOID RTMPWriteTxWI(
 		
 	pTxWI->TxWIWirelessCliID = WCID;
 	pTxWI->TxWIMPDUByteCnt = Length;
+#ifdef RLT_MAC
 	pTxWI->TxWIPacketId = PID;
+#endif /* RLT_MAC */
 	
 	/* If CCK or OFDM, BW must be 20*/
 	pTxWI->TxWIBW = (pTransmit->field.MODE <= MODE_OFDM) ? (BW_20) : (pTransmit->field.BW);
@@ -176,7 +178,9 @@ VOID RTMPWriteTxWI(
 #endif /* DOT11_N_SUPPORT */
 
 
+#ifdef RLT_MAC
 	pTxWI->TxWIPacketId = pTxWI->TxWIMCS;
+#endif /* RLT_MAC */
 	NdisMoveMemory(pOutTxWI, &TxWI, TXWISize);
 //+++Add by shiang for debug
 if (0){
@@ -194,7 +198,9 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 	UCHAR BASize;
 #endif /* DOT11_N_SUPPORT */
 	UINT8 TXWISize = pAd->chipCap.TXWISize;
-
+#ifdef WFA_VHT_PF
+	BOOLEAN amsdu_in_ampdu = FALSE;
+#endif /* WFA_VHT_PF */
 
 	ASSERT(pTxWI);
 
@@ -222,18 +228,13 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 #endif /* CONFIG_STA_SUPPORT */
 	pTxWI->TxWIWirelessCliID = pTxBlk->Wcid;
 
+#ifdef HDR_TRANS_SUPPORT
+	if (pTxBlk->NeedTrans )
+		pTxWI->TxWIMPDUByteCnt = pTxBlk->SrcBufLen;
+	else
+#endif /* HDR_TRANS_SUPPORT */
 	pTxWI->TxWIMPDUByteCnt = pTxBlk->MpduHeaderLen + pTxBlk->SrcBufLen;
 	pTxWI->TxWICFACK = TX_BLK_TEST_FLAG(pTxBlk, fTX_bPiggyBack);
-
-#ifdef WFA_VHT_PF
-	if (pAd->force_noack == TRUE)
-		pTxWI->TxWIACK = 0;
-#endif /* WFA_VHT_PF */
-
-	pTxWI->TxWIShortGI = pTransmit->field.ShortGI;
-	pTxWI->TxWISTBC = pTransmit->field.STBC;
-	pTxWI->TxWIMCS = pTransmit->field.MCS;
-	pTxWI->TxWIPHYMODE = pTransmit->field.MODE;
 
 	/* If CCK or OFDM, BW must be 20 */
 	pTxWI->TxWIBW = (pTransmit->field.MODE <= MODE_OFDM) ? (BW_20) : (pTransmit->field.BW);
@@ -243,21 +244,46 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 		pTxWI->TxWIBW = (pAd->CommonCfg.AddHTInfo.AddHtInfo.RecomWidth == 0) ? (BW_20) : (pTransmit->field.BW);
 #endif /* DOT11N_DRAFT3 */
 
+#ifdef WFA_VHT_PF
+	if ((pAd->force_amsdu == TRUE) && (pTxBlk->TxFrameType == TX_AMSDU_FRAME) && 
+		(pTxWI->TxWIWirelessCliID != MCAST_WCID) && pMacEntry)
+	{
+		DBGPRINT(RT_DEBUG_INFO, ("%s():f_amsdu=%d, pTxBlk->TxFrameType=%d, pMacEntry->TXBAbitmap=0x%x, pTxBlk->UserPriority=%d, cond_match=%d!\n", 
+					__FUNCTION__, pAd->force_amsdu, pTxBlk->TxFrameType, pMacEntry->TXBAbitmap, 
+					pTxBlk->UserPriority, ((pMacEntry->TXBAbitmap & (1<<pTxBlk->UserPriority)) != 0) ? TRUE : FALSE));
+
+
+		if ((pAd->force_amsdu == TRUE) && (pTxBlk->TxFrameType == TX_AMSDU_FRAME)
+			&& (pMacEntry && ((pMacEntry->TXBAbitmap & (1<<pTxBlk->UserPriority)) != 0)))
+			amsdu_in_ampdu = TRUE;
+	}
+#endif /* WFA_VHT_PF */
+
+#ifdef WFA_VHT_PF
+	if (amsdu_in_ampdu)
+		pTxWI->TxWIAMPDU = TRUE;
+	else
+#endif /* WFA_VHT_PF */
 	pTxWI->TxWIAMPDU = ((pTxBlk->TxFrameType == TX_AMPDU_FRAME) ? TRUE : FALSE);
+
+#ifdef TXBF_SUPPORT
+	if(pTxBlk->TxSndgPkt > SNDG_TYPE_DISABLE)
+		pTxWI->TxWIAMPDU = FALSE;
+#endif /* TXBF_SUPPORT */
+
 	BASize = pAd->CommonCfg.TxBASize;
-	if((pTxBlk->TxFrameType == TX_AMPDU_FRAME) && (pMacEntry))
+	if((pTxBlk->TxFrameType == TX_AMPDU_FRAME
+#ifdef WFA_VHT_PF
+		|| amsdu_in_ampdu == TRUE
+#endif /* WFA_VHT_PF */
+		) && (pMacEntry))
 	{
 		UCHAR RABAOriIdx = pTxBlk->pMacEntry->BAOriWcidArray[pTxBlk->UserPriority];
 
 		BASize = pAd->BATable.BAOriEntry[RABAOriIdx].BAWinSize;
 	}
 
-	pTxWI->TxWIBAWinSize = BASize;
-
 #ifdef TXBF_SUPPORT
-	if(pTxBlk->TxSndgPkt > SNDG_TYPE_DISABLE)
-		pTxWI->TxWIAMPDU = FALSE;
-
 	if (pTxBlk->TxSndgPkt == SNDG_TYPE_SOUNDING)
 	{
 		pTxWI->Sounding = 1;
@@ -286,12 +312,20 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 			pTxWI->eTxBF = pTransmit->field.eTxBF;
 		pTxWI->iTxBF = pTransmit->field.iTxBF;
 	}
+#endif /* TXBF_SUPPORT */
 
+	pTxWI->TxWIBAWinSize = BASize;
+	pTxWI->TxWIShortGI = pTransmit->field.ShortGI;
+	pTxWI->TxWISTBC = pTransmit->field.STBC;
+#ifdef TXBF_SUPPORT
 	if (pTxBlk->TxSndgPkt == SNDG_TYPE_NDP  || pTxBlk->TxSndgPkt == SNDG_TYPE_SOUNDING || pTxWI->eTxBF)
 		pTxWI->TxWISTBC = 0;
 #endif /* TXBF_SUPPORT */
 
 #endif /* DOT11_N_SUPPORT */
+	
+	pTxWI->TxWIMCS = pTransmit->field.MCS;
+	pTxWI->TxWIPHYMODE = pTransmit->field.MODE;
 
 
 #ifdef DOT11_N_SUPPORT
@@ -305,8 +339,7 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 		else if (pMacEntry->MmpsMode == MMPS_STATIC)
 		{
 			/* Static MIMO Power Save Mode*/
-			if ((pTransmit->field.MODE == MODE_HTMIX || pTransmit->field.MODE == MODE_HTGREENFIELD) && 
-				(pTransmit->field.MCS > 7))
+			if (pTransmit->field.MODE >= MODE_HTMIX && pTransmit->field.MCS > 7)
 			{
 				pTxWI->TxWIMCS = 7;
 				pTxWI->TxWIMIMOps = 0;
@@ -333,8 +366,11 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 	}
 #endif /* DBG_DIAGNOSE */
 
+#ifdef RLT_MAC
 	/* for rate adapation*/
 	pTxWI->TxWIPacketId = pTxWI->TxWIMCS;
+#endif /* RLT_MAC */
+
 
 #ifdef INF_AMAZON_SE
 	/*Iverson patch for WMM A5-T07 ,WirelessStaToWirelessSta do not bulk out aggregate */
@@ -346,40 +382,18 @@ VOID RTMPWriteTxWI_Data(RTMP_ADAPTER *pAd, TXWI_STRUC *pTxWI, TX_BLK *pTxBlk)
 #endif /* INF_AMAZON_SE */	
 
 
-#ifdef CONFIG_FPGA_MODE
-	if (pAd->fpga_ctl.fpga_on & 0x6)
+#ifdef FPGA_MODE
+	if (pAd->fpga_on & 0x2)
 	{
-		pTxWI->TxWIPHYMODE = pAd->fpga_ctl.tx_data_phy;
-		pTxWI->TxWIMCS = pAd->fpga_ctl.tx_data_mcs;
-		pTxWI->TxWILDPC = pAd->fpga_ctl.tx_data_ldpc; 
-		pTxWI->TxWIBW = pAd->fpga_ctl.tx_data_bw;
-		pTxWI->TxWIShortGI = pAd->fpga_ctl.tx_data_gi;
-		if (pAd->fpga_ctl.data_basize)
-			pTxWI->TxWIBAWinSize = pAd->fpga_ctl.data_basize;
+		pTxWI->TxWIPHYMODE = pAd->data_phy;
+		pTxWI->TxWIMCS = pAd->data_mcs;
+		pTxWI->TxWIBW = pAd->data_bw;
+		pTxWI->TxWIShortGI = pAd->data_gi;
+		if (pAd->data_basize)
+			pTxWI->TxWIBAWinSize = pAd->data_basize;
 	}
-#endif /* CONFIG_FPGA_MODE */
+#endif /* FPGA_MODE */
 
-#ifdef MCS_LUT_SUPPORT
-	if ((RTMP_TEST_MORE_FLAG(pAd, fASIC_CAP_MCS_LUT)) && 
-		(pTxWI->TxWIWirelessCliID < 128) && 
-		(pMacEntry && pMacEntry->bAutoTxRateSwitch == TRUE))
-	{
-		HTTRANSMIT_SETTING rate_ctrl;
-
-		rate_ctrl.field.MODE = pTxWI->TxWIPHYMODE;
-#ifdef TXBF_SUPPORT
-		rate_ctrl.field.iTxBF = pTxWI->iTxBF;
-		rate_ctrl.field.eTxBF = pTxWI->eTxBF;
-#endif /* TXBF_SUPPORT */
-		rate_ctrl.field.STBC = pTxWI->TxWISTBC;
-		rate_ctrl.field.ShortGI = pTxWI->TxWIShortGI;
-		rate_ctrl.field.BW = pTxWI->TxWIBW;
-		rate_ctrl.field.MCS = pTxWI->TxWIMCS; 
-		if (rate_ctrl.word == pTransmit->word)
-			pTxWI->TxWILutEn = 1;
-		pTxWI->TxWILutEn = 0;
-	}
-#endif /* MCS_LUT_SUPPORT */
 
 }
 
@@ -416,8 +430,10 @@ VOID RTMPWriteTxWI_Cache(
 		pTxWI->TxWIMCS = pTransmit->field.MCS;
 		pTxWI->TxWIPHYMODE = pTransmit->field.MODE;
 
+#ifdef RLT_MAC
 		/* set PID for TxRateSwitching*/
 		pTxWI->TxWIPacketId = pTransmit->field.MCS;
+#endif /* RLT_MAC */
 		
 	}
 
@@ -518,49 +534,26 @@ VOID RTMPWriteTxWI_Cache(
 	}
 #endif /* TXBF_SUPPORT */
 
+#ifdef HDR_TRANS_SUPPORT
+	if (pTxBlk->NeedTrans )
+		pTxWI->TxWIMPDUByteCnt = pTxBlk->SrcBufLen;
+	else
+#endif /* HDR_TRANS_SUPPORT */
 	pTxWI->TxWIMPDUByteCnt = pTxBlk->MpduHeaderLen + pTxBlk->SrcBufLen;
 
 
-#ifdef WFA_VHT_PF
-	if (pAd->force_noack == TRUE)
-		pTxWI->TxWIACK = 0;
-	else
-#endif /* WFA_VHT_PF */
-		pTxWI->TxWIACK = TX_BLK_TEST_FLAG(pTxBlk, fTX_bAckRequired);
-
-#ifdef CONFIG_FPGA_MODE
-	if (pAd->fpga_ctl.fpga_on & 0x6)
+#ifdef FPGA_MODE
+	if (pAd->fpga_on & 0x2)
 	{
-		pTxWI->TxWIPHYMODE = pAd->fpga_ctl.tx_data_phy;
-		pTxWI->TxWIMCS = pAd->fpga_ctl.tx_data_mcs;
-		pTxWI->TxWIBW = pAd->fpga_ctl.tx_data_bw;
-		pTxWI->TxWIShortGI = pAd->fpga_ctl.tx_data_gi;
-		if (pAd->fpga_ctl.data_basize)
-			pTxWI->TxWIBAWinSize = pAd->fpga_ctl.data_basize;
+		pTxWI->TxWIPHYMODE = pAd->data_phy;
+		pTxWI->TxWIMCS = pAd->data_mcs;
+		pTxWI->TxWIBW = pAd->data_bw;
+		pTxWI->TxWIShortGI = pAd->data_gi;
+		if (pAd->data_basize)
+			pTxWI->TxWIBAWinSize = pAd->data_basize;
 	}
-#endif /* CONFIG_FPGA_MODE */
+#endif /* FPGA_MODE */
 
-#ifdef MCS_LUT_SUPPORT
-	if (RTMP_TEST_MORE_FLAG(pAd, fASIC_CAP_MCS_LUT) && 
-		(pTxWI->TxWIWirelessCliID < 128) && 
-		(pMacEntry && pMacEntry->bAutoTxRateSwitch == TRUE))
-	{
-		HTTRANSMIT_SETTING rate_ctrl;
-		
-		rate_ctrl.field.MODE = pTxWI->TxWIPHYMODE;
-#ifdef TXBF_SUPPORT
-		rate_ctrl.field.iTxBF = pTxWI->iTxBF;
-		rate_ctrl.field.eTxBF = pTxWI->eTxBF;
-#endif /* TXBF_SUPPORT */
-		rate_ctrl.field.STBC = pTxWI->TxWISTBC;
-		rate_ctrl.field.ShortGI = pTxWI->TxWIShortGI;
-		rate_ctrl.field.BW = pTxWI->TxWIBW;
-		rate_ctrl.field.MCS = pTxWI->TxWIMCS; 
-		if (rate_ctrl.word == pTransmit->word)
-			pTxWI->TxWILutEn = 1;
-		pTxWI->TxWILutEn = 0;
-	}
-#endif /* MCS_LUT_SUPPORT */
 
 }
 

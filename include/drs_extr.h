@@ -139,14 +139,12 @@ extern UCHAR RateSwitchTableAdapt11N3S[];
 /* ADAPT_RATE_TABLE - true if pTable is one of the Adaptive Rate Switch tables */
 #ifdef DOT11_VHT_AC
 extern UCHAR RateTableVht1S[];
-extern UCHAR RateTableVht1S_MCS7[];
 extern UCHAR RateTableVht2S[];
 
 #define ADAPT_RATE_TABLE(pTable)	((pTable)==RateSwitchTableAdapt11N1S ||\
 									(pTable)==RateSwitchTableAdapt11N2S ||\
 									(pTable)==RateSwitchTableAdapt11N3S ||\
 									(pTable)==RateTableVht1S ||\
-									(pTable)==RateTableVht1S_MCS7 ||\
 									(pTable)==RateTableVht2S)
 #else
 #define ADAPT_RATE_TABLE(pTable)	((pTable)==RateSwitchTableAdapt11N1S || \
@@ -160,15 +158,15 @@ extern UCHAR RateTableVht2S[];
 /* FUNCTION */
 VOID MlmeGetSupportedMcs(
 	IN struct _RTMP_ADAPTER *pAd,
-	IN UCHAR *pTable,
-	OUT CHAR mcs[]);
+	IN UCHAR	*pTable,
+	OUT CHAR 	mcs[]);
 
 UCHAR MlmeSelectTxRate(
 	IN struct _RTMP_ADAPTER *pAd,
 	IN struct _MAC_TABLE_ENTRY *pEntry,
-	IN CHAR mcs[],
-	IN CHAR Rssi,
-	IN CHAR RssiOffset);
+	IN CHAR	mcs[],
+	IN CHAR		Rssi,
+	IN CHAR		RssiOffset);
 
 VOID MlmeClearTxQuality(struct _MAC_TABLE_ENTRY *pEntry);
 VOID MlmeClearAllTxQuality(struct _MAC_TABLE_ENTRY *pEntry);
@@ -288,7 +286,7 @@ INT Set_RateTable_Proc(
 VOID StaQuickResponeForRateUpExecAdapt(
 	IN struct _RTMP_ADAPTER *pAd,
 	IN ULONG i,
-	IN CHAR Rssi);
+	IN CHAR  Rssi);
 
 VOID MlmeDynamicTxRateSwitchingAdapt(
 	IN struct _RTMP_ADAPTER *pAd,

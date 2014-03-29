@@ -43,7 +43,7 @@ static UINT32 Default_TX_PIN_CFG;
 #define TXCONT_TX_PIN_CFG_A 0x040C0050
 #define TXCONT_TX_PIN_CFG_G 0x080C00A0
 
-#define ATE_TASK_EXEC_INTV 1000
+#define ATE_TASK_EXEC_INTV 100		// 1000 -> 100
 
 static CHAR CCKRateTable[] = {0, 1, 2, 3, 8, 9, 10, 11, -1}; /* CCK Mode. */
 static CHAR OFDMRateTable[] = {0, 1, 2, 3, 4, 5, 6, 7, -1}; /* OFDM Mode. */
@@ -51,7 +51,6 @@ static CHAR OFDMRateTable[] = {0, 1, 2, 3, 4, 5, 6, 7, -1}; /* OFDM Mode. */
 static CHAR HTMIXRateTable3T3R[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, -1}; /* HT Mix Mode for 3*3. */
 #endif /* DOT11N_SS3_SUPPORT */
 static CHAR HTMIXRateTable[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -1}; /* HT Mix Mode. */
-static CHAR VHTACRateTable[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, -1}; /* VHT Mode. */
 
 #ifdef RTMP_INTERNAL_TX_ALC
 
@@ -70,6 +69,18 @@ extern CHAR desiredTSSIOverHTUsingSTBC[8];
 /* The Tx power tuning entry*/
 extern TX_POWER_TUNING_ENTRY_STRUCT TxPowerTuningTable[];
 
+#define CALIBRATION_R         1
+#define CALIBRATION_RXDCOC	  2
+#define CALIBRATION_LC        3
+#define CALIBRATION_LOFT      4
+#define CALIBRATION_TXIQ      5
+#define CALIBRATION_BW_TX     6
+#define CALIBRATION_BW_RX     7
+#define CALIBRATION_DPD       8
+#define CALIBRATION_RXIQ      9
+#define CALIBRATION_TXDCOC    10
+
+
 /*
 ==========================================================================
 	Description:
@@ -82,6 +93,15 @@ extern TX_POWER_TUNING_ENTRY_STRUCT TxPowerTuningTable[];
 		The desired TSSI
 ==========================================================================
  */
+ #ifdef MT7601
+CHAR ATEGetDesiredTSSI(
+	IN PRTMP_ADAPTER		pAd)
+{
+	DBGPRINT(RT_DEBUG_ERROR, ("%s::Currently not support singledriver.\n", __FUNCTION__));
+	return 0;
+
+ }
+ #else
 CHAR ATEGetDesiredTSSI(
 	IN PRTMP_ADAPTER		pAd)
 {
@@ -168,7 +188,7 @@ CHAR ATEGetDesiredTSSI(
 
 	return desiredTSSI;
 }
-
+#endif /* MT7601 */
 
 #endif /* RTMP_INTERNAL_TX_ALC */
 
@@ -309,27 +329,15 @@ VOID DefaultATEAsicAdjustTxPower(
 			/* In ATE mode, only adjust TX0_ALC by default. */
 			if (IS_RT5350(pAd))
 			{
-				ATE_RF_IO_READ8_BY_REG_ID(pAd, RF_R49, (PUCHAR)(&RFValue));
-				RFValue &= ~0x3F; /* clear RF_R49[5:0] */
-				RFValue |= pAd->TxPowerCtrl.RF_TX_ALC;
-				DBGPRINT(RT_DEBUG_TRACE, ("Write RF_R49 = 0x%x\n", RFValue));
-				ATE_RF_IO_WRITE8_BY_REG_ID(pAd, RF_R49, (UCHAR)RFValue);
+				DBGPRINT(RT_DEBUG_ERROR, ("MT7601 Bata driver not support RT30xxReadRFRegister() and RT30xxWriteRFRegister().\n"));
 			}
 			else if (IS_RT3352(pAd))
 			{
-				ATE_RF_IO_READ8_BY_REG_ID(pAd, RF_R47, (PUCHAR)(&RFValue));
-				RFValue &= ~0x1F; /* clear RF_R47[4:0] */
-				RFValue |= pAd->TxPowerCtrl.RF_TX_ALC;
-				DBGPRINT(RT_DEBUG_TRACE, ("Write RF_R47 = 0x%x\n", RFValue));
-				ATE_RF_IO_WRITE8_BY_REG_ID(pAd, RF_R47, (UCHAR)RFValue);
+				DBGPRINT(RT_DEBUG_ERROR, ("MT7601 Bata driver not support RT30xxReadRFRegister() and RT30xxWriteRFRegister().\n"));
 			}
 			else
 			{
-				ATE_RF_IO_READ8_BY_REG_ID(pAd, RF_R12, (PUCHAR)(&RFValue));
-				TmpValue = (RFValue & 0xE0);
-				RFValue = (TmpValue | (pAd->TxPowerCtrl.RF_TX_ALC & 0x1F));
-				DBGPRINT(RT_DEBUG_TRACE, ("Write RF_R12 = 0x%x\n", RFValue));            
-				ATE_RF_IO_WRITE8_BY_REG_ID(pAd, RF_R12, (UCHAR)(RFValue));
+				DBGPRINT(RT_DEBUG_ERROR, ("MT7601 Bata driver not support RT30xxReadRFRegister() and RT30xxWriteRFRegister().\n"));
 			}
 
 			/* Tx power adjustment over MAC */
@@ -725,12 +733,7 @@ CHAR ATEConvertToRssi(
 	else
 		RssiOffset = pAd->BGRssiOffset[RssiNumber];
 
-#ifdef RT65xx
-	if (IS_RT65XX(pAd))
-		return (Rssi - LNAGain - RssiOffset);
-	else
-#endif /* RT65xx */
-		return (-12 - RssiOffset - LNAGain - Rssi);
+	return (-12 - RssiOffset - LNAGain - Rssi);
 }
 
 
@@ -761,10 +764,10 @@ VOID ATESampleRssi(
 		pATEInfo->AvgRssi2 = pATEInfo->AvgRssi2X8 >> 3;
 	}
 
-	pATEInfo->LastSNR0 = (CHAR)(pRxWI->RxWISNR0);
-	pATEInfo->LastSNR1 = (CHAR)(pRxWI->RxWISNR1);
+	pATEInfo->LastSNR0 = (CHAR)(pRxWI->RxWIRSSI0);
+	pATEInfo->LastSNR1 = (CHAR)(pRxWI->RxWIRSSI1);
 #ifdef DOT11N_SS3_SUPPORT
-	pATEInfo->LastSNR2 = (CHAR)(pRxWI->RxWISNR2);
+	pATEInfo->LastSNR2 = (CHAR)(pRxWI->RxWIRSSI2);
 #endif /* DOT11N_SS3_SUPPORT */
 
 	pATEInfo->NumOfAvgRssiSample ++;
@@ -778,12 +781,6 @@ VOID rt_ee_read_all(PRTMP_ADAPTER pAd, USHORT *Data)
 	USHORT offset = 0;
 	USHORT value;
 
-#ifdef RTMP_FLASH_SUPPORT
-	{	
-		rtmp_ee_flash_read_all(pAd, Data);
-		return;
-	}
-#endif /* RTMP_FLASH_SUPPORT */
 
 	for (offset = 0; offset < (EEPROM_SIZE >> 1);)
 	{
@@ -801,8 +798,11 @@ VOID rt_ee_write_all(PRTMP_ADAPTER pAd, USHORT *Data)
 	USHORT offset = 0;
 	USHORT value;
 
+
 #ifdef RTMP_FLASH_SUPPORT
+	if (pAd->infType == RTMP_DEV_INF_USB)
 	{
+		/* for RT3352+RT3572 solution */
 		rtmp_ee_flash_write_all(pAd, Data);
 		return;
 	}
@@ -811,11 +811,38 @@ VOID rt_ee_write_all(PRTMP_ADAPTER pAd, USHORT *Data)
 #ifdef RTMP_USB_SUPPORT
 	if (pAd->infType == RTMP_DEV_INF_USB)
 	{
+#ifdef MT7601
+		if ( IS_MT7601(pAd) )
+		{
+			USHORT	length = 0x100;
+			UCHAR	*ptr = (UCHAR *)Data;
+			UCHAR	index;
+			UCHAR	AllFF[16] = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+			for ( offset = 0 ; offset < length ; offset += 16 )
+			{
+				if ( memcmp( ptr, AllFF, 16 ) )
+				{
+					for ( index = 0 ; index < 16 ; index += 2 )
+					{
+						value = *(USHORT *)(ptr + index);
+						eFuseWrite(pAd, offset + index ,&value, 2);
+					}
+				}
+				
+				ptr += 16;
+			}
+			pAd->bCalFreeIC = FALSE;
+			return;
+		}
+		else
+#endif /* MT7601 */
+		{
 		USHORT offset = 0;
 		USHORT length = EEPROM_SIZE;
 
 		RTUSBWriteEEPROM(pAd, offset, (UCHAR *)Data, length);
 		return;
+	}
 	}
 #endif /* RTMP_USB_SUPPORT */
 
@@ -836,18 +863,6 @@ VOID rt_ee_write_bulk(PRTMP_ADAPTER pAd, USHORT *Data, USHORT offset, USHORT len
 	USHORT value;
 	USHORT len = length;
 
-#ifdef RTMP_FLASH_SUPPORT
-	{
-		for (pos = 0; pos < (len >> 1);)
-		{
-			value = Data[pos];
-			rtmp_ee_flash_write(pAd, offset+(pos*2), value);
-			pos++;
-		}
-		
-		return;
-	}
-#endif /* RTMP_FLASH_SUPPORT */
 
 	for (pos = 0; pos < (len >> 1);)
 	{
@@ -1141,9 +1156,7 @@ static int CheckMCSValid(
 #endif /* DOT11N_SS3_SUPPORT */
 				pRateTab = HTMIXRateTable;
 			break;
-		case MODE_VHT: 
-			pRateTab = VHTACRateTable;
-			break;
+			
 		default: 
 			DBGPRINT_ERR(("unrecognizable Tx Mode %d\n", Mode));
 			return -1;
@@ -1382,41 +1395,6 @@ VOID RTMPStationStart(
 
 
 
-static INT ate_bbp_core_soft_reset(RTMP_ADAPTER *pAd, BOOLEAN set_bw, INT bw)
-{
-	UINT32 bbp_val;
-
-	RTMP_BBP_IO_READ32(pAd, CORE_R4, &bbp_val);
-	bbp_val |= 0x1;
-	RTMP_BBP_IO_WRITE32(pAd, CORE_R4, bbp_val);
-	RTMPusecDelay(1000);
-
-	if (set_bw == TRUE)
-	{
-		RTMP_BBP_IO_READ32(pAd, CORE_R1, &bbp_val);
-		bbp_val &= (~0x18);
-		switch (bw)
-		{
-			case BW_40:
-				bbp_val |= 0x10;
-				break;
-			case BW_80:
-				bbp_val |= 0x18;
-				break;
-			case BW_20:
-			default:
-					break;
-		}			
-		RTMP_BBP_IO_WRITE32(pAd, CORE_R1, bbp_val);
-		RTMPusecDelay(1000);
-	}
-	RTMP_BBP_IO_READ32(pAd, CORE_R4, &bbp_val);
-	bbp_val &= (~0x1);
-	RTMP_BBP_IO_WRITE32(pAd, CORE_R4, bbp_val);
-	RTMPusecDelay(1000);
-
-	return 0;
-}
 
 static NDIS_STATUS ATESTART(
 	IN PRTMP_ADAPTER pAd)
@@ -1424,47 +1402,37 @@ static NDIS_STATUS ATESTART(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UINT32			MacData=0, atemode=0, temp=0;
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
+	UCHAR			BbpData = 0;
 #ifdef RTMP_MAC_USB
 	UCHAR LoopCount=0;
 #endif /* RTMP_MAC_USB */
 	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
 	BOOLEAN Cancelled;
-#ifdef RLT_MAC
-	UINT32 bbp_val;
-#endif /* RLT_MAC */
 	
 	DBGPRINT(RT_DEBUG_TRACE, ("ATE : ===> %s\n", __FUNCTION__));
 
 
+#ifdef RTMP_MAC_USB
+	RTMP_OS_NETDEV_STOP_QUEUE(pAd->net_dev);
+#endif /* RTMP_MAC_USB */
+
 	atemode = pATEInfo->Mode;
 	pATEInfo->Mode = ATE_START;
 
-    	if (atemode == ATE_STOP) {
-#ifdef MT76x0
-		if (IS_MT76x0(pAd)) {
-			UINT32 mac_val = 0;
-
-			mt76x0_read_per_rate_tx_pwr(pAd);
-			RTMP_IO_READ32(pAd, TX_ALC_CFG_1, &mac_val);
-			mac_val &= 0xFFFFFFC0;
-			RTMP_IO_WRITE32(pAd, TX_ALC_CFG_1, mac_val);
-		} 
-		else
-#endif /* MT76x0 */
-		{
-			/* DUT just enters ATE mode from normal mode. */
-			/* Only at this moment, we need to switch back to the channel of normal mode. */
-			AsicSwitchChannel(pAd, pAd->CommonCfg.Channel, FALSE);
-			/* empty function */
-			AsicLockChannel(pAd, pAd->CommonCfg.Channel);
-		}
-	}
+    if (atemode == ATE_STOP)
+	{
+		/* DUT just enters ATE mode from normal mode. */
+		/* Only at this moment, we need to switch back to the channel of normal mode. */
+		AsicSwitchChannel(pAd, pAd->CommonCfg.Channel, FALSE);
+		/* empty function */
+		AsicLockChannel(pAd, pAd->CommonCfg.Channel);
+    }
 
 #ifdef RTMP_MAC_USB
-#ifdef MT76x0
-	if (IS_MT76x0(pAd))
-		RT65xxDisableTxRx(pAd, GUIRADIO_OFF);
-#endif /* MT76x0 */
+
+#ifdef MT7601
+	MT7601DisableTxRx(pAd, GUIRADIO_OFF);
+#endif /* MT7601 */
 
 
 	/* one second is enough for waiting bulk-in urb */
@@ -1490,48 +1458,32 @@ static NDIS_STATUS ATESTART(
 	{
 		if (pChipStruct->bBBPStoreTXCARR == TRUE)
 		{
+			UINT32			bbp_index=0;
 			UCHAR			RestoreRfICType=pAd->RfIcType;
 
-#ifdef RTMP_MAC
 			BbpHardReset(pAd);
-                        UINT32			bbp_index=0;
 
 			/* Restore All BBP Value */
 			for (bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
 				ATE_BBP_IO_WRITE8_BY_REG_ID(pAd,bbp_index,restore_BBP[bbp_index]);
-#endif /* RTMP_MAC */
 
 			pAd->RfIcType=RestoreRfICType;
 		}
 
 		if (pATEInfo->TxMethod == TX_METHOD_1)
 		{
-#ifdef RLT_MAC
-#ifdef MT76x0
-			if (IS_MT76x0(pAd)) {
-				RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-				bbp_val &= ~((0x1 << 14) | (0x1 << 8));
-				RTMP_BBP_IO_WRITE32(pAd, CORE_R24, bbp_val);
-
-				ate_bbp_core_soft_reset(pAd, FALSE, 0);
-			}
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 			/* No Carrier Test set BBP R22 bit6=0, bit[5~0]=0x0 */
 			ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R22, &BbpData);
 			BbpData &= 0xFFFFFF80; /* clear bit6, bit[5~0] */	
 			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R22, BbpData);
+
 			BbpSoftReset(pAd);
-#endif /* RTMP_MAC */
-			RTMP_IO_WRITE32(pAd, TX_PIN_CFG, (pATEInfo->Default_TX_PIN_CFG));
+			RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, Default_TX_PIN_CFG);
 		}
 		else
 		{
-#ifdef RTMP_MAC
 			/* No Carrier Test set BBP R22 bit7=0, bit6=0, bit[5~0]=0x0 */
 			ATE_BBP_RESET_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 		}
 	}
 	else if (atemode == ATE_TXCARRSUPP)
@@ -1541,58 +1493,25 @@ static NDIS_STATUS ATESTART(
 			UINT32			bbp_index=0;
 			UCHAR			RestoreRfICType=pAd->RfIcType;
 
-#ifdef RTMP_MAC
 			BbpHardReset(pAd);
 
 			/* Restore All BBP Value */
 			for (bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
 				ATE_BBP_IO_WRITE8_BY_REG_ID(pAd,bbp_index,restore_BBP[bbp_index]);
-#endif /* RTMP_MAC */
 
 			pAd->RfIcType=RestoreRfICType;			
 		}
 
-#ifdef RT6352
-		/* No Carrier Suppression set BBP R21 bit4=0 */
-		if (IS_RT6352(pAd))
-		{
-			BbpData = 0x00;
-			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R21, BbpData);
-		}
-#endif /* RT6352 */
-
-#ifdef RLT_MAC
-#ifdef MT76x0
-		if (IS_MT76x0(pAd)) {
-			RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-			bbp_val &= ~(0x1 << 15);
-			RTMP_BBP_IO_WRITE32(pAd, CORE_R24, bbp_val);
-
-			RTMP_BBP_IO_READ32(pAd, TXC_R1, &bbp_val);
-			bbp_val &= ~(0x1 << 0);
-			RTMP_BBP_IO_WRITE32(pAd, TXC_R1, bbp_val);
-		}
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 		/* No Cont. TX set BBP R22 bit7=0 */
 		ATE_BBP_STOP_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
+
 		/* No Carrier Suppression set BBP R24 bit0=0 */
 		ATE_BBP_CTS_TX_SIN_WAVE_DISABLE(pAd, BBP_R24, &BbpData);
-#endif /* RTMP_MAC */
 
 		if (pATEInfo->TxMethod == TX_METHOD_1)
 		{
-#ifdef RLT_MAC
-#ifdef MT76x0
-			if (IS_MT76x0(pAd))
-				ate_bbp_core_soft_reset(pAd, FALSE, 0);
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 			BbpSoftReset(pAd);
-#endif /* RTMP_MAC */
-			RTMP_IO_WRITE32(pAd, TX_PIN_CFG, (pATEInfo->Default_TX_PIN_CFG));
+			RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, Default_TX_PIN_CFG);
 		}
 	}		
 
@@ -1609,51 +1528,27 @@ static NDIS_STATUS ATESTART(
 				UINT32			bbp_index=0;
 				UCHAR			RestoreRfICType=pAd->RfIcType;
 
-#ifdef RTMP_MAC
 				BbpHardReset(pAd);
 
 				/* Restore All BBP Value */
 				for (bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
 					ATE_BBP_IO_WRITE8_BY_REG_ID(pAd,bbp_index,restore_BBP[bbp_index]);
-#endif /* RTMP_MAC */
 
 				pAd->RfIcType=RestoreRfICType;
 			}
 
-#ifdef RLT_MAC
-#ifdef MT76x0
-			if (IS_MT76x0(pAd)) {
-				RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-				bbp_val &= ~(0x1 << 15);
-				RTMP_BBP_IO_WRITE32(pAd, CORE_R24, bbp_val);
-			}
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 			/* Not Cont. TX anymore, so set BBP R22 bit7=0 */
 			ATE_BBP_STOP_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 
 			if (pATEInfo->TxMethod == TX_METHOD_1)
 			{
-#ifdef RLT_MAC
-#ifdef MT76x0
-				if (IS_MT76x0(pAd))
-					ate_bbp_core_soft_reset(pAd, FALSE, 0);
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 				BbpSoftReset(pAd);
-#endif /* RTMP_MAC */
-				RTMP_IO_WRITE32(pAd, TX_PIN_CFG, (pATEInfo->Default_TX_PIN_CFG));
+				RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, Default_TX_PIN_CFG);
 			}
 		}
 
-		if (pAd->chipCap.MCUType != ANDES ) {
-			/* Abort Tx, Rx DMA. */
-			RtmpDmaEnable(pAd, 0);
-		}
-
+		/* Abort Tx, Rx DMA. */
+		RtmpDmaEnable(pAd, 0);
 
 		/* Start Tx, RX DMA */
 		RtmpDmaEnable(pAd, 1);
@@ -1683,10 +1578,9 @@ static NDIS_STATUS ATESTART(
 	/* Disable Rx */
 	ATE_MAC_RX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 
-	if (pAd->chipCap.MCUType != ANDES ) {
-		/* Abort Tx, RX DMA. */
-		RtmpDmaEnable(pAd, 0);
-	}
+	/* Abort Tx, RX DMA. */
+	/* If disable DMA TX and RX, in-band command not word */
+	//RtmpDmaEnable(pAd, 0);
 
 	/* Disable Tx */
 	ATE_MAC_TX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
@@ -1766,16 +1660,16 @@ static NDIS_STATUS ATESTART(
 #ifdef DOT11N_SS3_SUPPORT
 	pATEInfo->SNR2 = 0;
 #endif /* DOT11N_SS3_SUPPORT */
+	pATEInfo->IPG = 200;
+
 	/* control */
 	pATEInfo->TxDoneCount = 0;
 	/* TxStatus : 0 --> task is idle, 1 --> task is running */
 	pATEInfo->TxStatus = 0;
 #endif /* RALINK_QA */
 
-	if ((!IS_RT3883(pAd)) && (!IS_RT3593(pAd)) && (!IS_RT8592(pAd)) && (!IS_MT76x0(pAd))) {
 		/* Soft reset BBP. */
 		BbpSoftReset(pAd);
-	}
 
 
 #ifdef CONFIG_STA_SUPPORT 
@@ -1809,14 +1703,13 @@ static NDIS_STATUS ATESTART(
 	}
 
 #ifdef LED_CONTROL_SUPPORT
+	RTMPExitLEDMode(pAd);	
 #endif /* LED_CONTROL_SUPPORT */
 
 
 #ifdef RTMP_MAC_USB
-#ifdef RTMP_MAC
 	/* Default value in BBP R22 is 0x0. */
    	ATE_BBP_RESET_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 
 	/* Clear bit4 to stop continuous Tx production test. */
 	ATE_MAC_TX_CTS_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
@@ -1844,9 +1737,7 @@ static NDIS_STATUS ATESTOP(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UINT32			MacData=0, ring_index=0;
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
-#ifdef RTMP_MAC
 	UCHAR			BbpData = 0;
-#endif /* RTMP_MAC */
 	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
 	BOOLEAN Cancelled;
 	
@@ -1857,51 +1748,44 @@ static NDIS_STATUS ATESTOP(
 		UINT32			bbp_index=0;
 		UCHAR			RestoreRfICType=pAd->RfIcType;
 
-#ifdef RTMP_MAC
 		BbpHardReset(pAd);
 
 		/* Supposed that we have had a record in restore_BBP[] */
 		/* restore all BBP value */
 		for (bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
 			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd,bbp_index,restore_BBP[bbp_index]);
-#endif /* RTMP_MAC */
 
 		ASSERT(RestoreRfICType != 0);
 		pAd->RfIcType=RestoreRfICType;
 	}
 
-#ifdef RLT_MAC
-#ifdef RT65xx
-	if ((IS_RT8592(pAd)) && (IS_MT76x0(pAd))) {
-		/* do nothing */;
-	}
-#endif /* RT65xx */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
+
+	InterlockedExchange(&pAd->BulkOutRemained, 0);				
+	NdisAcquireSpinLock(&pAd->GenericLock);
+	pAd->ContinBulkOut = FALSE;		
+	//pAd->ContinBulkIn = FALSE;
+	NdisReleaseSpinLock(&pAd->GenericLock);		
+
 	/* Default value in BBP R22 is 0x0. */
 	ATE_BBP_RESET_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 
-#ifdef MT76x0
-	if (IS_MT76x0(pAd))
-		RT65xxDisableTxRx(pAd, GUIRADIO_OFF);
-	else
-#endif /* MT76x0 */
-	{
-		/* Clear bit4 to stop continuous Tx production test. */
-		ATE_MAC_TX_CTS_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
+#ifdef MT7601
+	MT7601DisableTxRx(pAd, GUIRADIO_OFF);
+#else
+	/* Clear bit4 to stop continuous Tx production test. */
+	ATE_MAC_TX_CTS_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 	
-		/* Disable Rx */
-		ATE_MAC_RX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
+	/* Disable Rx */
+	ATE_MAC_RX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 	
-		if (pAd->chipCap.MCUType != ANDES ) {
-			/* Abort TX, RX DMA. */
-			RtmpDmaEnable(pAd, 0);
-		}
+	/* Abort Tx, RX DMA */
+	RtmpDmaEnable(pAd, 0);
 
-		/* Disable Tx */
-		ATE_MAC_TX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
-	}
+	/* Disable Tx */
+	ATE_MAC_TX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
+#endif /* MT7601 */
+
+	pAd->ContinBulkIn = FALSE;
 
 
 	if (pATEInfo->PeriodicTimer.State == FALSE)
@@ -1934,10 +1818,10 @@ static NDIS_STATUS ATESTOP(
 	*/
 /*	pAd->ContinBulkIn = FALSE; */
 
-	while (pAd->PendingRx > 0)
+	if (pAd->PendingRx > 0)
 	{
 		ATE_RTUSBCancelPendingBulkInIRP(pAd);
-		RtmpOsMsDelay(500);
+		//RtmpOsMsDelay(500);
 	}
 
 	while (((pAd->BulkOutPending[0] == TRUE) ||
@@ -2024,11 +1908,6 @@ static NDIS_STATUS ATESTOP(
 	}	
 
 	/* Clear ATE Bulk in/out counter and continue setup. */
-	InterlockedExchange(&pAd->BulkOutRemained, 0);				
-	NdisAcquireSpinLock(&pAd->GenericLock);
-	pAd->ContinBulkOut = FALSE;		
-	pAd->ContinBulkIn = FALSE;
-	NdisReleaseSpinLock(&pAd->GenericLock);		
 
 	/* Wait 50ms to prevent next URB to bulkout during HW reset. */
 	/* todo : remove this if not necessary */
@@ -2060,6 +1939,7 @@ static NDIS_STATUS ATESTOP(
 	/* Everything is ready to start normal Tx/Rx. */
 	RTUSBBulkReceive(pAd);
 #endif /* RTMP_MAC_USB */
+	RTMP_OS_NETDEV_START_QUEUE(pAd->net_dev);
 
 	DBGPRINT(RT_DEBUG_TRACE, ("ATE : <=== %s\n", __FUNCTION__));
 	return Status;
@@ -2072,18 +1952,13 @@ static NDIS_STATUS TXCARR(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UINT32			MacData=0;
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
-#ifdef RTMP_MAC
-	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
 	UCHAR			BbpData = 0;
-#endif /* RTMP_MAC */
-#ifdef RLT_MAC
-	UINT32 bbp_val;
-#endif /* RLT_MAC */
+	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
 
 	DBGPRINT(RT_DEBUG_TRACE, ("ATE : ===> %s\n", __FUNCTION__));
 
 	pATEInfo->Mode = ATE_TXCARR;
-#ifdef RTMP_MAC
+
 	if (pChipStruct->bBBPStoreTXCARR == TRUE)
 	{
 		UINT32 bbp_index=0;
@@ -2096,7 +1971,7 @@ static NDIS_STATUS TXCARR(
 	for (bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
 		ATE_BBP_IO_READ8_BY_REG_ID(pAd,bbp_index,&restore_BBP[bbp_index]);
 	}
-#endif /* RTMP_MAC */
+
 #ifdef RTMP_MAC_USB
 	/* Disable Rx */
 	ATE_MAC_RX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
@@ -2105,60 +1980,41 @@ static NDIS_STATUS TXCARR(
 	/* QA has done the following steps if it is used. */
 	if (pATEInfo->bQATxStart == FALSE) 
 	{
-		if ((!IS_RT3883(pAd)) && (!IS_RT3352(pAd))
-			&& (!IS_RT5350(pAd)) && (!IS_RT3593(pAd)) && (!IS_MT76x0(pAd)))
+		if ((!IS_RT3883(pAd)) && (!IS_RT3352(pAd)) && (!IS_RT5350(pAd)) && (!IS_RT3593(pAd)))
 			BbpSoftReset(pAd);/* Soft reset BBP. */
 
 		if (pATEInfo->TxMethod == TX_METHOD_1)
 		{
-			if (!IS_RT5592(pAd))			
+			/* store the original value of RA_TX_PIN_CFG */
+			RTMP_IO_READ32(pAd, RA_TX_PIN_CFG, &Default_TX_PIN_CFG);
+
+			/* give RA_TX_PIN_CFG(0x1328) a proper value. */
+			if (pATEInfo->Channel <= 14)
 			{
-				/* store the original value of TX_PIN_CFG */
-				RTMP_IO_READ32(pAd, TX_PIN_CFG, &(pATEInfo->Default_TX_PIN_CFG));
-
-				/* give TX_PIN_CFG(0x1328) a proper value. */
-				if (pATEInfo->Channel <= 14)
-				{
-					/* G band */
-					MacData = TXCONT_TX_PIN_CFG_G;
-					RTMP_IO_WRITE32(pAd, TX_PIN_CFG, MacData);
-				}
-				else
-				{
-					/* A band */
-					MacData = TXCONT_TX_PIN_CFG_A;
-					RTMP_IO_WRITE32(pAd, TX_PIN_CFG, MacData);
-				}
+				/* G band */
+				MacData = TXCONT_TX_PIN_CFG_G;
+				RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, MacData);
+			}
+			else
+			{
+				/* A band */
+				MacData = TXCONT_TX_PIN_CFG_A;
+				RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, MacData);
 			}
 
-#ifdef RLT_MAC
-#ifdef MT76x0
-			if (IS_MT76x0(pAd)) {
-				RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-				bbp_val |= (0x1 << 14);
-				bbp_val |= (0x1 << 8);
-				RTMP_BBP_IO_WRITE32(pAd, CORE_R24, bbp_val);
-			}
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 			/* Carrier Test set BBP R22 bit6=1, bit[5~0]=0x01 */
 			ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R22, &BbpData);
 			BbpData &= 0xFFFFFF80; /* bit6, bit[5~0] */
 			BbpData |= 0x00000041; /* set bit6=1, bit[5~0]=0x01 */
 			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R22, BbpData);
-#endif /* RTMP_MAC */
 		}
 		else
 		{
-#ifdef RTMP_MAC
 			/* Carrier Test set BBP R22 bit7=1, bit6=1, bit[5~0]=0x01 */
 			ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R22, &BbpData);
 			BbpData &= 0xFFFFFF00; /* clear bit7, bit6, bit[5~0] */
 			BbpData |= 0x000000C1; /* set bit7=1, bit6=1, bit[5~0]=0x01 */
 			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R22, BbpData);
-#endif /* RTMP_MAC */
-			// TODO: how to handle this for RLT_BBP?
 
 			/* Set MAC_SYS_CTRL(0x1004) Continuous Tx Production Test (bit4) = 1. */
 			ATE_MAC_TX_CTS_ENABLE(pAd, MAC_SYS_CTRL, &MacData);
@@ -2178,14 +2034,9 @@ static NDIS_STATUS TXCONT(
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
 	UCHAR			BbpData = 0;
 	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
-#ifdef RLT_MAC
-	UINT32 bbp_val;
-#endif /* RLT_MAC */
 
 	DBGPRINT(RT_DEBUG_TRACE, ("ATE : ===> %s\n", __FUNCTION__));
 
-	pATEInfo->Mode = ATE_TXCONT;
-	
 	if (pATEInfo->bQATxStart == TRUE)
 	{
 		/*
@@ -2195,26 +2046,20 @@ static NDIS_STATUS TXCONT(
 		ATE_MAC_TX_CTS_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 		ATE_MAC_TX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 
-#ifdef RTMP_MAC
 		/* set BBP R22 bit7=0 */
 		ATE_BBP_STOP_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 	}
 	else
 	{
 		if (pATEInfo->TxMethod == TX_METHOD_1)
 		{
-			if (!IS_RT5592(pAd))
-			{
-				/* store the original value of TX_PIN_CFG */
-				RTMP_IO_READ32(pAd, TX_PIN_CFG, &(pATEInfo->Default_TX_PIN_CFG));
-			}
+			/* store the original value of RA_TX_PIN_CFG */
+			RTMP_IO_READ32(pAd, RA_TX_PIN_CFG, &Default_TX_PIN_CFG);
 		}
 	}
 
 	if (pChipStruct->bBBPStoreTXCONT == TRUE)
 	{
-#ifdef RTMP_MAC
 		UINT32 bbp_index=0;
 
 		/* Zero All BBP Value */
@@ -2224,13 +2069,13 @@ static NDIS_STATUS TXCONT(
 		/* Record All BBP Value */
 		for(bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
 			ATE_BBP_IO_READ8_BY_REG_ID(pAd,bbp_index,&restore_BBP[bbp_index]);
-#endif /* RTMP_MAC */
 	}
 
 	/* Step 1: send 50 packets first. */
+	pATEInfo->Mode = ATE_TXCONT;
 	pATEInfo->TxCount = 50;
 
-	if ((!IS_RT3883(pAd)) && (!IS_RT3352(pAd)) && (!IS_RT5350(pAd)) && (!IS_RT3593(pAd)) && (!IS_RT65XX(pAd)))
+	if ((!IS_RT3883(pAd)) && (!IS_RT3352(pAd)) && (!IS_RT5350(pAd)) && (!IS_RT3593(pAd)))
 		BbpSoftReset(pAd);/* Soft reset BBP. */
 
 	/* Abort Tx, RX DMA. */
@@ -2241,8 +2086,7 @@ static NDIS_STATUS TXCONT(
 	pATEInfo->TxDoneCount = 0;
 	
 	/* Only needed if we have to send some normal frames. */
-	if (pATEInfo->bQAEnabled == FALSE)
-		SetJapanFilter(pAd);
+	SetJapanFilter(pAd);
 
 
 #ifdef RTMP_MAC_USB
@@ -2290,50 +2134,35 @@ static NDIS_STATUS TXCONT(
 
 	if (pATEInfo->TxMethod == TX_METHOD_1)
 	{
-		if (!IS_RT5592(pAd))
-		{
-			/* give TX_PIN_CFG(0x1328) a proper value. */
+		/* give RA_TX_PIN_CFG(0x1328) a proper value. */
 		if (pATEInfo->Channel <= 14)
 		{
 			/* G band */
 			MacData = TXCONT_TX_PIN_CFG_G;
-				RTMP_IO_WRITE32(pAd, TX_PIN_CFG, MacData);
+			RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, MacData);
 		}
 		else
 		{
 			/* A band */
 			MacData = TXCONT_TX_PIN_CFG_A;
-				RTMP_IO_WRITE32(pAd, TX_PIN_CFG, MacData);
-			}
+			RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, MacData);
 		}
-#ifdef RLT_MAC
-#ifdef MT76x0
-		if (IS_MT76x0(pAd)) {
-			RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-			bbp_val |= (0x1 << 15);
-			RTMP_BBP_IO_WRITE32(pAd, CORE_R24, bbp_val);
-		}
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
+
 		/* Cont. TX set BBP R22 bit7=1 */
 		ATE_BBP_START_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 	}
 	else
 	{
 		/* Step 2: send more 50 packets then start Continuous Tx Mode. */
 		/* Abort Tx, RX DMA. */
 		RtmpDmaEnable(pAd, 0);
-#ifdef RTMP_MAC
+
 		/* Cont. TX set BBP R22 bit7=1 */
 		ATE_BBP_START_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 
 		pATEInfo->TxCount = 50;
 
 		pATEInfo->TxDoneCount = 0;
-		if (pATEInfo->bQAEnabled == FALSE)
 		SetJapanFilter(pAd);
 
 
@@ -2390,13 +2219,8 @@ static NDIS_STATUS TXCARS(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UINT32			MacData=0;
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
-	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
-#ifdef RTMP_MAC
 	UCHAR			BbpData = 0;
-#endif /* RTMP_MAC */
-#ifdef RLT_MAC
-	UINT32 bbp_val;
-#endif /* RLT_MAC */
+	PATE_CHIP_STRUCT pChipStruct = pATEInfo->pChipStruct;
 
 	DBGPRINT(RT_DEBUG_TRACE, ("ATE : ===> %s\n", __FUNCTION__));
 
@@ -2404,7 +2228,6 @@ static NDIS_STATUS TXCARS(
 
 	if (pChipStruct->bBBPStoreTXCARRSUPP == TRUE)
 	{
-#ifdef RTMP_MAC
 		UINT32 bbp_index=0;
 
 		/* Zero All BBP Value */
@@ -2414,7 +2237,6 @@ static NDIS_STATUS TXCARS(
         /* Record All BBP Value */
         for (bbp_index=0;bbp_index<ATE_BBP_REG_NUM;bbp_index++)
                 ATE_BBP_IO_READ8_BY_REG_ID(pAd,bbp_index,&restore_BBP[bbp_index]);
-#endif /* RTMP_MAC */
 	}
 #ifdef RTMP_MAC_USB
 	/* Disable Rx */
@@ -2424,65 +2246,45 @@ static NDIS_STATUS TXCARS(
 	/* QA has done the following steps if it is used. */
 	if (pATEInfo->bQATxStart == FALSE) 
 	{
-#if !defined(RT3883) && !defined(RT3593) && !defined(MT76x0)
-		if (!IS_RT3883(pAd) && !IS_RT3593(pAd) && !IS_MT76x0(pAd))
+		if (!IS_RT3883(pAd) && !IS_RT3593(pAd))
 		{
+			/* RT3883 and RT3593 do not need BbpSoftReset() */
+			/* Soft reset BBP. */
 			BbpSoftReset(pAd);
 		}
-#endif /* !defined(RT3883) && !defined(RT3593) && !defined(MT76x0) */
 
 		if (pATEInfo->TxMethod == TX_METHOD_1)
 		{
-			if (!IS_RT5592(pAd))
-			{
-				/* store the original value of TX_PIN_CFG */
-				RTMP_IO_READ32(pAd, TX_PIN_CFG, &(pATEInfo->Default_TX_PIN_CFG));
+			/* store the original value of RA_TX_PIN_CFG */
+			RTMP_IO_READ32(pAd, RA_TX_PIN_CFG, &Default_TX_PIN_CFG);
 
-				/* give TX_PIN_CFG(0x1328) a proper value. */
+			/* give RA_TX_PIN_CFG(0x1328) a proper value. */
 			if (pATEInfo->Channel <= 14)
 			{
 				/* G band */
 				MacData = TXCONT_TX_PIN_CFG_G;
-					RTMP_IO_WRITE32(pAd, TX_PIN_CFG, MacData);
+				RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, MacData);
 			}
 			else
 			{
 				/* A band */
 				MacData = TXCONT_TX_PIN_CFG_A;
-					RTMP_IO_WRITE32(pAd, TX_PIN_CFG, MacData);
-			}
+				RTMP_IO_WRITE32(pAd, RA_TX_PIN_CFG, MacData);
 			}
 
-#ifdef RLT_MAC
-#ifdef MT76x0
-			if (IS_MT76x0(pAd)) {
-				RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-				bbp_val |= (0x1 << 15);
-				RTMP_BBP_IO_WRITE32(pAd, CORE_R24, bbp_val);
-
-				RTMP_BBP_IO_READ32(pAd, TXC_R1, &bbp_val);
-				bbp_val |= (0x1 << 0);
-				RTMP_BBP_IO_WRITE32(pAd, TXC_R1, bbp_val);
-			}
-#endif /* MT76x0 */
-#endif /* RLT_MAC */
-#ifdef RTMP_MAC
 			/* Carrier Suppression set BBP R22 bit7=1 (Enable Continuous Tx Mode) */
 			ATE_BBP_START_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
+
 			/* Carrier Suppression set BBP R24 bit0=1 (TX continuously send out 5.5MHZ sin save) */
 			ATE_BBP_CTS_TX_SIN_WAVE_ENABLE(pAd, BBP_R24, &BbpData);
-#endif /* RTMP_MAC */
 		}
 		else
 		{
-#ifdef RTMP_MAC
 			/* Carrier Suppression set BBP R22 bit7=1 (Enable Continuous Tx Mode) */
 			ATE_BBP_START_CTS_TX_MODE(pAd, BBP_R22, &BbpData);
 
 			/* Carrier Suppression set BBP R24 bit0=1 (TX continuously send out 5.5MHZ sin save) */
 			ATE_BBP_CTS_TX_SIN_WAVE_ENABLE(pAd, BBP_R24, &BbpData);
-#endif /* RTMP_MAC */
-			// TODO: how to handle this for RLT_BBP??
 
 			/* Set MAC_SYS_CTRL(0x1004) Continuous Tx Production Test (bit4) = 1. */
 			ATE_MAC_TX_CTS_ENABLE(pAd, MAC_SYS_CTRL, &MacData);
@@ -2564,10 +2366,8 @@ static NDIS_STATUS TXFRAME(
 	/* Soft reset BBP. */
 	BbpSoftReset(pAd);
 
-#ifdef RTMP_MAC
 	/* Default value in BBP R22 is 0x0. */
    	ATE_BBP_RESET_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
 
 	/* Clear bit4 to stop continuous Tx production test. */
 	ATE_MAC_TX_CTS_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
@@ -2615,8 +2415,7 @@ static NDIS_STATUS TXFRAME(
 	/* Enable Tx */
 	ATE_MAC_TX_ENABLE(pAd, MAC_SYS_CTRL, &MacData);
 
-	if (pATEInfo->bQAEnabled == FALSE)
-		SetJapanFilter(pAd);
+	SetJapanFilter(pAd);
 	
 	/* Abort Tx, RX DMA. */
 	RtmpDmaEnable(pAd, 0);
@@ -2682,8 +2481,8 @@ static NDIS_STATUS TXFRAME(
 	{
 		if ((IS_RT3350(pAd)) || (IS_RT3352(pAd))) 
 		{
-			if ((pATEInfo->TxWI.TXWI_O.MCS == 7)
-				&& (pATEInfo->TxWI.TXWI_O.BW == BW_20)	&& (pATEInfo->TxAntennaSel == 1))                  
+			if ((pATEInfo->TxWI.MCS == 7)
+				&& (pATEInfo->TxWI.BW == BW_20)	&& (pATEInfo->TxAntennaSel == 1))                  
 			{
 				if (pATEInfo->Channel == 7)
 				{
@@ -2750,9 +2549,7 @@ static NDIS_STATUS RXFRAME(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UINT32			MacData=0;
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
-#ifdef RTMP_MAC
 	UCHAR			BbpData = 0;
-#endif /* RTMP_MAC */
 #ifdef RTMP_MAC_USB
 	UINT32			ring_index=0;
 #endif /* RTMP_MAC_USB */
@@ -2762,23 +2559,18 @@ static NDIS_STATUS RXFRAME(
 	/* Disable Rx of MAC block */
 	ATE_MAC_RX_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 
-#ifdef RTMP_MAC
 	/* Default value in BBP R22 is 0x0. */
-	if ((!IS_RT8592(pAd)) && (!IS_MT76x0(pAd)))
-		ATE_BBP_RESET_TX_MODE(pAd, BBP_R22, &BbpData);
-#endif /* RTMP_MAC */
+	ATE_BBP_RESET_TX_MODE(pAd, BBP_R22, &BbpData);
 
 
 	/* Clear bit4 to stop continuous Tx production test. */
 	ATE_MAC_TX_CTS_DISABLE(pAd, MAC_SYS_CTRL, &MacData);
 
-	pATEInfo->Mode = ATE_RXFRAME;
+	pATEInfo->Mode |= ATE_RXFRAME;
 
 #ifdef RTMP_MAC_USB
-	if (pAd->chipCap.MCUType != ANDES ) {
-		/* Abort Tx, Rx DMA. */
-		RtmpDmaEnable(pAd, 0);
-	}
+	/* Abort Tx, RX DMA. */
+	RtmpDmaEnable(pAd, 0);
 #endif /* RTMP_MAC_USB */
 
 	/* Disable Tx of MAC block. */
@@ -2857,9 +2649,8 @@ static NDIS_STATUS	ATECmdHandler(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg)
 {
-	ATE_INFO *pATEInfo = &(pAd->ate);
+	PATE_INFO pATEInfo = &(pAd->ate);
 	NDIS_STATUS		Status = NDIS_STATUS_SUCCESS;
-	BOOLEAN bNeedTxRx = FALSE;
 
 	DBGPRINT(RT_DEBUG_TRACE, ("===> %s\n", __FUNCTION__));
 
@@ -2886,14 +2677,6 @@ static NDIS_STATUS	ATECmdHandler(
 #endif
 	else if (!strcmp(arg, "TXCARR"))	
 	{
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_RXSTOP;
-			pATEInfo->Mode |= ATE_TXCARR;
-		}
-#endif /* RT6352 */
 		ATEAsicSwitchChannel(pAd);
 		/* AsicLockChannel() is empty function so far in fact */
 		AsicLockChannel(pAd, pATEInfo->Channel);
@@ -2903,14 +2686,6 @@ static NDIS_STATUS	ATECmdHandler(
 	}
 	else if (!strcmp(arg, "TXCARS"))
 	{
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_RXSTOP;
-			pATEInfo->Mode |= ATE_TXCARRSUPP;
-		}
-#endif /* RT6352 */
 		ATEAsicSwitchChannel(pAd);
 		/* AsicLockChannel() is empty function so far in fact */
 		AsicLockChannel(pAd, pATEInfo->Channel);
@@ -2920,14 +2695,6 @@ static NDIS_STATUS	ATECmdHandler(
 	}
 	else if (!strcmp(arg, "TXCONT"))	
 	{
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_RXSTOP;
-			pATEInfo->Mode |= ATE_TXCONT;
-		}
-#endif /* RT6352 */
 		ATEAsicSwitchChannel(pAd);
 		/* AsicLockChannel() is empty function so far in fact */
 		AsicLockChannel(pAd, pATEInfo->Channel);
@@ -2937,14 +2704,7 @@ static NDIS_STATUS	ATECmdHandler(
 	}
 	else if (!strcmp(arg, "TXFRAME")) 
 	{
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_RXSTOP;
-			pATEInfo->Mode |= ATE_TXFRAME;
-		}
-#endif /* RT6352 */
+	
 		ATEAsicSwitchChannel(pAd);
 		/* AsicLockChannel() is empty function so far in fact */
 		AsicLockChannel(pAd, pATEInfo->Channel);
@@ -2954,73 +2714,12 @@ static NDIS_STATUS	ATECmdHandler(
 	}
 	else if (!strcmp(arg, "RXFRAME")) 
 	{
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_TXSTOP;
-			pATEInfo->Mode |= ATE_RXFRAME;
-		}
-#endif /* RT6352 */
 		ATEAsicSwitchChannel(pAd);
 		/* AsicLockChannel() is empty function so far in fact */
 		AsicLockChannel(pAd, pATEInfo->Channel);
 		RTMPusecDelay(5);
 
 		Status = RXFRAME(pAd);
-	}
-	else if (!strcmp(arg, "TXAPPLY")) 
-	{
-		/* sanity check */
-		if ((pATEInfo->Mode != ATE_TXFRAME) || (pATEInfo->Mode == ATE_START))
-		{
-			/* need "TXFRAME", not only "TXAPPLY" */
-			bNeedTxRx = TRUE;
-		}
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_RXSTOP;
-			pATEInfo->Mode |= ATE_TXFRAME;
-		}
-#endif /* RT6352 */
-
-		ATEAsicSwitchChannel(pAd);
-		/* AsicLockChannel() is empty function so far in fact */
-		AsicLockChannel(pAd, pATEInfo->Channel);
-		RtmpOsMsDelay(5);
-
-		if (bNeedTxRx == TRUE)
-		{
-		Status = TXFRAME(pAd);
-	}
-	}
-	else if (!strcmp(arg, "RXAPPLY")) 
-	{
-		/* sanity check */
-		if ((pATEInfo->Mode != ATE_RXFRAME) || (pATEInfo->Mode == ATE_START))
-	{
-			/* need "RXFRAME", not only "RXAPPLY" */
-			bNeedTxRx = TRUE;
-		}
-#ifdef RT6352
-		if (IS_RT6352(pAd))
-		{
-			/* Set ATE Mode in advance for RT6352ATEAsicSetTxRxPath() */
-			pATEInfo->Mode &= ATE_TXSTOP;
-			pATEInfo->Mode |= ATE_RXFRAME;
-		}
-#endif /* RT6352 */
-		ATEAsicSwitchChannel(pAd);
-		/* AsicLockChannel() is empty function so far in fact */
-		AsicLockChannel(pAd, pATEInfo->Channel);
-		RTMPusecDelay(5);
-
-		if (bNeedTxRx == TRUE)
-		{
-		Status = RXFRAME(pAd);
-	}
 	}
 #ifdef RALINK_QA
 	/* Enter ATE mode and set Tx/Rx Idle */
@@ -3268,7 +2967,7 @@ INT	Set_ATE_CHANNEL_Proc(
 	/* to allow A band channel : ((channel < 1) || (channel > 14)) */
 	if ((channel < 1) || (channel > 216))
 	{
-		DBGPRINT_ERR(("Set_ATE_CHANNEL_Proc::Out of range.\n"));
+		DBGPRINT_ERR(("Set_ATE_CHANNEL_Proc::Out of range, it should be in range of 1~14.\n"));
 		return FALSE;
 	}
 
@@ -3383,16 +3082,23 @@ static INT ATESetAntennaTxPower(
 
 	if (pATEInfo->Channel <= 14) /* 2.4 GHz */
 	{
-#ifdef MT76x0
-		if (IS_MT76x0(pAd)) {
-			if ((TxPower > 63 /* 0x3F */) || (TxPower < 0)) {
+#ifdef MT7601
+		if (IS_MT7601(pAd))
+		{
+			CHAR MaxPower;
+			UINT32 RegValue = 0;
+
+			RTMP_IO_READ32(pAd, TX_ALC_CFG_0, &RegValue);
+			MaxPower = (RegValue & 0x003F0000) >> 16;
+			if (TxPower > MaxPower )
+			{
 				DBGPRINT_ERR(("Set_ATE_TX_POWER%d_Proc::Out of range! (Value=%d)\n", index, TxPower));
-				DBGPRINT_ERR(("TxPower range is 0~63 in G band.\n"));
+				DBGPRINT_ERR(("TxPower range is 0~39 in G band.\n"));
 				return FALSE;
 			}
 		}
 		else
-#endif /* MT76x0 */
+#endif /* MT7601 */
 		if (!IS_RT3390(pAd))
 		{
 			if ((TxPower > 31) || (TxPower < 0))
@@ -3405,16 +3111,6 @@ static INT ATESetAntennaTxPower(
 	}
 	else /* 5.5 GHz */
 	{
-#ifdef MT76x0
-		if (IS_MT76x0(pAd)) {
-			if ((TxPower > 63 /* 0x3F */) || (TxPower < 0)) {
-				DBGPRINT_ERR(("Set_ATE_TX_POWER%d_Proc::Out of range! (Value=%d)\n", index, TxPower));
-				DBGPRINT_ERR(("TxPower range is 0~63 in A band.\n"));
-				return FALSE;
-			}
-		}
-		else
-#endif /* MT76x0 */
 		if ((TxPower > (pATEInfo->MaxTxPowerBandA)) || (TxPower < (pATEInfo->MinTxPowerBandA)))
 		{
 			DBGPRINT_ERR(("Set_ATE_TX_POWER%d_Proc::Out of range! (Value=%d)\n", index, TxPower));
@@ -3544,6 +3240,9 @@ INT	Set_ATE_TX_Antenna_Proc(
 	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_Antenna_Proc (Antenna = %d)\n", pATEInfo->TxAntennaSel));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_Antenna_Proc Success\n"));
 
+	/* calibration power unbalance issues */
+	ATEAsicSwitchChannel(pAd);
+
 	
 	return TRUE;
 }
@@ -3581,6 +3280,9 @@ INT	Set_ATE_RX_Antenna_Proc(
 	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_RX_Antenna_Proc (Antenna = %d)\n", pATEInfo->RxAntennaSel));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_RX_Antenna_Proc Success\n"));
 
+	/* calibration power unbalance issues */
+	ATEAsicSwitchChannel(pAd);
+
 	
 	return TRUE;
 }
@@ -3589,8 +3291,8 @@ INT	Set_ATE_RX_Antenna_Proc(
 VOID DefaultATEAsicExtraPowerOverMAC(
 	IN	PRTMP_ADAPTER 		pAd)
 {
-	UINT32 ExtraPwrOverMAC = 0;
-	UINT32 ExtraPwrOverTxPwrCfg7 = 0, ExtraPwrOverTxPwrCfg8 = 0, ExtraPwrOverTxPwrCfg9 = 0;
+	ULONG	ExtraPwrOverMAC = 0;
+	ULONG	ExtraPwrOverTxPwrCfg7 = 0, ExtraPwrOverTxPwrCfg8 = 0, ExtraPwrOverTxPwrCfg9 = 0;
 
 	/* For OFDM_54 and HT_MCS_7, extra fill the corresponding register value into MAC 0x13D4 */
 	RTMP_IO_READ32(pAd, 0x1318, &ExtraPwrOverMAC);  
@@ -3632,6 +3334,18 @@ VOID ATEAsicExtraPowerOverMAC(
 }
 
 
+VOID ATEAsicTemperCompensation(
+	IN	PRTMP_ADAPTER 		pAd)
+{
+	PATE_INFO pATEInfo = &(pAd->ate);
+
+	if (pATEInfo->pChipStruct->TemperCompensation!= NULL)
+		pATEInfo->pChipStruct->TemperCompensation(pAd);
+
+	return;
+}
+
+
 #ifdef RT3350
 /* 
 ==========================================================================
@@ -3659,6 +3373,10 @@ INT Set_ATE_PA_Bias_Proc(
 	}
 
 	pATEInfo->PABias = PABias;
+
+	ATE_RF_IO_READ8_BY_REG_ID(pAd, RF_R19, (PUCHAR)&RFValue);
+	RFValue = (((RFValue & 0x0F) | (pATEInfo->PABias << 4)));
+	ATE_RF_IO_WRITE8_BY_REG_ID(pAd, RF_R19, (UCHAR)RFValue);
 
 	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_PA_Bias_Proc (PABias = %d)\n", pATEInfo->PABias));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_PA_Bias_Proc Success\n"));
@@ -3933,24 +3651,12 @@ INT	Set_ATE_TX_BW_Proc(
 	IN	PSTRING			arg)
 {
 	PATE_INFO pATEInfo = &(pAd->ate);
-	INT status = FALSE;
-	UCHAR bw = 0;
-
 
 	if (pATEInfo->pChipStruct->Set_BW_Proc != NULL)
-	{
-		status = pATEInfo->pChipStruct->Set_BW_Proc(pAd, arg);
+		pATEInfo->pChipStruct->Set_BW_Proc(pAd, arg);
 
-#ifdef RLT_MAC
-		bw = pATEInfo->TxWI.TXWI_N.BW;
-#endif /* RLT_MAC*/
-#ifdef RTMP_MAC
-		bw = pATEInfo->TxWI.TXWI_O.BW;
-#endif /* RTMP_MAC */
-
-	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_BW_Proc (BBPCurrentBW = %d)\n", bw));
-	}	
-	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_BW_Proc %s\n", status == TRUE ? "success" : "failed"));
+	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_BW_Proc (BBPCurrentBW = %d)\n", pATEInfo->TxWI.TxWIBW));
+	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_BW_Proc Success\n"));
 
 
 	return TRUE;
@@ -4006,6 +3712,10 @@ INT	Set_ATE_TX_COUNT_Proc(
 	
 	pATEInfo->TxCount = simple_strtol(arg, 0, 10);
 
+	if (pATEInfo->TxCount == 0)
+	{
+		pATEInfo->TxCount = 0xFFFFFFFF;
+	}
 
 	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_COUNT_Proc (TxCount = %d)\n", pATEInfo->TxCount));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_COUNT_Proc Success\n"));
@@ -4029,29 +3739,15 @@ INT	Set_ATE_TX_MCS_Proc(
 	IN	PSTRING			arg)
 {
 	PATE_INFO pATEInfo = &(pAd->ate);
-	UCHAR MCS, phy_mode = 0;
+	UCHAR MCS;
 	INT result;
 
-#ifdef RLT_MAC
-	phy_mode = pATEInfo->TxWI.TXWI_N.PHYMODE;
-#endif /* RLT_MAC*/
-
-#ifdef RTMP_MAC
-	phy_mode = pATEInfo->TxWI.TXWI_O.PHYMODE;
-#endif /* RTMP_MAC */
-
 	MCS = simple_strtol(arg, 0, 10);
-	result = CheckMCSValid(pAd, phy_mode, MCS);
+	result = CheckMCSValid(pAd, pATEInfo->TxWI.TxWIPHYMODE, MCS);
 
 	if (result != -1)
 	{
-#ifdef RLT_MAC
-		pATEInfo->TxWI.TXWI_N.MCS = MCS;
-#endif /* RLT_MAC*/
-
-#ifdef RTMP_MAC
-		pATEInfo->TxWI.TXWI_O.MCS = MCS;
-#endif /* RTMP_MAC */
+		pATEInfo->TxWI.TxWIMCS = (UCHAR)MCS;
 	}
 	else
 	{
@@ -4059,46 +3755,8 @@ INT	Set_ATE_TX_MCS_Proc(
 		return FALSE;
 	}
 
-	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_MCS_Proc (MCS = %d)\n", MCS));
+	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_MCS_Proc (MCS = %d)\n", pATEInfo->TxWI.TxWIMCS));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_MCS_Proc Success\n"));
-
-	
-	return TRUE;
-}
-
-
-/* 
-==========================================================================
-    Description:
-        Set ATE Tx frame STBC
-        
-        Return:
-        	TRUE if all parameters are OK, FALSE otherwise
-==========================================================================
-*/
-INT	Set_ATE_TX_STBC_Proc(
-	IN	PRTMP_ADAPTER	pAd,
-	IN	PSTRING			arg)
-{
-	PATE_INFO pATEInfo = &(pAd->ate);
-	UCHAR stbc = simple_strtol(arg, 0, 10);
-
-	if (stbc > 1)
-	{
-		DBGPRINT_ERR(("Set_ATE_TX_STBC_Proc::Out of range\n"));
-		return FALSE;
-	}
-	
-#ifdef RLT_MAC
-	pATEInfo->TxWI.TXWI_N.STBC = stbc;
-#endif /* RLT_MAC */
-
-#ifdef RTMP_MAC
-	pATEInfo->TxWI.TXWI_O.STBC = stbc;
-#endif /* RTMP_MAC */
-
-	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_STBC_Proc (GI = %d)\n", stbc));
-	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_STBC_Proc Success\n"));
 
 	
 	return TRUE;
@@ -4124,56 +3782,22 @@ INT	Set_ATE_TX_MODE_Proc(
 {
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UCHAR BbpData = 0;
-	UCHAR phy_mode, bw = BW_20;
-	
-	phy_mode = simple_strtol(arg, 0, 10);
 
-	if (phy_mode > MODE_VHT)
+	pATEInfo->TxWI.TxWIPHYMODE = simple_strtol(arg, 0, 10);
+
+	if (pATEInfo->TxWI.TxWIPHYMODE > 3)
 	{
-		phy_mode = MODE_CCK;
-		DBGPRINT_ERR(("Set_ATE_TX_MODE_Proc::Out of range.\nIt should be in range of 0~4\n"));
-		DBGPRINT(RT_DEBUG_OFF, ("0: CCK, 1: OFDM, 2: HT_MIX, 3: HT_GREEN_FIELD, 4: VHT.\n"));
+		pATEInfo->TxWI.TxWIPHYMODE = 0;
+		DBGPRINT_ERR(("Set_ATE_TX_MODE_Proc::Out of range.\nIt should be in range of 0~3\n"));
+		DBGPRINT(RT_DEBUG_OFF, ("0: CCK, 1: OFDM, 2: HT_MIX, 3: HT_GREEN_FIELD.\n"));
 		return FALSE;
 	}
 
-#ifdef RLT_MAC
-	{
-		pATEInfo->TxWI.TXWI_N.PHYMODE = phy_mode;
-		bw = pATEInfo->TxWI.TXWI_N.BW;
-
-		if (phy_mode == MODE_CCK)
-		{
-			pATEInfo->TxWI.TXWI_N.BW = BW_20;
-			bw = BW_20;
-		}
-	}
-#endif /* RLT_MAC*/
-
-#ifdef RTMP_MAC
-	{
-		pATEInfo->TxWI.TXWI_O.PHYMODE = phy_mode;
-		bw = pATEInfo->TxWI.TXWI_O.BW;
-
-		if (phy_mode == MODE_CCK)
-		{
-			pATEInfo->TxWI.TXWI_O.BW = BW_20;
-			bw = BW_20;
-		}
-	}
-#endif /* RTMP_MAC */
-
-#ifdef MT76x0
-	/* Turn on BBP 20MHz mode by request here. */
-	if (IS_MT76x0(pAd)) {
-		return TRUE;
-	}
-	else
-#endif /* MT76x0 */
 #if defined(RT5592) || defined(MT7601)
 	/* Turn on BBP 20MHz mode by request here. */
 	if (IS_RT5592(pAd) || IS_MT7601(pAd))
 	{
-		if (bw == BW_20)
+		if (pATEInfo->TxWI.TxWIBW == BW_20)
 		{
 			BbpData = 0x40;
 			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BbpData);
@@ -4184,23 +3808,22 @@ INT	Set_ATE_TX_MODE_Proc(
 			ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BbpData);
 		}
 	}
-	else
+	//else
 #endif /* defined(RT5592) || defined(MT7601) */
 	/* Turn on BBP 20MHz mode by request here. */
-	if (phy_mode == MODE_CCK)
+	if (pATEInfo->TxWI.TxWIPHYMODE == MODE_CCK)
 	{
-#ifdef RTMP_MAC
 		ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R4, &BbpData);
 		BbpData &= (~0x18);
 		ATE_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BbpData);
-#endif /* RTMP_MAC */
+		pATEInfo->TxWI.TxWIBW = BW_20;
 		DBGPRINT(RT_DEBUG_OFF, ("Set_ATE_TX_MODE_Proc::CCK Only support 20MHZ. Switch to 20MHZ.\n"));
 	}
 
 #ifdef RT3350
 	if (IS_RT3350(pAd))
 	{
-		if (phy_mode == MODE_CCK)
+		if (pATEInfo->TxWI.TxWIPHYMODE == MODE_CCK)
 		{
 			USHORT value;
 			UCHAR  rf_offset;
@@ -4228,7 +3851,7 @@ INT	Set_ATE_TX_MODE_Proc(
 		
 
 			/* set RF_R24 */
-			if (bw == BW_40)
+			if (pATEInfo->TxWI.BW == BW_40)
 			{    
 				value = 0x3F;
 			}
@@ -4265,7 +3888,7 @@ INT	Set_ATE_TX_MODE_Proc(
 			ATE_RF_IO_WRITE8_BY_REG_ID(pAd, rf_offset, (UCHAR)rf_value);
 		
 			/* set RF_R24 */
-			if (bw == BW_40)
+			if (pATEInfo->TxWI.BW == BW_40)
 			{    
 				value = 0x28;
 			}
@@ -4278,7 +3901,7 @@ INT	Set_ATE_TX_MODE_Proc(
 	}
 #endif /* RT3350 */
 
-	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_MODE_Proc (TxMode = %d)\n", phy_mode));
+	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_MODE_Proc (TxMode = %d)\n", pATEInfo->TxWI.TxWIPHYMODE));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_MODE_Proc Success\n"));
 
 	
@@ -4300,24 +3923,17 @@ INT	Set_ATE_TX_GI_Proc(
 	IN	PSTRING			arg)
 {
 	PATE_INFO pATEInfo = &(pAd->ate);
-	UCHAR sgi;
+	
+	pATEInfo->TxWI.TxWIShortGI = simple_strtol(arg, 0, 10);
 
-	sgi = simple_strtol(arg, 0, 10);
-#ifdef RLT_MAC
-	pATEInfo->TxWI.TXWI_N.ShortGI= (sgi > 1 ? 0 : sgi);
-#endif /* RLT_MAC*/
-
-#ifdef RTMP_MAC
-	pATEInfo->TxWI.TXWI_O.ShortGI = (sgi > 1 ? 0 : sgi);
-#endif /* RTMP_MAC */
-
-	if (sgi > 1)
+	if (pATEInfo->TxWI.TxWIShortGI > 1)
 	{
+		pATEInfo->TxWI.TxWIShortGI = 0;
 		DBGPRINT_ERR(("Set_ATE_TX_GI_Proc::Out of range\n"));
 		return FALSE;
 	}
 
-	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_GI_Proc (GI = %d)\n", sgi));
+	DBGPRINT(RT_DEBUG_TRACE, ("Set_ATE_TX_GI_Proc (GI = %d)\n", pATEInfo->TxWI.TxWIShortGI));
 	DBGPRINT(RT_DEBUG_TRACE, ("Ralink: Set_ATE_TX_GI_Proc Success\n"));
 
 	
@@ -4361,8 +3977,6 @@ INT Set_ATE_Read_RF_Proc(
 }
 
 
-
-#if (!defined(RTMP_RF_RW_SUPPORT)) && (!defined(RLT_RF))
 INT Set_ATE_Write_RF1_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg)
@@ -4413,7 +4027,6 @@ INT Set_ATE_Write_RF4_Proc(
 
 	return TRUE;
 }
- #endif /* !defined(RTMP_RF_RW_SUPPORT) && !defined(RLT_RF) */
 
 
 /* 
@@ -4502,6 +4115,56 @@ INT Set_ATE_Load_E2P_Proc(
 }
 
 
+#ifdef RTMP_EFUSE_SUPPORT
+/* 
+==========================================================================
+    Description:
+        Load and Write E-Fuse from pAd->EEPROMImage.
+        
+        Return:
+        	TRUE if all parameters are OK, FALSE otherwise
+==========================================================================
+*/
+INT Set_ATE_Load_E2P_From_Buf_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
+{
+	BOOLEAN		    	ret = FALSE;
+	UINT32 			value = (UINT32) simple_strtol(arg, 0, 10);
+
+	DBGPRINT(RT_DEBUG_OFF, ("===> %s (value=%d)\n\n", __FUNCTION__, value));
+
+	if (value > 0)
+	{
+
+		rt_ee_write_all(pAd, pAd->EEPROMImage);
+		ret = TRUE;
+	
+	}
+
+    DBGPRINT(RT_DEBUG_OFF, ("<=== %s (ret=%d)\n", __FUNCTION__, ret));
+
+    return ret;
+}
+
+
+INT Set_ATE_Cal_Free_Info_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
+{
+	BOOLEAN		    	ret = FALSE;
+
+	if ( pAd->bCalFreeIC )
+		DBGPRINT(RT_DEBUG_OFF, ("%s (bCalFreeIC=TRUE)\n\n", __FUNCTION__));
+	else
+		DBGPRINT(RT_DEBUG_OFF, ("%s (bCalFreeIC=FALSE)\n\n", __FUNCTION__));
+
+	return TRUE;
+}
+
+#endif /* RTMP_EFUSE_SUPPORT */
+
+
 INT Set_ATE_Read_E2P_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg)
@@ -4561,8 +4224,6 @@ INT	Set_ATE_AUTO_ALC_Proc(
 
 	return TRUE;
 }
-
-
 
 
 #ifdef TXBF_SUPPORT
@@ -4894,7 +4555,6 @@ INT Set_ATE_TXBF_INIT_Proc(
 	snprintf(cmdStr, sizeof(cmdStr), "%d\n", (eepromVal & 0xff));
 	Set_ATE_TX_FREQ_OFFSET_Proc(pAd, cmdStr);
 	
-#ifdef RTMP_MAC
 	/* bbp 65=29 */
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R65, 0x29);
 	
@@ -4903,7 +4563,6 @@ INT Set_ATE_TXBF_INIT_Proc(
 	
 	/* bbp 173=28 */
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R173, 0x28);
-#endif /* RTMP_MAC */
 
 	return TRUE;
 }
@@ -5040,22 +4699,18 @@ INT Set_ATE_TXBF_GOLDEN_Proc(
 	snprintf(cmdStr, sizeof(cmdStr), "%d\n", (eepromVal & 0xff));
 	Set_ATE_TX_FREQ_OFFSET_Proc(pAd, cmdStr);
 	
-#ifdef RTMP_MAC
 	/* iwpriv ra0 bbp 65=29 */
 	/* iwpriv ra0 bbp 163=9d */
 	/* iwpriv ra0 bbp 173=00 */
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R65, 0x29);
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R163, 0x9d);
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R173, 0x00);
-#endif /* RTMP_MAC */
 	
 	/* iwpriv ra0 set ATE=RXFRAME */
 	Set_ATE_Proc(pAd, "RXFRAME");
 	
-#ifdef RTMP_MAC	
 	/* reset the BBP_R173 as 0 to eliminate the compensation */
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R173, 0x00);
-#endif /* RTMP_MAC */
 	
 	return TRUE;
 
@@ -5202,11 +4857,9 @@ INT Set_ATE_TXBF_VERIFY_NoComp_Proc(
 	if (Set_InvTxBfTag_Proc(pAd, "0") == FALSE)
 		return FALSE;
 
-#ifdef RTMP_MAC
 	/* save current BBP_R173 value and reset it as 0 */
 	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R173, &bbpR173);
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R173, 0);
-#endif /* RTMP_MAC */
 
 	/* force BBP_R173 value when do following procedures. */
 	Set_ATE_ForceBBP_Proc(pAd, "173");
@@ -5224,10 +4877,8 @@ INT Set_ATE_TXBF_VERIFY_NoComp_Proc(
 	/* iwpriv ra0 set ITxBfCal=0 */
 	retval = Set_ITxBfCal_Proc(pAd, "0");
 
-#ifdef RTMP_MAC
 	/* recovery the BBP_173 to original value */
 	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R173, bbpR173);
-#endif /* RTMP_MAC */
 
 	/* done and return */
 	return retval;
@@ -5366,26 +5017,6 @@ INT	Set_ATE_Show_Proc(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	PSTRING Mode_String = NULL;
 	PSTRING TxMode_String = NULL;
-	UCHAR bw = 0, phy_mode = 0, sgi =0, mcs =0;
-
-#ifdef RLT_MAC
-	{
-		bw = pATEInfo->TxWI.TXWI_N.BW;
-		phy_mode = pATEInfo->TxWI.TXWI_N.PHYMODE;
-		sgi = pATEInfo->TxWI.TXWI_N.ShortGI;
-		mcs = pATEInfo->TxWI.TXWI_N.MCS;
-	}
-#endif /* RLT_MAC*/
-
-#ifdef RTMP_MAC
-	{
-		bw = pATEInfo->TxWI.TXWI_O.BW;
-		phy_mode = pATEInfo->TxWI.TXWI_O.PHYMODE;
-		sgi = pATEInfo->TxWI.TXWI_O.ShortGI;
-		mcs = pATEInfo->TxWI.TXWI_O.MCS;
-	}
-#endif /* RTMP_MAC */
-
 	
 	switch (pATEInfo->Mode)
 	{
@@ -5438,11 +5069,11 @@ INT	Set_ATE_Show_Proc(
 #endif /* DOT11N_SS3_SUPPORT */
 	DBGPRINT(RT_DEBUG_OFF, ("TxAntennaSel=%d\n", pATEInfo->TxAntennaSel));
 	DBGPRINT(RT_DEBUG_OFF, ("RxAntennaSel=%d\n", pATEInfo->RxAntennaSel));
-	DBGPRINT(RT_DEBUG_OFF, ("BBPCurrentBW=%u\n", bw));
-	DBGPRINT(RT_DEBUG_OFF, ("GI=%u\n", sgi));
-	DBGPRINT(RT_DEBUG_OFF, ("MCS=%u\n", mcs));
+	DBGPRINT(RT_DEBUG_OFF, ("BBPCurrentBW=%u\n", pATEInfo->TxWI.TxWIBW));
+	DBGPRINT(RT_DEBUG_OFF, ("GI=%u\n", pATEInfo->TxWI.TxWIShortGI));
+	DBGPRINT(RT_DEBUG_OFF, ("MCS=%u\n", pATEInfo->TxWI.TxWIMCS));
 
-	switch (phy_mode)
+	switch (pATEInfo->TxWI.TxWIPHYMODE)
 	{
 		case 0:
 			TxMode_String = "CCK";
@@ -5513,16 +5144,12 @@ INT	Set_ATE_Help_Proc(
 	if (IS_RT3350(pAd))
 		DBGPRINT(RT_DEBUG_OFF, ("ATEPABIAS, set power amplifier bias for EVM, range 0~15\n"));
 #endif /* RT3350 */
-#if defined(RTMP_RF_RW_SUPPORT) || defined(RLT_RF)
-	DBGPRINT(RT_DEBUG_OFF, ("ATETXFREQOFFSET, set frequency offset, range 0~95\n"));
-#else
 	DBGPRINT(RT_DEBUG_OFF, ("ATETXFREQOFFSET, set frequency offset, range 0~63\n"));
-#endif /* RTMP_RF_RW_SUPPORT */
-	DBGPRINT(RT_DEBUG_OFF, ("ATETXBW, set BandWidth, 0:20MHz, 1:40MHz , 2:80MHz.\n"));
+	DBGPRINT(RT_DEBUG_OFF, ("ATETXBW, set BandWidth, 0:20MHz, 1:40MHz.\n"));
 	DBGPRINT(RT_DEBUG_OFF, ("ATETXLEN, set Frame length, range 24~%d\n", (MAX_FRAME_SIZE - 34/* == 2312 */)));
 	DBGPRINT(RT_DEBUG_OFF, ("ATETXCNT, set how many frame going to transmit.\n"));
 	DBGPRINT(RT_DEBUG_OFF, ("ATETXMCS, set MCS, reference to rate table.\n"));
-	DBGPRINT(RT_DEBUG_OFF, ("ATETXMODE, set Mode 0:CCK, 1:OFDM, 2:HT-Mix, 3:GreenField, 4:VHT, reference to rate table.\n"));
+	DBGPRINT(RT_DEBUG_OFF, ("ATETXMODE, set Mode 0:CCK, 1:OFDM, 2:HT-Mix, 3:GreenField, reference to rate table.\n"));
 	DBGPRINT(RT_DEBUG_OFF, ("ATETXGI, set GI interval, 0:Long, 1:Short\n"));
 	DBGPRINT(RT_DEBUG_OFF, ("ATERXFER, 0:disable Rx Frame error rate. 1:enable Rx Frame error rate.\n"));
 	DBGPRINT(RT_DEBUG_OFF, ("ATERRF, show all RF registers.\n"));
@@ -5834,28 +5461,86 @@ INT Set_ATE_READ_EXTERNAL_TSSI_Proc(
 
 
 
+#ifdef MT7601
+INT Set_ATE_Read_Temperature_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
+{
+	CHAR	Temperature;
+
+	DBGPRINT(RT_DEBUG_TRACE,("Set_MT7601ATE_Read_Temperature_Proc\n"));
+
+	MT7601_Read_Temperature(pAd, &Temperature);
+
+	DBGPRINT(RT_DEBUG_TRACE,("Temperature = %d (0x%X)\n", Temperature, Temperature));
+
+	return TRUE;
+}
+
+
+INT Set_ATE_Read_TSSI_DC_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
+{
+	UCHAR BbpReg;
+
+	DBGPRINT(RT_DEBUG_TRACE,("Set_ATE_Read_TSSI_DC_Proc\n"));
+
+	RTMP_IO_WRITE32(pAd, 0x50C, 0x30);
+	RTMP_IO_WRITE32(pAd, 0x504, 0xC0030);
+	/* Set VGA gain */
+	rlt_rf_write(pAd, RF_BANK5, RF_R03, 0x8);
+	/* Mixer disable */
+	rlt_rf_write(pAd, RF_BANK4, RF_R39, 0x0);
+
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4  , 0x0);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R58  , 0x0);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R21  , 0x1);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R21  , 0x0);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R47  , 0x50);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R22  , 0x40);
+	RtmpOsMsDelay(10);
+
+	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R47, &BbpReg);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R47, 0x40);
+	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R49, &BbpReg);
+	DBGPRINT(RT_DEBUG_TRACE,("TSSI DC = %d (0x%X)\n", BbpReg, BbpReg));
+	RtmpOsMsDelay(1);
+
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R22  , 0x0);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R21  , 0x1);
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R21  , 0x0);
+	RTMP_IO_WRITE32(pAd, 0x504, 0x0);
+	RTMP_IO_WRITE32(pAd, 0x50C, 0x0);
+	rlt_rf_write(pAd, RF_BANK4, RF_R39, 0xB3);
+
+	return TRUE;
+}
+#endif /* MT7601 */
+
+
 struct _ATE_CHIP_STRUCT RALINKDefault =
 {
 	/* functions */
-	.ChannelSwitch = NULL,
-	.TxPwrHandler = NULL,
+	.ChannelSwitch = DefaultATEAsicSwitchChannel,
+	.TxPwrHandler = DefaultATETxPwrHandler,
 	.TssiCalibration = NULL,
 	.ExtendedTssiCalibration = NULL,
 	.RxVGAInit = NULL,
-	.AsicSetTxRxPath = NULL,
-	.AdjustTxPower = NULL,	
+	.AsicSetTxRxPath = DefaultATEAsicSetTxRxPath,
+	.AdjustTxPower = DefaultATEAsicAdjustTxPower,	
 	.AsicExtraPowerOverMAC = NULL,
 
 	/* command handlers */
-	.Set_BW_Proc = NULL,
-	.Set_FREQ_OFFSET_Proc = NULL,
+	.Set_BW_Proc = Default_Set_ATE_TX_BW_Proc,
+	.Set_FREQ_OFFSET_Proc = Default_Set_ATE_TX_FREQ_OFFSET_Proc,
 
 	/* variables */
 	.maxTxPwrCnt = 5,
-	.bBBPStoreTXCARR = FALSE,
-	.bBBPStoreTXCARRSUPP = FALSE,	
+	.bBBPStoreTXCARR = TRUE,
+	.bBBPStoreTXCARRSUPP = TRUE,	
 	.bBBPStoreTXCONT = FALSE,
-	.bBBPLoadATESTOP = FALSE,
+	.bBBPLoadATESTOP = TRUE,
 };
 
 #ifdef RT28xx
@@ -5873,13 +5558,11 @@ extern ATE_CHIP_STRUCT RALINK2870;
 
 
 
-#ifdef RT8592
-extern ATE_CHIP_STRUCT RALINK85592;
-#endif /* RT8592 */
 
-#ifdef MT76x0
-extern ATE_CHIP_STRUCT mt76x0ate;
-#endif /* MT76x0 */
+
+#ifdef MT7601
+extern ATE_CHIP_STRUCT MT7601ATE;
+#endif
 
 /*
 ==========================================================================
@@ -5896,62 +5579,42 @@ NDIS_STATUS ChipStructAssign(
 
 	pATEInfo->pChipStruct = &RALINKDefault;
 
-#ifdef RT8592
-	if (IS_RT8592(pAd))
-	{
-		pATEInfo->pChipStruct = &RALINK85592;
-		DBGPRINT(RT_DEBUG_OFF, ("%s(): RALINK85592 hook !\n", __FUNCTION__));
-		return NDIS_STATUS_SUCCESS;
-		}
-#endif /* RT8592 */
-
-#ifdef MT76x0
-	if (IS_MT76x0(pAd)) {
-		pATEInfo->pChipStruct = &mt76x0ate;
-		DBGPRINT(RT_DEBUG_OFF, ("%s(): MT7650/30/10 hook !\n", __FUNCTION__));
-		return NDIS_STATUS_SUCCESS;
-	}
-#endif /* MT76x0 */
-
-#ifdef RT6352
-	if (IS_RT6352(pAd))
-		{
-		/* 
-			Notice: IS_RT6352(_pAd) is currently defined 
-			as (((_pAd)->MACVersion & 0xFFFF0000) == 0x53900000)
-		*/
-		pATEInfo->pChipStruct = &RALINK6352;
-		DBGPRINT(RT_DEBUG_OFF, ("%s(): RALINK6352 hook !\n", __FUNCTION__));
-		return NDIS_STATUS_SUCCESS;
-	}
-#endif /* IS_RT6352 */
-
-
-
-
-
-
-
 #ifdef RT28xx
 #ifdef A_BAND_SUPPORT
 	if (IS_PCI_ONLY_INF(pAd) || IS_USB_INF(pAd) || IS_RBUS_INF(pAd))
+
 	{
 
 
+
+		if (pATEInfo->pChipStruct == &RALINKDefault)
+		{
+			/* Not RT2860/RT2870/RT2880 ! */
+			DBGPRINT_ERR(("Error - Unknown chipset !!!\n"));
+			DBGPRINT_ERR(("The interface type is %d\n", pAd->infType));
+
+			return NDIS_STATUS_FAILURE;
+		}
 	}
 #endif /* A_BAND_SUPPORT */
 #endif /* RT28xx */
 
-	/* sanity check */
-	if (pATEInfo->pChipStruct == &RALINKDefault)
-	{
-		/* Unknown chipset ! */
-		DBGPRINT_ERR(("Warning - Unknown chipset !!!\n"));
-		DBGPRINT_ERR(("MAC Version is %u\n", ((pAd->MACVersion & 0xFFFF0000) >> 16)));
-		DBGPRINT_ERR(("Interface type is %d\n", pAd->infType));
 
-		return NDIS_STATUS_FAILURE;
+
+
+
+
+
+
+
+
+
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+	{
+		pATEInfo->pChipStruct = &MT7601ATE;
 	}
+#endif /* MT7601 */
 
 	return NDIS_STATUS_SUCCESS;
 }
@@ -5982,38 +5645,18 @@ NDIS_STATUS ATEInit(
 #ifdef RT3350
 	pATEInfo->PABias = 0;
 #endif /* RT3350  */
-	pATEInfo->TxCount = 0xFFFFFFFF;
+	pATEInfo->TxCount = 1000;/* to sync with QA and to exceed TX_RING_SIZE ... */
 	pATEInfo->TxDoneCount = 0;
 	pATEInfo->RFFreqOffset = 0;
-#ifdef MT76x0
-	if (IS_MT76x0(pAd))
-		pATEInfo->Payload = 0xAA;
-	else
-#endif /* MT76x0 */
-	        pATEInfo->Payload = 0xA5;/* to be backward compatible */	
+	pATEInfo->Payload = 0xA5;/* to be backward compatible */	
 	pATEInfo->IPG = 200;/* 200 : sync with QA */	
-	pATEInfo->TxLength = 1058;/* sync with QA */
-#ifdef RLT_MAC
-	{
-		pATEInfo->TxWI.TXWI_N.BW = BW_20;
-		pATEInfo->TxWI.TXWI_N.PHYMODE = MODE_OFDM;
-		pATEInfo->TxWI.TXWI_N.MCS = 7;
-		pATEInfo->TxWI.TXWI_N.ShortGI = 0;/* LONG GI : 800 ns*/
-	}
-#endif /* RLT_MAC*/
-
-#ifdef RTMP_MAC
-	{
-		pATEInfo->TxWI.TXWI_O.BW = BW_20;
-		pATEInfo->TxWI.TXWI_O.PHYMODE = MODE_OFDM;
-		pATEInfo->TxWI.TXWI_O.MCS = 7;
-		pATEInfo->TxWI.TXWI_O.ShortGI = 0;/* LONG GI : 800 ns*/
-	}
-#endif /* RTMP_MAC */
-
+	pATEInfo->TxLength = 1024;
+	pATEInfo->TxWI.TxWIShortGI = 0;/* LONG GI : 800 ns*/
+	pATEInfo->TxWI.TxWIPHYMODE = MODE_CCK;
+	pATEInfo->TxWI.TxWIMCS = 3;
+	pATEInfo->TxWI.TxWIBW = BW_20;
+	/* please do not change this default channel value */
 	pATEInfo->Channel = 1;
-	pATEInfo->TxAntennaSel = 1;
-	pATEInfo->RxAntennaSel = 0;
 
 
 	pATEInfo->QID = QID_AC_BE;
@@ -6035,7 +5678,7 @@ NDIS_STATUS ATEInit(
 	pATEInfo->Addr2[4] = 0xBB;
 	pATEInfo->Addr2[5] = 0xCC;
 
-	NdisMoveMemory(pATEInfo->Addr3, pATEInfo->Addr2, MAC_ADDR_LEN);
+	NdisMoveMemory(pATEInfo->Addr3, pATEInfo->Addr2, ETH_LENGTH_OF_ADDRESS);
 
 	{		
 		UINT32 data;
@@ -6056,8 +5699,8 @@ NDIS_STATUS ATEInit(
 	pATEInfo->Addr1[4] = 0xBB;
 	pATEInfo->Addr1[5] = 0xCC;
 
-	NdisMoveMemory(pATEInfo->Addr2, pATEInfo->Addr1, MAC_ADDR_LEN);
-	NdisMoveMemory(pATEInfo->Addr3, pATEInfo->Addr1, MAC_ADDR_LEN);
+	NdisMoveMemory(pATEInfo->Addr2, pATEInfo->Addr1, ETH_LENGTH_OF_ADDRESS);
+	NdisMoveMemory(pATEInfo->Addr3, pATEInfo->Addr1, ETH_LENGTH_OF_ADDRESS);
 #endif /* DOT11N_SS3_SUPPORT */
 
 	pATEInfo->bRxFER = 0;
@@ -6065,7 +5708,6 @@ NDIS_STATUS ATEInit(
 	pATEInfo->bQATxStart = FALSE;
 	pATEInfo->bQARxStart = FALSE;
 	pATEInfo->bAutoTxAlc = FALSE;
-	pATEInfo->bAutoVcoCal = FALSE;
 #ifdef RTMP_INTERNAL_TX_ALC
 #if defined(RT3350) || defined(RT3352)
 	pATEInfo->bTSSICalbrEnableG = FALSE;
@@ -6128,21 +5770,7 @@ VOID ReadQATxTypeFromBBP(
 	PATE_INFO pATEInfo = &(pAd->ate);
 	UCHAR   Bbp22Value = 0, Bbp24Value = 0;
 
-#ifdef RT65xx
-	if (IS_RT65XX(pAd))
-	{
-		UINT32 bbp_val;
-
-		RTMP_BBP_IO_READ32(pAd, CORE_R24, &bbp_val);
-		Bbp22Value = (bbp_val & 0xff00) >> 8;
-	}
-	else
-#endif /* RT65xx */
-	{
-#ifdef RTMP_MAC
-	        ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R22, &Bbp22Value);
-#endif /* RTMP_MAC */
-	}
+	ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R22, &Bbp22Value);
 
 	switch (Bbp22Value)
 	{
@@ -6157,21 +5785,7 @@ VOID ReadQATxTypeFromBBP(
 		case BBP22_TXCONT_OR_CARRSUPP:
 			{
 				DBGPRINT(RT_DEBUG_TRACE,("BBP22_TXCONT_OR_CARRSUPP\n"));
-#ifdef RT65xx
-				if (IS_RT65XX(pAd))
-				{
-					UINT32 bbp_val;
-
-					RTMP_BBP_IO_READ32(pAd, TXC_R1, &bbp_val);
-					Bbp24Value = (bbp_val & 0x01);
-				}
-				else
-#endif /* RT65xx */
-				{
-#ifdef RTMP_MAC
-				        ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R24, &Bbp24Value);
-#endif /* RTMP_MAC */
-				}
+				ATE_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R24, &Bbp24Value);
 
 				switch (Bbp24Value)
 				{
@@ -6231,7 +5845,7 @@ VOID ReadQATxTypeFromBBP(
 }
 #endif /* RALINK_QA */
 
-#ifdef RTMP_MAC
+
 NDIS_STATUS ATEBBPWriteWithRxChain(
 	IN RTMP_ADAPTER *pAd,
 	IN UCHAR bbpId,
@@ -6275,25 +5889,27 @@ NDIS_STATUS ATEBBPWriteWithRxChain(
 
 	return NDIS_STATUS_SUCCESS;
 }
-#endif /* RTMP_MAC */
+
 
 #define SMM_BASEADDR                      0x4000
 #define PKT_BASEADDR                      0x8000
 
 
 #ifdef RLT_MAC
-// TODO: shiang-6590, fix me, how about this register in RT85592?
-#define PBF_CAP_CTRL	0x0440
-#endif /* RLT_MAC */
 INT Set_ADCDump_Proc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg)
 {
-#ifdef RLT_MAC
-	return FALSE;
-#endif /* RLT_MAC */
 
-#ifdef RTMP_MAC
+	DBGPRINT_ERR(("%s::Not supported!!!\n", __FUNCTION__));
+	return TRUE;
+}
+
+#else
+INT Set_ADCDump_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg)
+{
 	UCHAR BBP_R21_Ori=0,BBP_R60_Ori=0,BBP_R142_ORI=0,BBP_R143_ORI=0;
 	UINT32 MACValue=0,PBF_SYS_CTRL_ORI=0,PBF_CAP_CTRL_ORI=0;
 	UINT32 CaptureModeOffset=0,CaptureStartAddr=0;
@@ -6508,13 +6124,10 @@ INT Set_ADCDump_Proc(
 
 	return TRUE;
 }
-#endif /* RTMP_MAC */
-
-	return FALSE;
-}
+#endif /* RLT_MAC */
 
 
-/* 100ms periodic execution */
+/* one-second periodic execution */
 VOID ATEPeriodicExec(
 	IN PVOID SystemSpecific1, 
 	IN PVOID FunctionContext, 
@@ -6556,11 +6169,6 @@ VOID ATEPeriodicExec(
 			return;
 		}
 
-#ifdef MT76x0
-		if (IS_MT76x0(pAd))
-			mt76x0_ate_adjust_per_rate_pwr(pAd);
-#endif /* MT76x0 */
-
 		if ((pATEInfo->bAutoTxAlc == TRUE)
 			&& ((pATEInfo->Mode == ATE_TXFRAME) || (pATEInfo->Mode == ATE_TXCONT)))
 		{
@@ -6568,6 +6176,8 @@ VOID ATEPeriodicExec(
 		}
 		
 		ATEAsicExtraPowerOverMAC(pAd);		
+
+		//ATEAsicTemperCompensation(pAd);
 
 	}
 	else
@@ -6578,3 +6188,82 @@ VOID ATEPeriodicExec(
 	return;
 }
 
+INT Set_ATE_CAL_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg)
+{
+	int value;
+	PATE_INFO pATEInfo = &(pAd->ate);
+
+	/* Get calibration ID */
+	value = simple_strtol(arg, 0, 10);
+
+	switch(value)
+	{
+		case CALIBRATION_R:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_R, 0);
+			printk("R Calibration done!\n");
+			break; 
+		case CALIBRATION_RXDCOC:
+			MT7601_RXDC_CAL(pAd);
+			printk("RXDC Calibration done!\n");
+			break;
+		case CALIBRATION_LC:
+			printk("LC tank Calibration is not support!\n");
+			break;
+		case CALIBRATION_LOFT:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_LOFT, 0);
+			printk("TXLOFT Calibration done!\n");
+			break;
+		case CALIBRATION_TXIQ:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_TXIQ, 0);
+			printk("TXIQ Calibration done!\n");
+			break;
+		case CALIBRATION_BW_TX:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_BW, 0x00001);
+			if (pATEInfo->TxWI.TxWIBW == BW_20)
+			{
+				AndesCalibrationOP(pAd, ANDES_CALIBRATION_BW, 0x10001);
+				printk("BW TX (BW20) Calibration done!\n");
+			}
+			else
+			{
+				AndesCalibrationOP(pAd, ANDES_CALIBRATION_BW, 0x10101);
+				printk("BW TX (BW40) Calibration done!\n");
+			}
+			break;
+		case CALIBRATION_BW_RX:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_BW, 0x00000);
+			if (pATEInfo->TxWI.TxWIBW == BW_20)
+			{
+				AndesCalibrationOP(pAd, ANDES_CALIBRATION_BW, 0x10000);
+				printk("BW RX (BW20) Calibration done!\n");
+			}
+			else
+			{
+				AndesCalibrationOP(pAd, ANDES_CALIBRATION_BW, 0x10100);
+				printk("BW RX (BW40) Calibration done!\n");
+			}
+			break;
+#ifdef DPD_CALIBRATION_SUPPORT
+		case CALIBRATION_DPD:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_DPD, (pAd->chipCap.CurrentTemperBbpR49 - pAd->chipCap.TemperatureRef25C) * MT7601_E2_TEMPERATURE_SLOPE);
+			printk("DPD Calibration done@%d Deg.!\n", (pAd->chipCap.CurrentTemperBbpR49 - pAd->chipCap.TemperatureRef25C) * MT7601_E2_TEMPERATURE_SLOPE);
+			break;
+#endif /* DPD_CALIBRATION_SUPPORT */
+		case CALIBRATION_RXIQ:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_RXIQ, 0);
+			printk("RXIQ Calibration done!\n");
+			break;
+		case CALIBRATION_TXDCOC:
+			AndesCalibrationOP(pAd, ANDES_CALIBRATION_TXDCOC, 0);
+			printk("TXDCOC Calibration done!\n");
+			break;
+		default:
+			printk("Calibration %d is not support\n", value);
+	}
+
+	return TRUE;
+
+	
+}

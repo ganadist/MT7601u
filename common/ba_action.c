@@ -92,6 +92,11 @@ VOID BA_MaxWinSizeReasign(
 		MaxSize = 31;
 	else
 #endif /* RT65xx */
+#ifdef MT7601
+	if (IS_MT7601(pAd))
+		MaxSize = 21;
+	else
+#endif /* MT7601 */
 	if (pAd->MACVersion >= RALINK_2883_VERSION)
 	{
 		if (pAd->MACVersion >= RALINK_3070_VERSION)
@@ -1606,7 +1611,6 @@ void convert_reordering_packet_to_preAMSDU_or_802_3_packet(
     	}																\
 	} while (0);
 
-#ifdef HDR_TRANS_SUPPORT
 #define INDICATE_LEGACY_OR_AMSDU_HDR_TRNS(_pAd, _pRxBlk, _fromWhichBSSID)		\
 	do																	\
 	{																	\
@@ -1623,8 +1627,6 @@ void convert_reordering_packet_to_preAMSDU_or_802_3_packet(
     		Indicate_Legacy_Packet_Hdr_Trns(_pAd, _pRxBlk, _fromWhichBSSID);		\
     	}																\
 	} while (0);
-#endif /* HDR_TRANS_SUPPORT */
-
 
 static VOID ba_enqueue_reordering_packet(
 	IN	PRTMP_ADAPTER	pAd,
@@ -2018,6 +2020,7 @@ VOID Indicate_AMPDU_Packet_Hdr_Trns(
 	/* II. Drop Duplicated Packet*/
 	else if (Sequence == pBAEntry->LastIndSeq)
 	{
+	
 		
 		/* drop and release packet*/
 		pBAEntry->nDropPacket++;
@@ -2027,6 +2030,7 @@ VOID Indicate_AMPDU_Packet_Hdr_Trns(
 	/* III. Drop Old Received Packet*/
 	else if (SEQ_SMALLER(Sequence, pBAEntry->LastIndSeq, MAXSEQ))
 	{
+	
 		
 		/* drop and release packet*/
 		pBAEntry->nDropPacket++;
@@ -2036,7 +2040,6 @@ VOID Indicate_AMPDU_Packet_Hdr_Trns(
 	/* IV. Receive Sequence within Window Size*/
 	else if (SEQ_SMALLER(Sequence, (((pBAEntry->LastIndSeq+pBAEntry->BAWinSize+1)) & MAXSEQ), MAXSEQ))
 	{
-	
 		ba_enqueue_reordering_packet_hdr_trns(pAd, pBAEntry, pRxBlk, FromWhichBSSID);
 	}
 	
@@ -2045,6 +2048,8 @@ VOID Indicate_AMPDU_Packet_Hdr_Trns(
 	{
 		LONG WinStartSeq, TmpSeq;
 
+
+		printk("999999999\n");
 
 		TmpSeq = Sequence - (pBAEntry->BAWinSize) -1;
 		if (TmpSeq < 0)

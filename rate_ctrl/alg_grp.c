@@ -305,12 +305,12 @@ VOID MlmeGetSupportedMcsAdapt(
 		mcs[idx] = -1;
 
 #ifdef DOT11_VHT_AC
-	if (pEntry->pTable == RateTableVht2S)
+	if (pEntry->pTable == RateTableVht1S || pEntry->pTable == RateTableVht2S)
 	{
 		for (idx = 0; idx < RATE_TABLE_SIZE(pTable); idx++)
 		{
 			pCurrTxRate = PTX_RA_GRP_ENTRY(pEntry->pTable, idx);
-			if ((pCurrTxRate->CurrMCS == MCS_0) && (pCurrTxRate->dataRate == 1) && (mcs[0] == -1))
+			if (pCurrTxRate->CurrMCS == MCS_0 && pCurrTxRate->dataRate == 1)
 				mcs[0] = idx;
 			else if (pCurrTxRate->CurrMCS == MCS_1 && pCurrTxRate->dataRate == 1)
 				mcs[1] = idx;
@@ -342,60 +342,6 @@ VOID MlmeGetSupportedMcsAdapt(
 				mcs[14] = idx;
 			else if (pCurrTxRate->CurrMCS == MCS_7 && pCurrTxRate->dataRate == 2)
 				mcs[15] = idx;
-		}
-
-		return;
-	}
-	if (pEntry->pTable == RateTableVht1S)
-	{
-		for (idx = 0; idx < RATE_TABLE_SIZE(pTable); idx++)
-		{
-			pCurrTxRate = PTX_RA_GRP_ENTRY(pEntry->pTable, idx);
-			if ((pCurrTxRate->CurrMCS == MCS_0) && (pCurrTxRate->dataRate == 1) && (mcs[0] == -1))
-				mcs[0] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_1 && pCurrTxRate->dataRate == 1)
-				mcs[1] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_2 && pCurrTxRate->dataRate == 1)
-				mcs[2] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_3 && pCurrTxRate->dataRate == 1)
-				mcs[3] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_4 && pCurrTxRate->dataRate == 1)
-				mcs[4] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_5 && pCurrTxRate->dataRate == 1)
-				mcs[5] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_6 && pCurrTxRate->dataRate == 1)
-				mcs[6] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_7 && pCurrTxRate->dataRate == 1)
-				mcs[7] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_8 && pCurrTxRate->dataRate == 1)
-				mcs[8] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_9 && pCurrTxRate->dataRate == 1)
-				mcs[9] = idx;
-		}
-
-		return;
-	}
-	if (pEntry->pTable == RateTableVht1S_MCS7)
-	{
-		for (idx = 0; idx < RATE_TABLE_SIZE(pTable); idx++)
-		{
-			pCurrTxRate = PTX_RA_GRP_ENTRY(pEntry->pTable, idx);
-			if ((pCurrTxRate->CurrMCS == MCS_0) && (pCurrTxRate->dataRate == 1) && (mcs[0] == -1))
-				mcs[0] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_1 && pCurrTxRate->dataRate == 1)
-				mcs[1] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_2 && pCurrTxRate->dataRate == 1)
-				mcs[2] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_3 && pCurrTxRate->dataRate == 1)
-				mcs[3] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_4 && pCurrTxRate->dataRate == 1)
-				mcs[4] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_5 && pCurrTxRate->dataRate == 1)
-				mcs[5] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_6 && pCurrTxRate->dataRate == 1)
-				mcs[6] = idx;
-			else if (pCurrTxRate->CurrMCS == MCS_7 && pCurrTxRate->dataRate == 1)
-				mcs[7] = idx;
 		}
 
 		return;
@@ -497,7 +443,7 @@ UCHAR MlmeSelectTxRateAdapt(
 
 #ifdef DOT11_N_SUPPORT
 #ifdef DOT11_VHT_AC
-	if (pTable == RateTableVht1S || pTable == RateTableVht2S || pTable == RateTableVht1S_MCS7)
+	if ((pTable == RateTableVht1S || pTable == RateTableVht2S))
 	{
 		if (pTable == RateTableVht2S)
 		{
@@ -519,38 +465,10 @@ UCHAR MlmeSelectTxRateAdapt(
 			else if (mcs[9] && (Rssi > (-87 + RssiOffset)))
 				TxRateIdx = mcs[9];
 			else
-				TxRateIdx = mcs[0];
+				TxRateIdx = mcs[8];
 			
 			pEntry->mcsGroup = 2;
 		} 
-		else if (pTable == RateTableVht1S)
-		{
-			DBGPRINT_RAW(RT_DEBUG_INFO | DBG_FUNC_RA, ("%s: GRP: 1*1, RssiOffset=%d\n", __FUNCTION__, RssiOffset));
-			
-			/* 1x1 peer device (Adhoc, DLS or AP) */
-			if (mcs[9] && (Rssi > (-67 + RssiOffset)))
-				TxRateIdx = mcs[9];
-			else if (mcs[8] && (Rssi > (-69 + RssiOffset)))
-				TxRateIdx = mcs[8];
-			else if (mcs[7] && (Rssi > (-71 + RssiOffset)))
-				TxRateIdx = mcs[7];
-			else if (mcs[6] && (Rssi > (-73 + RssiOffset)))
-				TxRateIdx = mcs[6];
-			else if (mcs[5] && (Rssi > (-76 + RssiOffset)))
-				TxRateIdx = mcs[5];
-			else if (mcs[4] && (Rssi > (-78 + RssiOffset)))
-				TxRateIdx = mcs[4];
-			else if (mcs[3] && (Rssi > (-82 + RssiOffset)))
-				TxRateIdx = mcs[3];
-			else if (mcs[2] && (Rssi > (-84 + RssiOffset)))
-				TxRateIdx = mcs[2];
-			else if (mcs[1] && (Rssi > (-89 + RssiOffset)))
-				TxRateIdx = mcs[1];
-			else
-				TxRateIdx = mcs[0];
-			
-			pEntry->mcsGroup = 1;
-		}
 		else
 		{
 			DBGPRINT_RAW(RT_DEBUG_INFO | DBG_FUNC_RA, ("%s: GRP: 1*1, RssiOffset=%d\n", __FUNCTION__, RssiOffset));
@@ -1317,6 +1235,7 @@ VOID MlmeDynamicTxRateSwitchingAdapt(
 
 	if ((pAd->MacTab.Size == 1) || (IS_ENTRY_DLS(pEntry)))
 	{
+		/* Rssi = RTMPMaxRssi(pAd, (CHAR)pAd->StaCfg.RssiSample.AvgRssi0, (CHAR)pAd->StaCfg.RssiSample.AvgRssi1, (CHAR)pAd->StaCfg.RssiSample.AvgRssi2); */
 		Rssi = RTMPAvgRssi(pAd, &pAd->StaCfg.RssiSample);
 
 		/* Update statistic counter */
@@ -1327,6 +1246,7 @@ VOID MlmeDynamicTxRateSwitchingAdapt(
 	}
 	else
 	{
+		/* Rssi = RTMPMaxRssi(pAd, (CHAR)pEntry->RssiSample.AvgRssi0, (CHAR)pEntry->RssiSample.AvgRssi1, (CHAR)pEntry->RssiSample.AvgRssi2); */
 		Rssi = RTMPAvgRssi(pAd, &pEntry->RssiSample);
 
 		TxSuccess = pEntry->OneSecTxNoRetryOkCount;

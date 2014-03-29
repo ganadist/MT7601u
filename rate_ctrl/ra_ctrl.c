@@ -295,9 +295,7 @@ UCHAR RateSwitchTable11BGN3SForABand[] = { /* 3*3*/
 	First row contains table information:
 		Byte0=the number of rate entries, Byte1=the initial rate.
 	Format of Mode byte:
-		Bit0: STBC,
-		Bit1: Short GI,
-		Bit4~6: Mode(0:CCK, 1:OFDM, 2:HT Mix, 3:HT GF)
+		Bit0: STBC, Bit1: Short GI, Bit4~6: Mode(0:CCK, 1:OFDM, 2:HT Mix, 3:HT GF)
 */
 UCHAR RateSwitchTableAdapt11N1S[] = {
 /*  item no.   mcs   highPERThrd  upMcs3     upMcs1
@@ -470,71 +468,49 @@ UCHAR RateSwitchTableAdapt11N3S[] = {
 /* 1x1 VHT-capable rate table */
 UCHAR RateTableVht1S[] = 
 {
-	14,		12,			0,		0, 0,				0,		0, 0, 0,		0,
-/*	[Idx]	[Mode]		[MCS]	[PER_Low/High]	[dMCS]	[upMCS3/2/1] [nSS] */
-	0,		0x10,		0, 		30, 101,			0,		0, 0, 1,		1, /* OFDM, MCS0, BW20 */
-	1,		0x45,		0, 		30, 50,				0,		0, 0, 2,		1, /* VHT, MCS0, BW40, STBC */
-	2,		0x49,		0,		30, 50,				1,		0, 0, 3,		1, /* VHT, MCS0, BW80, STBG */
-	3,		0x49,		1,		20, 50,				2,		0, 0, 4,		1, /* VHT, MCS1, BW80, STBG */
-	4,		0x49,		2,		20, 50,				3,		0, 0, 5, 		1, /* VHT, MCS2, BW80, STBG */
-	5,		0x49,		3,		15, 50,				4,		0, 0, 6, 		1, /* VHT, MCS3, BW80, STBG */
-	6,		0x49,		4,		15, 30,				5,		0, 0, 7, 		1, /* VHT, MCS4, BW80, STBG */
-	7,		0x49,		5,		10, 25,				6,		0, 0, 8, 		1, /* VHT, MCS5, BW80, STBG */
-	8,		0x49,		6,		8, 14,				7,		0, 0, 9, 		1, /* VHT, MCS6, BW80, STBG */
-	9,		0x49,		7,		8, 14,				8,		0, 0, 10, 		1, /* VHT, MCS7, BW80, STBG */
-	10,		0x4B,		7,		8, 14,				9,		0, 0, 11, 		1, /* VHT, MCS7, BW80, STBG, SGI */
-	11,		0x49,		8,		8, 14,				10,		0, 0, 12, 		1, /* VHT, MCS8, BW80, STBG */ //snowpin test
-	12,		0x49,		9,		8, 14,				11,		0, 0, 13, 		1, /* VHT, MCS9, BW80, STBG */ //snowpin test
-	13,		0x4A,		9,		8, 14,				12,		0, 0, 13, 		1, /* VHT, MCS9, BW80, SGI */ //snowpin test
-};
-
-UCHAR RateTableVht1S_MCS7[] = 
-{
-	11,		9,			0,		0, 0,				0,		0, 0, 0,		0,
-/*	[Idx]	[Mode]		[MCS]	[PER_Low/High]	[dMCS]	[upMCS3/2/1] [nSS] */
-	0,		0x10,		0, 		30, 101,			0,		0, 0, 1,		1, /* OFDM, MCS0, BW20 */
-	1,		0x45,		0, 		30, 50,				0,		0, 0, 2,		1, /* VHT, MCS0, BW40, STBC */
-	2,		0x49,		0,		30, 50,				1,		0, 0, 3,		1, /* VHT, MCS0, BW80, STBG */
-	3,		0x49,		1,		20, 50,				2,		0, 0, 4,		1, /* VHT, MCS1, BW80, STBG */
-	4,		0x49,		2,		20, 50,				3,		0, 0, 5, 		1, /* VHT, MCS2, BW80, STBG */
-	5,		0x49,		3,		15, 50,				4,		0, 0, 6, 		1, /* VHT, MCS3, BW80, STBG */
-	6,		0x49,		4,		15, 30,				5,		0, 0, 7, 		1, /* VHT, MCS4, BW80, STBG */
-	7,		0x49,		5,		10, 25,				6,		0, 0, 8, 		1, /* VHT, MCS5, BW80, STBG */
-	8,		0x49,		6,		8, 14,				7,		0, 0, 9, 		1, /* VHT, MCS6, BW80, STBG */
-	9,		0x49,		7,		8, 14,				8,		0, 0, 10, 		1, /* VHT, MCS7, BW80, STBG */
-	10,		0x4B,		7,		8, 14,				9,		0, 0, 10, 		1, /* VHT, MCS7, BW80, STBG, SGI */
+	9,		8, 		0,		0, 0,				0,		0, 0, 0,		0,
+/*	[Idx]	[Mode]	[MCS]	[PER_Low/High]	[dMCS]	[upMCS3/2/1] [nSS]*/
+	0,		0x41,	0,		30, 101,			0,		0, 0, 1,		1,
+	1,		0x41,	1,		20, 50,			0,		0, 0, 2,		1, 
+	2,		0x41,	2,		20, 50,			1,		0, 0, 3, 		1,
+	3,		0x41,	3,		15, 50,			2,		0, 0, 4, 		1,
+	4,		0x41,	4,		15, 30,			3,		0, 0, 5, 		1,
+	5,		0x41,	5,		10, 25,			4,		0, 0, 6, 		1,
+	6,		0x41,	6,		8, 14,			5,		0, 0, 7, 		1,
+	7,		0x41,	7,		8, 14,			6,		0, 0, 8, 		1,
+	8,		0x43,	7,		8, 14,			7,		0, 0, 8, 		1,
 };
 
 
 /* 2x2 VHT-capable rate table */
 UCHAR RateTableVht2S[] = 
 {
-	19,		17,		0,		0, 0,				0,		0, 0,0,		0,
-/*	[Idx]	[Mode]	[MCS]	[PER_Low/High]	[dMCS]	[upMCS3/2/1] [nSS] */
-	0,		0x10,	0,		30, 101,			0,		0, 1, 1,		1, /* OFDM1x1 MCS 0, BW20 */
-	1,		0x45,	0,		30, 50,				0,		0, 2, 2,		1, /* VHT 1x1 MCS 0, BW40 */
-	2,		0x49,	0,		30, 50,				1,		0, 10, 3,		1, /* VHT 1x1 MCS 0, BW80 */
-	3,		0x49,	1,		20, 50,				2,		0, 11, 4,		1,
-	4,		0x49,	2,		20, 50,				3,		0, 11, 5,		1,
-	5,		0x49,	3,		15, 50,				4,		0, 12, 6,		1,
-	6,		0x49,	4,		15, 30,				5,		0, 13, 7,		1,
-	7,		0x49,	5,		10, 25,				6,		0, 14, 8,		1,
-	8,		0x49,	6,		8, 14,				7,		0, 14, 9,		1,
-	9,		0x49,	7,		8, 14,				8,		0, 14, 9,		1,
-	10,		0x48,	0,		30, 50,				2,		0, 11, 4,		2,/* VHT 2x2 MCS 0, BW80 */
-	11,		0x48,	1,		20, 50,				10,		0, 12, 6,		2,
-	12,		0x48,	2,		20, 50,				11,		0, 13, 7,		2,
-	13,		0x48,	3,		15, 30,				12,		0, 14, 8,		2,
-	14,		0x48,	4,		15, 30,				13,		0, 15, 14,		2,
-	15,		0x48,	5,		8, 20,				14,		0, 16, 15, 	2,
-	16,		0x48,	6,		8, 18,				15,		0, 17, 16, 	2,
-	17,		0x48,	7,		8, 25,				16,		0, 18, 17, 	2,
-	18,		0x4A,	7,		8, 25,				17,		0, 18, 18, 	2,
+	17,		15,		0,		0, 0,				0,		0, 0, 0,		1,
+/*	[Idx]	[Mode]	[MCS]	[PER_Low/High]	[dMCS]	[upMCS3/2/1] [nSS]*/
+	0,		0x41,	0, 		30, 101,			0,		0, 8,	1,		1, 
+	1,		0x41,	1,		20, 50,			0,		0, 9,	2, 		1,
+	2,		0x41,	2,		20, 50,			1,		0, 9,	3, 		1,
+	3,		0x41,	3,		15, 50,			2,		0, 10, 4, 		1,
+	4,		0x41,	4,		15, 30,			3,		0, 11, 5, 		1,
+	5,		0x41,	5,		10, 25,			4,		0, 12, 6, 		1,
+	6,		0x41,	6,		8, 14,			5,		0, 12, 7, 		1,
+	7,		0x41,	7,		8, 14,			6,		0, 12, 7, 		1,
+	8,		0x40,	0,		30, 50,			0,		0, 9,	2, 		2,
+	9,		0x40,	1,		20, 50,			8,		0, 10, 4, 		2,
+	10,		0x40,	2,		20, 50,			9,		0, 11, 5, 		2,
+	11,		0x40,	3,		15, 30,			10,		0, 12, 6, 		2,
+	12,		0x40,	4,		15, 30,			11,		0, 13, 12, 	2,
+	13,		0x40,	5,		8, 20,			12,		0, 14, 13, 	2,
+	14,		0x40,	6,		8, 18,			13,		0, 15, 14, 	2,
+	15,		0x40,	7,		8, 25,			14,		0, 16, 15, 	2,
+	16,		0x42,	7,		8, 25,			15,		0, 16, 16, 	2,
 };
 #endif /* DOT11_VHT_AC */
 #endif /*  NEW_RATE_ADAPT_SUPPORT */
 
 #endif /* DOT11_N_SUPPORT */
+
+
 
 
 /* MlmeGetSupportedMcs - fills in the table of mcs with index into the pTable
@@ -550,7 +526,7 @@ VOID MlmeGetSupportedMcs(
 	CHAR	idx;
 	RTMP_RA_LEGACY_TB *pCurrTxRate;
 
-	for (idx = 0; idx < 24; idx++)
+	for (idx=0; idx<24; idx++)
 		mcs[idx] = -1;
 
 	/*  check the existence and index of each needed MCS */
@@ -678,41 +654,6 @@ USHORT MlmeGetTxQuality(
 }
 
 
-#ifdef MCS_LUT_SUPPORT
-VOID asic_mcs_lut_update(RTMP_ADAPTER *pAd, MAC_TABLE_ENTRY *pEntry)
-{
-	if(RTMP_TEST_MORE_FLAG(pAd, fASIC_CAP_MCS_LUT) && (pEntry->Aid < 128))
-	{
-		UINT32 wcid_offset;
-		HW_RATE_CTRL_STRUCT rate_ctrl;
-
-		rate_ctrl.PHYMODE = pEntry->HTPhyMode.field.MODE;
-		rate_ctrl.STBC = pEntry->HTPhyMode.field.STBC;
-		rate_ctrl.ShortGI = pEntry->HTPhyMode.field.ShortGI;
-		rate_ctrl.BW = pEntry->HTPhyMode.field.BW;
-		rate_ctrl.MCS = pEntry->HTPhyMode.field.MCS;
-			
-		wcid_offset = MAC_MCS_LUT_BASE + (pEntry->Aid * 8);
-
-		RTMP_IO_WRITE32(pAd, wcid_offset, pEntry->HTPhyMode.word);
-		RTMP_IO_WRITE32(pAd, wcid_offset + 4, 0x00);
-
-		DBGPRINT(RT_DEBUG_INFO, ("%s():MCS_LUT update, write to MAC=0x%08x, Value=0x%04x, WCID=%d\n",
-					__FUNCTION__, wcid_offset, pEntry->HTPhyMode.word, pEntry->Aid));
-
-		DBGPRINT_RAW(RT_DEBUG_INFO, ("\tAid=%d, APMlmeSetTxRate - CurrTxRateIdx=%d, MCS=%d, STBC=%d, ShortGI=%d, Mode=%d, BW=%d \n\n",
-			pEntry->Aid,
-			pEntry->CurrTxRateIndex,
-			pEntry->HTPhyMode.field.MCS,
-			pEntry->HTPhyMode.field.STBC,
-			pEntry->HTPhyMode.field.ShortGI,
-			pEntry->HTPhyMode.field.MODE,
-			pEntry->HTPhyMode.field.BW));
-	}
-}
-#endif /* MCS_LUT_SUPPORT */
-
-
 
 
 #ifdef CONFIG_STA_SUPPORT
@@ -730,13 +671,7 @@ VOID MlmeSetTxRate(
 	MaxMode = MODE_VHT;
 #endif /* DOT11_VHT_AC */
 
-	if (pTxRate->STBC &&
-		(((pAd->StaCfg.MaxHTPhyMode.field.STBC) && (pTxRate->Mode == MODE_HTMIX || pTxRate->Mode == MODE_HTGREENFIELD))
-#ifdef DOT11_VHT_AC
-			||((CLIENT_STATUS_TEST_FLAG(pEntry, fCLIENT_STATUS_VHT_RXSTBC_CAPABLE)) && (pTxRate->Mode == MODE_VHT))
-#endif /* DOT11_VHT_AC */
-		)
-	)
+	if (pTxRate->STBC && (pAd->StaCfg.MaxHTPhyMode.field.STBC))
 		pAd->StaCfg.HTPhyMode.field.STBC = STBC_USE;
 	else
 #endif /*  DOT11_N_SUPPORT */
@@ -900,10 +835,6 @@ VOID MlmeSetTxRate(
 		pEntry->HTPhyMode.field.MODE = pAd->StaCfg.HTPhyMode.field.MODE;
     }
 
-#ifdef MCS_LUT_SUPPORT
-	asic_mcs_lut_update(pAd, pEntry);
-#endif /* MCS_LUT_SUPPORT */
-
 }
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -933,26 +864,13 @@ VOID MlmeSelectTxRateTable(
 				}
 			}
 
-#ifdef RT65xx
-			if (IS_MT76x0(pAd))
-				ss = 1;
-#endif /* RT65xx */
-
 #ifdef NEW_RATE_ADAPT_SUPPORT
 			if (pAd->rateAlg == RATE_ALG_GRP)
 			{
 				if (ss == 2)
 					*ppTable = RateTableVht2S;
 				else
-				{
-					if ((pEntry->SupportVHTMCS[MCS_8] == 0) && 
-						(pEntry->SupportVHTMCS[MCS_9] == 0))
-					{
-						*ppTable = RateTableVht1S_MCS7; 
-					}
-					else
-						*ppTable = RateTableVht1S;
-				}
+					*ppTable = RateTableVht1S;
 				DBGPRINT(RT_DEBUG_INFO | DBG_FUNC_RA, ("%s(): Select RateTableVht%dS\n",
 							__FUNCTION__, (ss == 2 ? 2 : 1)));
 			}
@@ -965,7 +883,7 @@ VOID MlmeSelectTxRateTable(
 					*ppTable = Ags2x2VhtRateTable;
 				else
 					*ppTable = Ags1x1VhtRateTable;
-				DBGPRINT(RT_DEBUG_INFO, ("%s(): Select Ags%dx%dVhtRateTable\n",
+				DBGPRINT(RT_DEBUG_TRACE, ("%s(): Select Ags%dx%dVhtRateTable\n",
 							__FUNCTION__, (ss == 2 ? 2 : 1), (ss == 2 ? 2 : 1)));
 			}
 #endif /* AGS_SUPPORT */
@@ -1058,7 +976,7 @@ VOID MlmeSelectTxRateTable(
 			else
 #endif
 			if ((pAd->LatchRfRegs.Channel <= 14) && (pEntry->SupportRateMode & (SUPPORT_CCK_MODE)))
-				*ppTable = RateSwitchTable11BGN1S;
+				*ppTable = RateSwitchTable11BGN1S;			
 			else
 				*ppTable = RateSwitchTable11N1SForABand;
 
@@ -1264,7 +1182,7 @@ VOID MlmeSelectTxRateTable(
 #endif /* DOT11_N_SUPPORT */
 
 		if (((pEntry->SupportRateMode == SUPPORT_CCK_MODE) || 
-			WMODE_EQUAL(pAd->CommonCfg.PhyMode, WMODE_B))
+			WMODE_EQUAL(pAd->CommonCfg.PhyMode, WMODE_B)) 
 #ifdef DOT11_N_SUPPORT
 		/*Iverson mark for Adhoc b mode,sta will use rate 54  Mbps when connect with sta b/g/n mode */
 		/* && (pEntry->HTCapability.MCSSet[0] == 0) && (pEntry->HTCapability.MCSSet[1] == 0)*/
@@ -1444,29 +1362,6 @@ UCHAR MlmeSelectTxRate(
 	}
 	else if (pTable == RateTableVht1S)
 	{	/*  VHT mode with 1SS */
-		if (mcs[9]>=0 && (Rssi > (-72+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_9]))
-			TxRateIdx = mcs[8];
-		else if (mcs[8]>=0 && (Rssi > (-72+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_8]))
-			TxRateIdx = mcs[8];
-		else if (mcs[7]>=0 && (Rssi > (-72+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_7]))
-			TxRateIdx = mcs[7];
-		else if (mcs[6]>=0 && (Rssi > (-74+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_6]))
-			TxRateIdx = mcs[6];
-		else if (mcs[5]>=0 && (Rssi > (-77+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_5]))
-			TxRateIdx = mcs[5];
-		else if (mcs[4]>=0 && (Rssi > (-79+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_4]))
-			TxRateIdx = mcs[4];
-		else if (mcs[3]>=0 && (Rssi > (-81+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_3]))
-			TxRateIdx = mcs[3];
-		else if (mcs[2]>=0 && (Rssi > (-83+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_2]))
-			TxRateIdx = mcs[2];
-		else if (mcs[1]>=0 && (Rssi > (-86+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_1]))
-			TxRateIdx = mcs[1];
-		else
-			TxRateIdx = mcs[0];
-	}
-	else if (pTable == RateTableVht1S_MCS7)
-	{	/*  VHT mode with 1SS */
 		if (mcs[7]>=0 && (Rssi > (-72+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_7]))
 			TxRateIdx = mcs[7];
 		else if (mcs[6]>=0 && (Rssi > (-74+RssiOffset)) && (pEntry->SupportVHTMCS[MCS_6]))
@@ -1552,22 +1447,58 @@ UCHAR MlmeSelectTxRate(
 #endif /* NEW_RATE_ADAPT_SUPPORT */
 	)
 	{/*  N mode with 1 stream */
-		if (mcs[7]>=0 && (Rssi > (-72+RssiOffset)) && (pEntry->SupportHTMCS[MCS_7]))
-			TxRateIdx = mcs[7];
-		else if (mcs[6]>=0 && (Rssi > (-74+RssiOffset)) && (pEntry->SupportHTMCS[MCS_6]))
-			TxRateIdx = mcs[6];
-		else if (mcs[5]>=0 && (Rssi > (-77+RssiOffset)) && (pEntry->SupportHTMCS[MCS_5]))
-			TxRateIdx = mcs[5];
-		else if (mcs[4]>=0 && (Rssi > (-79+RssiOffset)) && (pEntry->SupportHTMCS[MCS_4]))
-			TxRateIdx = mcs[4];
-		else if (mcs[3]>=0 && (Rssi > (-81+RssiOffset)) && (pEntry->SupportHTMCS[MCS_3]))
-			TxRateIdx = mcs[3];
-		else if (mcs[2]>=0 && (Rssi > (-83+RssiOffset)) && (pEntry->SupportHTMCS[MCS_2]))
-			TxRateIdx = mcs[2];
-		else if (mcs[1]>=0 && (Rssi > (-86+RssiOffset)) && (pEntry->SupportHTMCS[MCS_1]))
-			TxRateIdx = mcs[1];
+#ifdef MT7601
+		if ( IS_MT7601(pAd))
+		{		
+			//printk("RSSI=%d\n", Rssi);
+			if (mcs[7]>=0 && (Rssi > (-64+RssiOffset)) && (pEntry->SupportHTMCS[MCS_7]))
+				TxRateIdx = mcs[7];
+			else if (mcs[6]>=0 && (Rssi > (-66+RssiOffset)) && (pEntry->SupportHTMCS[MCS_6]))
+				TxRateIdx = mcs[6];
+			else if (mcs[5]>=0 && (Rssi > (-70+RssiOffset)) && (pEntry->SupportHTMCS[MCS_5]))
+				TxRateIdx = mcs[5];
+			else if (mcs[4]>=0 && (Rssi > (-73+RssiOffset)) && (pEntry->SupportHTMCS[MCS_4]))
+				TxRateIdx = mcs[4];
+			else if (mcs[3]>=0 && (Rssi > (-77+RssiOffset)) && (pEntry->SupportHTMCS[MCS_3]))
+				TxRateIdx = mcs[3];
+			else if (mcs[2]>=0 && (Rssi > (-79+RssiOffset)) && (pEntry->SupportHTMCS[MCS_2]))
+				TxRateIdx = mcs[2];
+			else if (mcs[1]>=0 && (Rssi > (-81+RssiOffset)) && (pEntry->SupportHTMCS[MCS_1]))
+				TxRateIdx = mcs[1];
+			else if (mcs[1]>=0 && (Rssi > (-83+RssiOffset)) && (pEntry->SupportHTMCS[MCS_0]))
+				TxRateIdx = mcs[0];
+#ifdef CONFIG_STA_SUPPORT
+			else 
+			{
+				if ( (mcs[0] > 1 ) && pEntry->SupportCCKMCS[MCS_1] )
+					TxRateIdx=1;
+				else
+					TxRateIdx = mcs[0];
+			}
+#endif /* CONFIG_STA_SUPPORT */
+
+			//printk("TxRateIdx = %d\n", TxRateIdx);
+		} 
 		else
-			TxRateIdx = mcs[0];
+#endif /* MT7601 */
+		{
+			if (mcs[7]>=0 && (Rssi > (-72+RssiOffset)) && (pEntry->SupportHTMCS[MCS_7]))
+				TxRateIdx = mcs[7];
+			else if (mcs[6]>=0 && (Rssi > (-74+RssiOffset)) && (pEntry->SupportHTMCS[MCS_6]))
+				TxRateIdx = mcs[6];
+			else if (mcs[5]>=0 && (Rssi > (-77+RssiOffset)) && (pEntry->SupportHTMCS[MCS_5]))
+				TxRateIdx = mcs[5];
+			else if (mcs[4]>=0 && (Rssi > (-79+RssiOffset)) && (pEntry->SupportHTMCS[MCS_4]))
+				TxRateIdx = mcs[4];
+			else if (mcs[3]>=0 && (Rssi > (-81+RssiOffset)) && (pEntry->SupportHTMCS[MCS_3]))
+				TxRateIdx = mcs[3];
+			else if (mcs[2]>=0 && (Rssi > (-83+RssiOffset)) && (pEntry->SupportHTMCS[MCS_2]))
+				TxRateIdx = mcs[2];
+			else if (mcs[1]>=0 && (Rssi > (-86+RssiOffset)) && (pEntry->SupportHTMCS[MCS_1]))
+				TxRateIdx = mcs[1];
+			else
+				TxRateIdx = mcs[0];
+		}
 	}
 	else
 #endif /*  DOT11_N_SUPPORT */
@@ -1820,6 +1751,7 @@ VOID MlmeCheckRDG(
 
 		pTempTxRate = (RTMP_RA_LEGACY_TB *)(&pTable[(pEntry->CurrTxRateIndex + 1)*TableStep]);
 		RTMP_IO_READ32(pAd, TX_LINK_CFG, &TxLinkCfg.word);
+
 		if (pAd->RalinkCounters.OneSecReceivedByteCount > (pAd->RalinkCounters.OneSecTransmittedByteCount * 5) &&
 				pTempTxRate->CurrMCS != 23 && pTempTxRate->ShortGI != 1)
 		{
@@ -1916,7 +1848,7 @@ INT rtmp_get_rate_from_rate_tb(UCHAR *table, INT idx, RTMP_TX_RATE *tx_rate)
 		tx_rate->sgi = rate_entry->ShortGI;
 		tx_rate->stbc = rate_entry->STBC;
 #ifdef DOT11_VHT_AC
-		if (table == RateTableVht1S || table == RateTableVht2S || table == RateTableVht1S_MCS7)
+		if (table == RateTableVht1S || table == RateTableVht2S)
 			tx_rate->nss = rate_entry->dataRate;
 		else
 #endif /* DOT11_VHT_AC */
@@ -2180,21 +2112,9 @@ VOID RTMPSetSupportMCS(
 					}
 				case 1:
 					if (vht_cap->mcs_set.rx_mcs_map.mcs_ss1 < VHT_MCS_CAP_NA)
-					{							
+					{
 						for (i = 0; i <= 7; i++)
 							pEntry->SupportVHTMCS[i] = TRUE;
-						/*
-							MT7650E2(1x1 AC) supports VHT_MCS8 & VHT_MCS9 @20120812
-						*/
-						if (vht_cap->mcs_set.rx_mcs_map.mcs_ss1 == VHT_MCS_CAP_8)
-						{
-							pEntry->SupportVHTMCS[8] = TRUE;
-						}
-						else if (vht_cap->mcs_set.rx_mcs_map.mcs_ss1 == VHT_MCS_CAP_9)
-						{
-							pEntry->SupportVHTMCS[8] = TRUE;
-							pEntry->SupportVHTMCS[9] = TRUE;
-						}
 						pEntry->SupportRateMode |= SUPPORT_VHT_MODE;
 					}
 				default:

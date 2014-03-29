@@ -1350,6 +1350,10 @@ VOID AssocPostProc(
 	}
 #endif /* DOT11_N_SUPPORT */
 
+	    if (pEdcaParm->bValid == TRUE)
+                CLIENT_STATUS_SET_FLAG(&pAd->MacTab.Content[BSSID_WCID], fCLIENT_STATUS_WMM_CAPABLE);
+
+
 	NdisMoveMemory(&pAd->MlmeAux.APEdcaParm, pEdcaParm, sizeof (EDCA_PARM));
 
 	/* filter out un-supported rates */

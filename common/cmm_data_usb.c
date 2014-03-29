@@ -173,20 +173,25 @@ BOOLEAN	RTUSBNeedQueueBackForAgg(RTMP_ADAPTER *pAd, UCHAR BulkOutPipeId)
 	
 	========================================================================
 */
-VOID rlt_usb_write_txinfo(
+static VOID rlt_usb_write_txinfo(
 	IN RTMP_ADAPTER *pAd,
 	IN TXINFO_STRUC *pTxInfo,
 	IN USHORT USBDMApktLen,
 	IN BOOLEAN bWiv,
 	IN UCHAR QueueSel,
 	IN UCHAR NextValid,
-	IN UCHAR TxBurst)
+	IN UCHAR TxBurst,
+	IN UCHAR pkt_80211 )
 {
 #ifdef RLT_MAC
 	struct _TXINFO_NMAC_PKT *nmac_info;
 
 	nmac_info = (struct _TXINFO_NMAC_PKT *)pTxInfo;
+#ifdef HDR_TRANS_SUPPORT
+	nmac_info->pkt_80211 = pkt_80211;
+#else
 	nmac_info->pkt_80211 = 1;
+#endif /* HDR_TRANS_SUPPORT */
 	nmac_info->info_type = 0;
 	nmac_info->d_port = 0;
 	nmac_info->cso = 0;
@@ -194,12 +199,15 @@ VOID rlt_usb_write_txinfo(
 #endif /* RLT_MAC */
 
 #ifdef RTMP_MAC
+
 #endif /* RTMP_MAC */
 
 	pTxInfo->TxInfoPktLen = USBDMApktLen;
 	pTxInfo->TxInfoQSEL = QueueSel;
+#ifndef CONFIG_MULTI_CHANNEL
 	if (QueueSel != FIFO_EDCA)
 		DBGPRINT(RT_DEBUG_TRACE, ("====> QueueSel != FIFO_EDCA <====\n"));
+#endif /* !CONFIG_MULTI_CHANNEL */
 	pTxInfo->TxInfoUDMANextVld = FALSE; /*NextValid;   Need to check with Jan about this.*/
 	pTxInfo->TxInfoUDMATxburst = TxBurst;
 	pTxInfo->TxInfoWIV = bWiv;
@@ -247,7 +255,7 @@ VOID ComposePsPoll(RTMP_ADAPTER *pAd)
 	RTMPZeroMemory(buf, 100);
 	data_len = sizeof (PSPOLL_FRAME);
 	rlt_usb_write_txinfo(pAd, pTxInfo, data_len + TXWISize + TSO_SIZE, TRUE, 
-						EpToQueue[MGMTPIPEIDX], FALSE, FALSE);
+						EpToQueue[MGMTPIPEIDX], FALSE, FALSE, 1);
 	RTMPWriteTxWI(pAd, pTxWI, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, 0,
 		      BSSID_WCID, data_len, 0, 0,
 		      (UCHAR) pAd->CommonCfg.MlmeTransmit.field.MCS,
@@ -268,6 +276,7 @@ VOID ComposeNullFrame(RTMP_ADAPTER *pAd)
 	UINT8 TXWISize = pAd->chipCap.TXWISize;
 	USHORT data_len = sizeof(pAd->NullFrame);;
 
+	PTX_CONTEXT pNullContext = &pAd->NullContext[0];
 
 	NdisZeroMemory(&pAd->NullFrame, data_len);
 	pAd->NullFrame.FC.Type = BTYPE_DATA;
@@ -276,19 +285,21 @@ VOID ComposeNullFrame(RTMP_ADAPTER *pAd)
 	COPY_MAC_ADDR(pAd->NullFrame.Addr1, pAd->CommonCfg.Bssid);
 	COPY_MAC_ADDR(pAd->NullFrame.Addr2, pAd->CurrentAddress);
 	COPY_MAC_ADDR(pAd->NullFrame.Addr3, pAd->CommonCfg.Bssid);
-	buf = &pAd->NullContext.TransferBuffer->field.WirelessPacket[0];
+	buf = (PUCHAR)&pNullContext->TransferBuffer->field.WirelessPacket[0];
+
 	RTMPZeroMemory(buf, 100);
 	pTxInfo = (TXINFO_STRUC *)buf;
 	pTxWI = (TXWI_STRUC *)&buf[TXINFO_SIZE];
 	rlt_usb_write_txinfo(pAd, pTxInfo,
 			(USHORT)(data_len + TXWISize + TSO_SIZE), TRUE,
-			EpToQueue[MGMTPIPEIDX], FALSE, FALSE);
+			EpToQueue[MGMTPIPEIDX], FALSE, FALSE, 1);
 	RTMPWriteTxWI(pAd, pTxWI, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, 0,
 		      BSSID_WCID, data_len, 0, 0,
 		      (UCHAR)pAd->CommonCfg.MlmeTransmit.field.MCS,
 		      IFS_BACKOFF, FALSE, &pAd->CommonCfg.MlmeTransmit);
 	RTMPMoveMemory((VOID *)&buf[TXWISize + TXINFO_SIZE], (VOID *)&pAd->NullFrame, data_len);
-	pAd->NullContext.BulkOutSize = TXINFO_SIZE + TXWISize + TSO_SIZE + data_len + 4;
+	pNullContext->BulkOutSize = TXINFO_SIZE + TXWISize + TSO_SIZE + data_len + 4;
+
 }
 
 
@@ -460,7 +471,13 @@ USHORT	RtmpUSB_WriteFragTxResource(
 	pTxBlk->Priv += (TXINFO_SIZE + USBDMApktLen);
 
 	/* For TxInfo, the length of USBDMApktLen = TXWI_SIZE + 802.11 header + payload*/
-	rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(USBDMApktLen), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE);
+#ifdef CONFIG_MULTI_CHANNEL
+	if ((QueIdx == QID_HCCA) && (pAd->Multi_Channel_Enable == TRUE))
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(USBDMApktLen), 
+								FALSE, FIFO_EDCA2, FALSE, FALSE, 1);
+	else
+#endif /* CONFIG_MULTI_CHANNEL */
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(USBDMApktLen), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE, 1);
 	
 	if (fragNum == pTxBlk->TotalFragNum) 
 	{
@@ -573,7 +590,6 @@ USHORT RtmpUSB_WriteSingleTxResource(
 #endif /* USB_BULK_BUF_ALIGMENT */		
 	UINT8 TXWISize = pAd->chipCap.TXWISize;
 
-
 	/* get Tx Ring Resource & Dma Buffer address*/
 	QueIdx = pTxBlk->QueIdx;
 
@@ -615,7 +631,21 @@ USHORT RtmpUSB_WriteSingleTxResource(
 		pTxBlk->Priv = (TXINFO_SIZE + dma_len);
 
 		/* For TxInfo, the length of USBDMApktLen = TXWI_SIZE + TSO_SIZE + 802.11 header + payload */
-		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(dma_len), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE);
+#ifdef HDR_TRANS_SUPPORT
+#ifdef CONFIG_MULTI_CHANNEL
+	if ((QueIdx == QID_HCCA) && (pAd->Multi_Channel_Enable == TRUE))
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(dma_len), FALSE, FIFO_EDCA2, FALSE /*NextValid*/,  FALSE, pTxBlk->NeedTrans?0:1);
+	else
+#endif /* CONFIG_MULTI_CHANNEL */
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(dma_len), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE, pTxBlk->NeedTrans?0:1);
+#else
+#ifdef CONFIG_MULTI_CHANNEL
+	if ((QueIdx == QID_HCCA) && (pAd->Multi_Channel_Enable == TRUE))
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(dma_len), FALSE, FIFO_EDCA2, FALSE /*NextValid*/,  FALSE, 1);
+	else
+#endif /* CONFIG_MULTI_CHANNEL */
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(dma_len), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE, 1);
+#endif /* HDR_TRANS_SUPPORT */
 
 
 #ifndef USB_BULK_BUF_ALIGMENT
@@ -785,7 +815,13 @@ USHORT RtmpUSB_WriteMultiTxResource(
 			pTxBlk->Priv = TXINFO_SIZE + TXWISize + hwHdrLen;
 
 			/*	pTxInfo->USBDMApktLen now just a temp value and will to correct latter.*/
-			rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(pTxBlk->Priv), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE);
+#ifdef CONFIG_MULTI_CHANNEL
+	if ((QueIdx == QID_HCCA) && (pAd->Multi_Channel_Enable == TRUE))
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(pTxBlk->Priv), FALSE, FIFO_EDCA2, FALSE /*NextValid*/,  FALSE, 1);
+	else
+#endif /* CONFIG_MULTI_CHANNEL */
+
+			rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(pTxBlk->Priv), FALSE, FIFO_EDCA, FALSE /*NextValid*/,  FALSE, 1);
 			
 			/* Copy it.*/
 			NdisMoveMemory(pWirelessPacket, pTxBlk->HeaderBuf, pTxBlk->Priv); 
@@ -976,6 +1012,13 @@ VOID RtmpUSBDataKickOut(
 	IN TX_BLK *pTxBlk,
 	IN UCHAR QueIdx)
 {
+
+#ifdef CONFIG_MULTI_CHANNEL
+	if ((pAd->MultiChannelFlowCtl & (1 << QueIdx)) == (1 << QueIdx))
+	{
+		return;
+	}
+#endif /* CONFIG_MULTI_CHANNEL */
 	RTUSB_SET_BULK_FLAG(pAd, (fRTUSB_BULK_OUT_DATA_NORMAL << QueIdx));
 	RTUSBKickBulkOut(pAd);
 
@@ -1006,7 +1049,7 @@ int RtmpUSBMgmtKickOut(
 
 	/* Build our URB for USBD*/
 	BulkOutSize = (SrcBufLen + 3) & (~3);
-	rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(BulkOutSize - TXINFO_SIZE), TRUE, EpToQueue[MGMTPIPEIDX], FALSE,  FALSE);
+	rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(BulkOutSize - TXINFO_SIZE), TRUE, EpToQueue[MGMTPIPEIDX], FALSE,  FALSE, 1);
 	
 	BulkOutSize += 4; /* Always add 4 extra bytes at every packet.*/
 
@@ -1084,7 +1127,25 @@ VOID RtmpUSBNullFrameKickOut(
 	IN UCHAR *pNullFrame,
 	IN UINT32 frameLen)
 {
-	if (pAd->NullContext.InUse == FALSE)
+
+	PTX_CONTEXT	pNullContext = &pAd->NullContext[0];
+
+#ifdef CONFIG_MULTI_CHANNEL
+
+
+	if (QueIdx == EDCA_AC0_PIPE)
+	{
+		pNullContext = &pAd->NullContext[0];
+	}
+	else if (QueIdx == HCCA_PIPE)
+	{
+		pNullContext = &pAd->NullContext[1];
+	}
+	else
+		DBGPRINT(RT_DEBUG_ERROR, ("%s: Unknow pipe!!\n", __FUNCTION__));
+
+#endif /* CONFIG_MULTI_CHANNEL */
+	if (pNullContext->InUse == FALSE)
 	{
 		PTX_CONTEXT pNullContext;
 		TXINFO_STRUC *pTxInfo;
@@ -1092,7 +1153,7 @@ VOID RtmpUSBNullFrameKickOut(
 		UCHAR *pWirelessPkt;
 		UINT8 TXWISize = pAd->chipCap.TXWISize;
 
-		pNullContext = &(pAd->NullContext);
+		pNullContext = &(pAd->NullContext[0]);
 
 		/* Set the in use bit*/
 		pNullContext->InUse = TRUE;
@@ -1100,7 +1161,7 @@ VOID RtmpUSBNullFrameKickOut(
 
 		RTMPZeroMemory(&pWirelessPkt[0], 100);
 		pTxInfo = (TXINFO_STRUC *)&pWirelessPkt[0];
-		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(frameLen + TXWISize + TSO_SIZE), TRUE, EpToQueue[MGMTPIPEIDX], FALSE,  FALSE);
+		rlt_usb_write_txinfo(pAd, pTxInfo, (USHORT)(frameLen + TXWISize + TSO_SIZE), TRUE, EpToQueue[MGMTPIPEIDX], FALSE,  FALSE, 1);
 		pTxInfo->TxInfoQSEL = FIFO_EDCA;
 		pTxWI = (TXWI_STRUC *)&pWirelessPkt[TXINFO_SIZE];
 		RTMPWriteTxWI(pAd, pTxWI,  FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, 0, BSSID_WCID, frameLen,
@@ -1112,13 +1173,18 @@ VOID RtmpUSBNullFrameKickOut(
 #ifdef RT_BIG_ENDIAN
 		RTMPFrameEndianChange(pAd, (PUCHAR)&pWirelessPkt[TXINFO_SIZE + TXWISize + TSO_SIZE], DIR_WRITE, FALSE);
 #endif /* RT_BIG_ENDIAN */
-		pAd->NullContext.BulkOutSize =  TXINFO_SIZE + TXWISize + TSO_SIZE + frameLen + 4;
-		pAd->NullContext.BulkOutSize = ( pAd->NullContext.BulkOutSize + 3) & (~3);
+		pNullContext->BulkOutSize =  TXINFO_SIZE + TXWISize + TSO_SIZE + frameLen + 4;
+
 
 		/* Fill out frame length information for global Bulk out arbitor*/
 		/*pNullContext->BulkOutSize = TransferBufferLength;*/
 		DBGPRINT(RT_DEBUG_TRACE, ("%s - Send NULL Frame @%d Mbps...\n", __FUNCTION__, RateIdToMbps[pAd->CommonCfg.TxRate]));
-		RTUSB_SET_BULK_FLAG(pAd, fRTUSB_BULK_OUT_DATA_NULL);
+#ifdef CONFIG_MULTI_CHANNEL
+		if ((QueIdx == HCCA_PIPE) && (pAd->Multi_Channel_Enable == TRUE))
+			RTUSB_SET_BULK_FLAG(pAd, fRTUSB_BULK_OUT_DATA_NULL_HCCA);
+		else
+#endif /* CONFIG_MULTI_CHANNEL */
+			RTUSB_SET_BULK_FLAG(pAd, fRTUSB_BULK_OUT_DATA_NULL);
 
 		pAd->Sequence = (pAd->Sequence+1) & MAXSEQ;
 		
@@ -1150,12 +1216,11 @@ PNDIS_PACKET GetPacketFromRxRing(
 	IN RTMP_ADAPTER *pAd,
 	OUT RX_BLK *pRxBlk,
 	OUT BOOLEAN *pbReschedule,
-	INOUT UINT32 *pRxPending,
-	OUT BOOLEAN *bCmdRspPacket)
+	INOUT UINT32 *pRxPending)
 {
 	RX_CONTEXT *pRxContext;
 	PNDIS_PACKET pNetPkt;
-	UCHAR *pData, *RXDMA;
+	UCHAR *pData;
 	ULONG ThisFrameLen, RxBufferLength, valid_len;
 	RXWI_STRUC *pRxWI;
 	UINT8 RXWISize = pAd->chipCap.RXWISize;
@@ -1164,27 +1229,30 @@ PNDIS_PACKET GetPacketFromRxRing(
 	RXFCE_INFO *pRxFceInfo;
 #endif /* RLT_MAC */
 
-	*bCmdRspPacket = FALSE;
-
 
 	pRxContext = &pAd->RxContext[pAd->NextRxBulkInReadIndex];
 	if ((pRxContext->Readable == FALSE) || (pRxContext->InUse == TRUE))
 		return NULL;
 
 	RxBufferLength = pRxContext->BulkInOffset - pAd->ReadPosition;
-	valid_len = RXDMA_FIELD_SIZE * 2;
-	
+	valid_len = RXDMA_FIELD_SIZE + RXWISize + sizeof(RXINFO_STRUC);
+#ifdef RLT_MAC
+	valid_len += sizeof(RXFCE_INFO);
+#endif /* RLT_MAC */
 	if (RxBufferLength < valid_len)
 	{
 		goto label_null;
 	}
 	
 	pData = &pRxContext->TransferBuffer[pAd->ReadPosition];
+//+++Add by shiang for debug
+if (0) {
+	hex_dump("GetPacketFromRxRing", pData, (RxBufferLength > 7000 ? 7000 : RxBufferLength));
+}
+//---Add by shiang for debug
 
-	RXDMA = pData;
 	/* The RXDMA field is 4 bytes, now just use the first 2 bytes. The Length including the (RXWI + MSDU + Padding) */
 	ThisFrameLen = *pData + (*(pData+1)<<8);
-	
 	if (ThisFrameLen == 0)
 	{	    
 		DBGPRINT(RT_DEBUG_TRACE, ("BIRIdx(%d): RXDMALen is zero.[%ld], BulkInBufLen = %ld)\n", 
@@ -1209,30 +1277,14 @@ PNDIS_PACKET GetPacketFromRxRing(
 
 	/* skip USB frame length field*/
 	pData += RXDMA_FIELD_SIZE;
-
 #ifdef RLT_MAC
-	pRxFceInfo = (RXFCE_INFO *)(pData + ThisFrameLen);
-
-	/* Check if command response or data packet */
-	if ((pRxFceInfo->info_type == CMD_PACKET) && (pAd->chipCap.CmdRspRxRing == RX_RING0))
-	{
-		//CmdRspEventCallbackHandle(pAd, RXDMA); 
-
-		/* Update next packet read position.*/
-		pAd->ReadPosition += (sizeof(*pRxFceInfo) * 2 + pRxFceInfo->pkt_len);
-
-		*bCmdRspPacket = TRUE;
-
-		goto label_null;
-	} 
-
 	pRxInfo = (RXINFO_STRUC *)pData;
+	pRxFceInfo = (RXFCE_INFO *)(pData + ThisFrameLen);
 
 	pData += RXINFO_SIZE;
 #endif /* RLT_MAC */
-
 #ifdef RTMP_MAC
-	pRxInfo = *(RXINFO_STRUC *)(pData + ThisFrameLen);
+	pRxInfo = (RXINFO_STRUC *)(pData + ThisFrameLen);
 #endif /* RTMP_MAC */
 
 	pRxWI = (RXWI_STRUC *)pData;
@@ -1417,10 +1469,27 @@ VOID RtmpUsbStaAsicForceWakeupTimeout(
 
 	if (pAd && pAd->Mlme.AutoWakeupTimerRunning)
 	{
-		RTUSBBulkReceive(pAd);
 
-		AsicSendCommandToMcu(pAd, 0x31, 0xff, 0x00, 0x02, FALSE);
-		
+#ifdef MT7601
+		if ( IS_MT7601(pAd) )
+		{
+			if ( !OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE) )
+			{
+				RTMPSetTimer(&pAd->Mlme.AutoWakeupTimer, AUTO_WAKEUP_TIMEOUT);
+				return;
+			}
+				
+			ASIC_RADIO_ON(pAd, MLME_RADIO_ON);
+		}
+		else
+#endif /* MT7601 */
+		{
+			RTUSBBulkReceive(pAd);
+
+			AsicSendCommandToMcu(pAd, 0x31, 0xff, 0x00, 0x02, FALSE);
+		}
+
+
 		OPSTATUS_CLEAR_FLAG(pAd, fOP_STATUS_DOZE);
 		pAd->Mlme.AutoWakeupTimerRunning = FALSE;
 	}
@@ -1435,11 +1504,24 @@ VOID RT28xxUsbStaAsicForceWakeup(
 
 	if (pAd->Mlme.AutoWakeupTimerRunning)
 	{
+		if ( !OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE) )
+		{
+			return;	
+		}
 		RTMPCancelTimer(&pAd->Mlme.AutoWakeupTimer, &Canceled);
 		pAd->Mlme.AutoWakeupTimerRunning = FALSE;
 	}
 
-	AsicSendCommandToMcu(pAd, 0x31, 0xff, 0x00, 0x02, FALSE);
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+	{
+		ASIC_RADIO_ON(pAd, DOT11_RADIO_ON);
+	}
+	else
+#endif /* MT7601 */
+	{
+		AsicSendCommandToMcu(pAd, 0x31, 0xff, 0x00, 0x02, FALSE);
+	}
 
 	OPSTATUS_CLEAR_FLAG(pAd, fOP_STATUS_DOZE);
 }
@@ -1455,24 +1537,34 @@ VOID RT28xxUsbStaAsicSleepThenAutoWakeup(
 	if (pAd->CountDowntoPsm > 0)
 		return;
 
+	if (pAd->Mlme.AutoWakeupTimerRunning == TRUE)
+		return;
 
 	/* we have decided to SLEEP, so at least do it for a BEACON period.*/
 	if (TbttNumToNextWakeUp == 0)
 		TbttNumToNextWakeUp = 1;
 
+
 	RTMPSetTimer(&pAd->Mlme.AutoWakeupTimer, AUTO_WAKEUP_TIMEOUT);
 	pAd->Mlme.AutoWakeupTimerRunning = TRUE;
 
-	AsicSendCommandToMcu(pAd, 0x30, 0xff, 0xff, 0x02, FALSE);   /* send POWER-SAVE command to MCU. Timeout 40us.*/
-
-	/* cancel bulk-in IRPs prevent blocking CPU enter C3.*/
-	if((pAd->PendingRx > 0) && (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
 	{
-		RTUSBCancelPendingBulkInIRP(pAd);
-		/* resend bulk-in IRPs to receive beacons after a period of (pAd->CommonCfg.BeaconPeriod - 40) ms*/
-		pAd->PendingRx = 0;
+		ASIC_RADIO_OFF(pAd, DOT11_RADIO_OFF);
 	}
-
+	else
+#endif /* MT7601 */
+	{
+		AsicSendCommandToMcu(pAd, 0x30, 0xff, 0xff, 0x02, FALSE);   /* send POWER-SAVE command to MCU. Timeout 40us.*/
+		/* cancel bulk-in IRPs prevent blocking CPU enter C3.*/
+		if((pAd->PendingRx > 0) && (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
+		{
+			RTUSBCancelPendingBulkInIRP(pAd);
+			/* resend bulk-in IRPs to receive beacons after a period of (pAd->CommonCfg.BeaconPeriod - 40) ms*/
+			pAd->PendingRx = 0;
+		}
+	}
 
 	OPSTATUS_SET_FLAG(pAd, fOP_STATUS_DOZE);
 

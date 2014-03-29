@@ -165,11 +165,15 @@
 /*
 	RTMP_ADAPTER flags
 */
+#ifdef CONFIG_MULTI_CHANNEL
+#define fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET  0x00000001
+#else
 #define fRTMP_ADAPTER_MAP_REGISTER           0x00000001
+#endif /*CONFIG_MULTI_CHANNEL*/
 #define fRTMP_ADAPTER_INTERRUPT_IN_USE       0x00000002
-#define fRTMP_HW_ERR						 0x00000004
-#define fRTMP_SG							 0x00000008	/* Scatter and Gather */
-#define fRTMP_PKT_TX_ERR					 0x00000010
+#define fRTMP_HW_ERR				0x00000004
+#define fRTMP_SG					0x00000008	/* Scatter and Gather */
+#define fRTMP_PKT_TX_ERR			0x00000010
 #define fRTMP_ADAPTER_MLME_RESET_IN_PROGRESS 0x00000020
 #define fRTMP_ADAPTER_HALT_IN_PROGRESS       0x00000040
 #define fRTMP_ADAPTER_RESET_IN_PROGRESS      0x00000080
@@ -185,14 +189,14 @@
 #define	fRTMP_ADAPTER_RADIO_OFF				 0x00020000
 #define fRTMP_ADAPTER_BULKOUT_RESET			 0x00040000
 #define	fRTMP_ADAPTER_BULKIN_RESET			 0x00080000
-#define fRTMP_ADAPTER_RDG_ACTIVE			 0x00100000
+#define fRTMP_ADAPTER_RDG_ACTIVE				0x00100000
 #define fRTMP_ADAPTER_DYNAMIC_BE_TXOP_ACTIVE 0x00200000
 #define fRTMP_ADAPTER_RALINK_BURST_MODE		 0x00400000
-#define fRTMP_ADAPTER_DISABLE_DEQUEUEPACKET  0x00800000
+#define fRTMP_ADAPTER_SUSPEND 				 0x00800000
 #define fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD	 0x01000000
 #define fRTMP_ADAPTER_CMD_RADIO_OFF			 0x02000000
-#define fRTMP_ADAPTER_SCAN_2040				 0x04000000
-#define	fRTMP_ADAPTER_RADIO_MEASUREMENT		 0x08000000
+#define fRTMP_ADAPTER_SCAN_2040				0x04000000
+#define	fRTMP_ADAPTER_RADIO_MEASUREMENT	0x08000000
 
 #define fRTMP_ADAPTER_START_UP         		 0x10000000	/*Devive already initialized and enabled Tx/Rx. */
 #define fRTMP_ADAPTER_MEDIA_STATE_CHANGE     0x20000000
@@ -202,7 +206,6 @@
 enum ASIC_CAP{
 	fASIC_CAP_CSO = 0x1,
 	fASIC_CAP_TSO = 0x2,
-	fASIC_CAP_MCS_LUT = 0x4,
 
 	fASIC_CAP_PMF_ENC = 0x10,
 };
@@ -246,12 +249,6 @@ enum WIFI_MODE{
 #define WMODE_HT_ONLY(_x)		(((_x) & (~(WMODE_GN | WMODE_AN | WMODE_AC))) == 0)
 #define WMODE_VHT_ONLY(_x)		(((_x) & (~(WMODE_AC))) == 0)
 
-//#ifdef CONFIG_PM
-//#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
-#define fRTMP_ADAPTER_SUSPEND 0x00800000
-//#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-//#endif /* CONFIG_PM */
-
 
 /*
 	STA operation status flags
@@ -290,8 +287,8 @@ enum WIFI_MODE{
 /* This flag is used ONLY in RTMPHandleRxDoneInterrupt routine. */
 #define fRTMP_PS_GO_TO_SLEEP_NOW         0x00000008
 #define fRTMP_PS_TOGGLE_L1		0x00000010	/* Use Toggle L1 mechanism for rt28xx PCIe */
+#define fRTMP_PS_MCU_SLEEP				 0x00800000
 
-#define fRTMP_PS_MCU_SLEEP		0x00000020
 
 #define WAKE_MCU_CMD				0x31
 #define SLEEP_MCU_CMD				0x30
@@ -300,7 +297,6 @@ enum WIFI_MODE{
 #ifdef DOT11N_DRAFT3
 #define fOP_STATUS_SCAN_2040               	    0x00040000
 #endif /* DOT11N_DRAFT3 */
-
 
 #define CCKSETPROTECT		0x1
 #define OFDMSETPROTECT		0x2
@@ -527,9 +523,7 @@ enum WIFI_MODE{
 #define BSS5Mcast_WCID	0xfc
 #define BSS6Mcast_WCID	0xfd
 #define BSS7Mcast_WCID	0xfe
-#define RESERVED_WCID	0xff
-#define WCID_ALL		0xff
-
+#define RESERVED_WCID		0xff
 
 #define MAX_NUM_OF_ACL_LIST				MAX_NUMBER_OF_ACL
 
@@ -572,6 +566,10 @@ enum WIFI_MODE{
 #define PWR_SAVE                        1
 #define PWR_MMPS                        2	/*MIMO power save */
 /*#define PWR_UNKNOWN                   2 */
+
+#define PS_LEVEL_NONE		0
+#define PS_LEVEL_NORMAL	1
+#define PS_LEVEL_MAX		2
 
 /* Auth and Assoc mode related definitions */
 #define AUTH_MODE_OPEN                  0x00
@@ -1057,6 +1055,17 @@ enum WIFI_MODE{
 /*
 	AP's SYNC state machine: states, events, total function #
 */
+#ifdef CONFIG_MULTI_CHANNEL
+#define AP_SYNC_IDLE                    0
+#ifdef AP_SCAN_SUPPORT
+#define AP_SCAN_LISTEN					1
+#define AP_SCAN_PENDING               2
+#define AP_MAX_SYNC_STATE               3
+#else
+#define AP_SCAN_PENDING               1
+#define AP_MAX_SYNC_STATE               2
+#endif
+#else
 #define AP_SYNC_IDLE                    0
 #ifdef AP_SCAN_SUPPORT
 #define AP_SCAN_LISTEN					1
@@ -1064,6 +1073,7 @@ enum WIFI_MODE{
 #else
 #define AP_MAX_SYNC_STATE               1
 #endif
+#endif /*CONFIG_MULTI_CHANNEL*/
 
 #define AP_SYNC_MACHINE_BASE		0
 #define APMT2_PEER_PROBE_REQ		0
@@ -1147,9 +1157,7 @@ enum WIFI_MODE{
 #define APCLI_CTRL_JOIN_REQ_TIMEOUT       7
 #define APCLI_CTRL_AUTH_REQ_TIMEOUT       8
 #define APCLI_CTRL_ASSOC_REQ_TIMEOUT      9
-#define APCLI_CTRL_MT2_AUTH_REQ			  10
-#define APCLI_CTRL_MT2_ASSOC_REQ		  11
-#define APCLI_MAX_CTRL_MSG                12
+#define APCLI_MAX_CTRL_MSG                10
 
 #define APCLI_CTRL_FUNC_SIZE              (APCLI_MAX_CTRL_STATE * APCLI_MAX_CTRL_MSG)
 
@@ -1270,30 +1278,6 @@ enum WIFI_MODE{
 #define MCS_23		23
 #define MCS_32		32
 #define MCS_AUTO		33
-
-#ifdef DOT11_VHT_AC
-#define MCS_VHT_1SS_MCS0	0
-#define MCS_VHT_1SS_MCS1	1
-#define MCS_VHT_1SS_MCS2	2
-#define MCS_VHT_1SS_MCS3	3
-#define MCS_VHT_1SS_MCS4	4
-#define MCS_VHT_1SS_MCS5	5
-#define MCS_VHT_1SS_MCS6	6
-#define MCS_VHT_1SS_MCS7	7
-#define MCS_VHT_1SS_MCS8	8
-#define MCS_VHT_1SS_MCS9	9
-
-#define MCS_VHT_2SS_MCS0	10
-#define MCS_VHT_2SS_MCS1	11
-#define MCS_VHT_2SS_MCS2	12
-#define MCS_VHT_2SS_MCS3	13
-#define MCS_VHT_2SS_MCS4	14
-#define MCS_VHT_2SS_MCS5	15
-#define MCS_VHT_2SS_MCS6	16
-#define MCS_VHT_2SS_MCS7	17
-#define MCS_VHT_2SS_MCS8	18
-#define MCS_VHT_2SS_MCS9	19
-#endif /* DOT11_VHT_AC */
 
 #ifdef DOT11_N_SUPPORT
 /* OID_HTPHYMODE */
@@ -1510,7 +1494,7 @@ enum WIFI_MODE{
 #define DEFAULT_RF_TX_POWER         5
 #define DEFAULT_BBP_TX_FINE_POWER_CTRL 0
 
-#define MAX_INI_BUFFER_SIZE		10000
+#define MAX_INI_BUFFER_SIZE		4096
 #define MAX_PARAM_BUFFER_SIZE		(2048)	/* enough for ACL (18*64) */
 											/*18 : the length of Mac address acceptable format "01:02:03:04:05:06;") */
 											/*64 : MAX_NUM_OF_ACL_LIST */
@@ -1613,40 +1597,17 @@ enum WIFI_MODE{
 #define IS_OPMODE_AP(_x)		((_x)->OpMode == OPMODE_AP)
 #define IS_OPMODE_STA(_x)		((_x)->OpMode == OPMODE_STA)
 
-#define CONFIG_RT_FIRST_CARD 7610
-#define CONFIG_RT_SECOND_CARD 7610
-
 #ifdef ANDROID_SUPPORT
 #define INF_MAIN_DEV_NAME		"wlan"
 #define INF_MBSSID_DEV_NAME		"wlan"
 #else
-#if CONFIG_RT_FIRST_CARD == 7610
 #define INF_MAIN_DEV_NAME		"ra"
 #define INF_MBSSID_DEV_NAME		"ra"
-#elif CONFIG_RT_SECOND_CARD == 7610
-#define INF_MAIN_DEV_NAME		"rai"
-#define INF_MBSSID_DEV_NAME		"rai"
-#else
-#define INF_MAIN_DEV_NAME		"ra"
-#define INF_MBSSID_DEV_NAME		"ra"
-#endif
 #endif /* ANDROID_SUPPORT */
-#if CONFIG_RT_FIRST_CARD == 7610
 #define INF_WDS_DEV_NAME		"wds"
 #define INF_APCLI_DEV_NAME		"apcli"
 #define INF_MESH_DEV_NAME		"mesh"
 #define INF_P2P_DEV_NAME		"p2p"
-#elif CONFIG_RT_SECOND_CARD == 7610
-#define INF_WDS_DEV_NAME		"wdsi"
-#define INF_APCLI_DEV_NAME		"apclii"
-#define INF_MESH_DEV_NAME		"meshi"
-#define INF_P2P_DEV_NAME		"p2pi"
-#else
-#define INF_WDS_DEV_NAME		"wds"
-#define INF_APCLI_DEV_NAME		"apcli"
-#define INF_MESH_DEV_NAME		"mesh"
-#define INF_P2P_DEV_NAME		"p2p"
-#endif
 
 /* WEP Key TYPE */
 #define WEP_HEXADECIMAL_TYPE    0
@@ -1768,6 +1729,13 @@ enum WIFI_MODE{
 #define	WPA_SUPPLICANT_ENABLE_WITH_WEB_UI	0x02
 #define	WPA_SUPPLICANT_ENABLE_WPS			0x80
 
+#ifdef MICROWAVE_OVEN_SUPPORT
+/* definition for mitigating microwave interference */
+#define MO_FALSE_CCA_TH	50
+#define MO_MEAS_PERIOD	0	/* 0 ~ 100 ms */
+#define MO_IDLE_PERIOD	1	/* 100 ~ 1000 ms */
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
 /* definition for Antenna Diversity flag */
 typedef enum {
 	ANT_DIVERSITY_DISABLE,
@@ -1790,7 +1758,32 @@ enum {
 	SUSPEND_RADIO_OFF,
 	MLME_RADIO_ON,
 	MLME_RADIO_OFF,
+	DOT11_RADIO_ON,
+	DOT11_RADIO_OFF,
 };
+
+#ifdef CONFIG_MULTI_CHANNEL
+
+enum {
+	EDCA_AC0_DEQUEUE_DISABLE = (1 << 0),
+	EDCA_AC1_DEQUEUE_DISABLE = (1 << 1),
+	EDCA_AC2_DEQUEUE_DISABLE = (1 << 2),
+	EDCA_AC3_DEQUEUE_DISBALE = (1 << 3),
+	HCCA_DEQUEUE_DISABLE = (1 << 4)
+};
+
+enum {
+	HCCA_TO_EDCA,
+	EDCA_TO_HCCA = 0x55
+};
+
+#define MUL_CHANNEL_ENABLE 0x77
+#define HCCA_TIMEOUT	100
+#define EDCA_TIMEOUT	100
+#define	MCC_ACTION		400
+
+#endif /* CONFIG_MULTI_CHANNEL */
+
 
 /* Advertismenet Protocol ID definitions */
 enum DOT11U_ADVERTISMENT_PROTOCOL_ID {

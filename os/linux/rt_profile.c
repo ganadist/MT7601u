@@ -27,10 +27,7 @@
 
 #include "rt_config.h"
 
-#if defined (CONFIG_RA_HW_NAT)  || defined (CONFIG_RA_HW_NAT_MODULE)
-#include "../../../../../../net/nat/hw_nat/ra_nat.h"
-#include "../../../../../../net/nat/hw_nat/frame_engine.h"
-#endif
+
 
 #ifdef SYSTEM_LOG_SUPPORT
 /* for wireless system event message */
@@ -360,55 +357,14 @@ void announce_802_3_packet(
 	}	  	
 #endif /* INF_PPA_SUPPORT */
 
-	{
-#ifdef CONFIG_RT2880_BRIDGING_ONLY
-		PACKET_CB_ASSIGN(pRxPkt, 22) = 0xa8;
-#endif
 
-#if defined(CONFIG_RA_CLASSIFIER)||defined(CONFIG_RA_CLASSIFIER_MODULE)
-		if(ra_classifier_hook_rx!= NULL)
-		{
-			unsigned int flags;
-			
-			RTMP_IRQ_LOCK(&pAd->page_lock, flags);
-			ra_classifier_hook_rx(pRxPkt, classifier_cur_cycle);
-			RTMP_IRQ_UNLOCK(&pAd->page_lock, flags);
-		}
-#endif /* CONFIG_RA_CLASSIFIER */
-
-#if !defined(CONFIG_RA_NAT_NONE)
-#if defined (CONFIG_RA_HW_NAT)  || defined (CONFIG_RA_HW_NAT_MODULE)
-		RtmpOsPktNatMagicTag(pRxPkt);
-#endif
-
-#ifdef RA_NAT_SUPPORT
-		/* bruce+
-		  * ra_sw_nat_hook_rx return 1 --> continue
-		  * ra_sw_nat_hook_rx return 0 --> FWD & without netif_rx
-		 */
-		if (ra_sw_nat_hook_rx!= NULL)
-		{
-			unsigned int flags;
-			
-			RtmpOsPktProtocolAssign(pRxPkt);
-
-			RTMP_IRQ_LOCK(&pAd->page_lock, flags);
-			if(ra_sw_nat_hook_rx(pRxPkt)) 
-			{
-				RtmpOsPktRcvHandle(pRxPkt);
-			}
-			RTMP_IRQ_UNLOCK(&pAd->page_lock, flags);
-		}
-#endif /* RA_NAT_SUPPORT */
-#else
-		{
-#if defined (CONFIG_RA_HW_NAT)  || defined (CONFIG_RA_HW_NAT_MODULE)
-			RtmpOsPktNatNone(pRxPkt);
-#endif /* CONFIG_RA_HW_NAT */
-		}
-#endif /* CONFIG_RA_NAT_NONE */
-	}
 	
+
+//+++Add by shiang for debug
+if (0) {
+		hex_dump("announce_802_3_packet", GET_OS_PKT_DATAPTR(pRxPkt), GET_OS_PKT_LEN(pRxPkt));
+}
+//---Add by shiang for debug
 
 		RtmpOsPktProtocolAssign(pRxPkt);
 		RtmpOsPktRcvHandle(pRxPkt);
@@ -445,10 +401,15 @@ void STA_MonPktSend(
     }
 
 	/* init */
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+		MaxRssi = ConvertToRssi(pAd, pRxBlk->pRxWI->RxWISNR2, RSSI_0, pRxBlk->pRxWI->RxWISNR1, pRxBlk->pRxWI->RxWIBW);
+	else
+#endif /* MT7601 */
 	MaxRssi = RTMPMaxRssi(pAd,
-						ConvertToRssi(pAd, pRxBlk->pRxWI->RxWIRSSI0, RSSI_0),
-						ConvertToRssi(pAd, pRxBlk->pRxWI->RxWIRSSI1, RSSI_1),
-						ConvertToRssi(pAd, pRxBlk->pRxWI->RxWIRSSI2, RSSI_2));
+						ConvertToRssi(pAd, pRxBlk->pRxWI->RxWIRSSI0, RSSI_0, 0, 0),
+						ConvertToRssi(pAd, pRxBlk->pRxWI->RxWIRSSI1, RSSI_1, 0, 0),
+						ConvertToRssi(pAd, pRxBlk->pRxWI->RxWIRSSI2, RSSI_2, 0, 0));
 
 	pNetDev = get_netdev_from_bssid(pAd, BSS0); 
 	pRxPacket = pRxBlk->pRxPacket;
@@ -502,9 +463,6 @@ VOID	RTMPFreeAdapter(
 
 	NdisFreeSpinLock(&pAd->MgmtRingLock);
 	
-
-#if defined(RT3290) || defined(RT65xx)
-#endif /* defined(RT3290) || defined(RT65xx) */
 
 	for (index =0 ; index < NUM_OF_TX_RING; index++)
 	{
@@ -652,7 +610,7 @@ PNET_DEV get_netdev_from_bssid(
 
 
 
-#ifdef WDS_SUPPORT
+//#ifdef WDS_SUPPORT
 VOID AP_WDS_KeyNameMakeUp(
 	IN	STRING						*pKey,
 	IN	UINT32						KeyMaxSize,
@@ -660,5 +618,5 @@ VOID AP_WDS_KeyNameMakeUp(
 {
 	snprintf(pKey, KeyMaxSize, "Wds%dKey", KeyId);
 }
-#endif /* WDS_SUPPORT */
+//#endif /* WDS_SUPPORT */
 

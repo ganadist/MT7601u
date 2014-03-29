@@ -28,6 +28,17 @@
 #ifndef __RAL_NMAC_H__
 #define __RAL_NMAC_H__
 
+
+#include "rtmp_type.h"
+
+#ifdef MT7601
+#include "mac_ral/omac/ral_omac_rxwi.h"
+#else
+#include "mac_ral/nmac/ral_nmac_rxwi.h"
+#endif /* MT7601 */
+
+#include "mac_ral/nmac/ral_nmac_txwi.h"
+
 enum INFO_TYPE {
 	NORMAL_PACKET,
 	CMD_PACKET,
@@ -42,8 +53,6 @@ enum D_PORT {
 	VIRTUAL_CPU_TX_PORT,
 	DISCARD,
 };
-
-#include "rtmp_type.h"
 
 #ifdef RT_BIG_ENDIAN
 typedef struct GNU_PACKED _TXINFO_NMAC_PKT{
@@ -83,7 +92,10 @@ typedef struct GNU_PACKED _TXINFO_NMAC_PKT {
 #define TxInfoSwLstRnd		txinfo_nmac_pkt.rsv0
 #define TxInfoUDMATxburst	txinfo_nmac_pkt.tx_burst
 #define TxInfoUDMANextVld	txinfo_nmac_pkt.next_vld
-#define TxInfoPkt80211		txinfo_nmac_pkt.pkt_80211
+#define TxInfoPKT_80211	txinfo_nmac_pkt.pkt_80211
+#define TxInfoCSO			txinfo_nmac_pkt.cso
+#define TxInfoTSO			txinfo_nmac_pkt.tso
+
 
 #ifdef RT_BIG_ENDIAN
 typedef struct GNU_PACKED _TXINFO_NMAC_CMD{
@@ -109,6 +121,7 @@ typedef union GNU_PACKED _TXINFO_NMAC{
 	struct _TXINFO_NMAC_CMD txinfo_cmd;
 }TXINFO_NMAC;
 
+#ifdef LED_CONTROL_SUPPORT
 #ifdef RT_BIG_ENDIAN
 typedef struct GNU_PACKED _LED_NMAC_CMD{
 	UINT32  rsv:8;
@@ -124,130 +137,7 @@ typedef struct GNU_PACKED _LED_NMAC_CMD{
 	UINT32 rsv:8;	
 }LED_NMAC_CMD;
 #endif /* RT_BIG_ENDIAN */
-
-#ifdef RT_BIG_ENDIAN
-typedef struct GNU_PACKED _TXWI_NMAC {
-	/* Word 0 */
-	UINT32		PHYMODE:3;
-	UINT32		iTxBF:1;
-	UINT32		eTxBF:1;
-	UINT32		STBC:1;
-	UINT32		ShortGI:1;
-	UINT32		BW:2;			/* channel bandwidth 20/40/80 MHz */
-	UINT32		LDPC:1
-	UINT32		MCS:6;
-	
-	UINT32		lut_en:1;
-	UINT32		rsv0:1;
-	UINT32		Sounding:1;
-	UINT32		NDPSndBW:1;	/* NDP sounding BW */
-	UINT32		NDPSndRate:2;	/* 0 : MCS0, 1: MCS8, 2: MCS16, 3: reserved */
-	UINT32		txop:2;
-
-	UINT32		MpduDensity:3;
-	UINT32		AMPDU:1;
-	UINT32		TS:1;
-	UINT32		CFACK:1;
-	UINT32		MIMOps:1;	/* the remote peer is in dynamic MIMO-PS mode */
-	UINT32		FRAG:1;		/* 1 to inform TKIP engine this is a fragment. */
-	
-	/* Word 1 */
-	UINT32		TIM:1;
-	UINT32		TXBF_PT_SCA:1;
-	UINT32		MPDUtotalByteCnt:14;
-	UINT32		wcid:8;
-	UINT32		BAWinSize:6;
-	UINT32		NSEQ:1;
-	UINT32		ACK:1;
-
-	/* Word 2 */
-	UINT32		IV;
-	/* Word 3 */
-	UINT32		EIV;
-
-	/* Word 4 */
-	UINT32		TxPktId:8;
-	UINT32		Rsv4:4;
-	UINT32		TxPwrAdj:4;
-	UINT32		TxStreamMode:8;
-	UINT32		TxEAPId:8;
-}	TXWI_NMAC, *PTXWI_NMAC;
-#else
-typedef	struct GNU_PACKED _TXWI_NMAC {
-	/* Word	0 */
-	/* ex: 00 03 00 40 means txop = 3, PHYMODE = 1 */
-	UINT32		FRAG:1;		/* 1 to inform TKIP engine this is a fragment. */
-	UINT32		MIMOps:1;	/* the remote peer is in dynamic MIMO-PS mode */
-	UINT32		CFACK:1;
-	UINT32		TS:1;
-	UINT32		AMPDU:1;
-	UINT32		MpduDensity:3;
-
-	UINT32		txop:2;
-	UINT32		NDPSndRate:2; /* 0 : MCS0, 1: MCS8, 2: MCS16, 3: reserved */
-	UINT32		NDPSndBW:1; /* NDP sounding BW */
-	UINT32		Sounding:1;
-	UINT32		rsv0:1;
-	UINT32		lut_en:1;
-	
-	UINT32		MCS:6;
-	UINT32		LDPC:1;
-	UINT32		BW:2;		/*channel bandwidth 20/40/80 MHz */
-	UINT32		ShortGI:1;
-	UINT32		STBC:1;
-	UINT32		eTxBF:1;
-	UINT32		iTxBF:1;
-	UINT32		PHYMODE:3;  
-
-	/* Word1 */
-	/* ex:  1c ff 38 00 means ACK=0, BAWinSize=7, MPDUtotalByteCnt = 0x38 */
-	UINT32		ACK:1;
-	UINT32		NSEQ:1;
-	UINT32		BAWinSize:6;
-	UINT32		wcid:8;
-	UINT32		MPDUtotalByteCnt:14;
-	UINT32		TXBF_PT_SCA:1;
-	UINT32		TIM:1;
-	
-	/*Word2 */
-	UINT32		IV;
-	
-	/*Word3 */
-	UINT32		EIV;
-
-	/* Word 4 */
-	UINT32		TxEAPId:8;
-	UINT32		TxStreamMode:8;
-	UINT32		TxPwrAdj:4;
-	UINT32		Rsv4:4;	
-	UINT32		TxPktId:8;
-}	TXWI_NMAC, *PTXWI_NMAC;
-#endif
-
-#define TxWITIM				TXWI_N.TIM
-#define TxWITxBfPTSca		TXWI_N.TXBF_PT_SCA
-#define TxWIMPDUByteCnt	TXWI_N.MPDUtotalByteCnt
-#define TxWIWirelessCliID		TXWI_N.wcid
-#define TxWIFRAG			TXWI_N.FRAG
-#define TxWICFACK			TXWI_N.CFACK
-#define TxWITS				TXWI_N.TS
-#define TxWIAMPDU			TXWI_N.AMPDU
-#define TxWIACK				TXWI_N.ACK
-#define TxWITXOP			TXWI_N.txop
-#define TxWINSEQ			TXWI_N.NSEQ
-#define TxWIBAWinSize		TXWI_N.BAWinSize
-#define TxWIShortGI			TXWI_N.ShortGI
-#define TxWISTBC			TXWI_N.STBC
-#define TxWIPacketId			TXWI_N.TxPktId
-#define TxWIBW				TXWI_N.BW
-#define TxWILDPC			TXWI_N.LDPC
-#define TxWIMCS				TXWI_N.MCS
-#define TxWIPHYMODE		TXWI_N.PHYMODE
-#define TxWIMIMOps			TXWI_N.MIMOps
-#define TxWIMpduDensity		TXWI_N.MpduDensity
-#define TxWILutEn			TXWI_N.lut_en
-
-
+#endif /*LED_CONTROL_SUPPORT*/
 /*
 	Rx Memory layout:
 
@@ -325,14 +215,9 @@ typedef struct GNU_PACKED _RXFCE_INFO_CMD{
 typedef struct GNU_PACKED _RXINFO_NMAC{
 	UINT32 ic_err:1;
 	UINT32 tc_err:1;
-	UINT32 rsv:1;
-	UINT32 action_wanted:1;
-	UINT32 deauth:1;
-	UINT32 disasso:1;
-	UINT32 beacon:1;
-	UINT32 probe_rsp:1;
-	UINT32 sw_fc_type1:1;
-	UINT32 sw_fc_type0:1;
+	UINT32 ichk_bps:1;
+	UINT32 tchk_bps:1;
+	UINT32 rsv0:6;
 	UINT32 pn_len:3;
 	UINT32 wapi_kid:1;
 	UINT32 bssid_idx3:1;
@@ -376,124 +261,13 @@ typedef struct GNU_PACKED _RXINFO_NMAC{
 	UINT32 bssid_idx3:1;
 	UINT32 wapi_kid:1;
 	UINT32 pn_len:3;
-	UINT32 sw_fc_type0:1;
-	UINT32 sw_fc_type1:1;
-	UINT32 probe_rsp:1;
-	UINT32 beacon:1;
-	UINT32 disasso:1;
-	UINT32 deauth:1;
-	UINT32 action_wanted:1;
-	UINT32 rsv:1;
+	UINT32 rsv0:6;
+	UINT32 tchk_bps:1;
+	UINT32 ichk_bps:1;
 	UINT32 tc_err:1;
 	UINT32 ic_err:1;
 }RXINFO_NMAC;
 #endif /* RT_BIG_ENDIAN */
-
-
-/*
-	RXWI wireless information format.
-*/
-#ifdef RT_BIG_ENDIAN
-typedef	struct GNU_PACKED _RXWI_NMAC{
-	/* Word 0 */
-	UINT32 eof:1;
-	UINT32 rsv:1;
-	UINT32 MPDUtotalByteCnt:14;  /* mpdu_total_byte = rxfceinfo_len - rxwi_len- rxinfo_len - l2pad */
-	UINT32 udf:3;
-	UINT32 bss_idx:3;
-	UINT32 key_idx:2;
-	UINT32 wcid:8;
-
-	/* Word 1 */
-	UINT32 phy_mode:3;
-	UINT32 rsv1:1;
-	UINT32 ldpc_ex_sym:1;
-	UINT32 stbc:1;
-	UINT32 sgi:1;
-	UINT32 bw:2;
-	UINT32 ldpc:1;
-	UINT32 mcs:6;
-	UINT32 sn:12;
-	UINT32 tid:4;
-
-	/* Word 2 */
-	UINT8 rssi[4];
-
-	/* Word 3~6 */
-	UINT8 bbp_rxinfo[16];
-}	RXWI_NMAC;
-#else
-typedef	struct GNU_PACKED _RXWI_NMAC {
-	/* Word 0 */
-	UINT32 wcid:8;
-	UINT32 key_idx:2;
-	UINT32 bss_idx:3;
-	UINT32 udf:3;
-	UINT32 MPDUtotalByteCnt:14; /* mpdu_total_byte = rxfceinfo_len - rxwi_len- rxinfo_len - l2pad */
-	UINT32 rsv:1;
-	UINT32 eof:1;
-
-	/* Word 1 */
-	UINT32 tid:4;
-	UINT32 sn:12;
-	UINT32 mcs:6;
-	UINT32 ldpc:1;
-	UINT32 bw:2;
-	UINT32 sgi:1;
-	UINT32 stbc:1;
-	UINT32 ldpc_ex_sym:1;
-	UINT32 rsv1:1;
-	UINT32 phy_mode:3;
-
-	/* Word 2 */
-	UINT8 rssi[4];
-
-	/* Word 3~6 */
-	UINT8 bbp_rxinfo[16];
-}	RXWI_NMAC;
-#endif /* RT_BIG_ENDIAN */
-
-
-#define RxWIMPDUByteCnt	RXWI_N.MPDUtotalByteCnt
-#define RxWIWirelessCliID		RXWI_N.wcid
-#define RxWIKeyIndex		RXWI_N.key_idx
-#define RxWIMCS				RXWI_N.mcs
-#define RxWILDPC			RXWI_N.ldpc
-#define RxWIBW				RXWI_N.bw
-#define RxWIBSSID			RXWI_N.bss_idx
-#define RxWISGI				RXWI_N.sgi
-#define RxWIPhyMode		RXWI_N.phy_mode
-#define RxWISTBC			RXWI_N.stbc
-#define RxWITID				RXWI_N.tid
-#define RxWIRSSI0			RXWI_N.rssi[0]
-#define RxWIRSSI1			RXWI_N.rssi[1]
-#define RxWIRSSI2			RXWI_N.rssi[2]
-#define RxWIRSSI3			RXWI_N.rssi[3]
-#define RxWISNR0			RXWI_N.bbp_rxinfo[0]
-#define RxWISNR1			RXWI_N.bbp_rxinfo[1]
-#define RxWISNR2			RXWI_N.bbp_rxinfo[2]
-#define RxWIFOFFSET			RXWI_N.bbp_rxinfo[3]
-
-
-typedef struct GNU_PACKED _HW_RATE_CTRL_STRUCT_{
-#ifdef RT_BIG_ENDIAN
-	UINT16 PHYMODE:3;
-	UINT16 iTxBF:1;
-	UINT16 eTxBF:1;
-	UINT16 STBC:1;
-	UINT16 ShortGI:1;
-	UINT16 BW:2;			/* channel bandwidth 20/40/80 MHz */
-	UINT16 MCS:7;
-#else
-	UINT16 MCS:7;
-	UINT16 BW:2;
-	UINT16 ShortGI:1;
-	UINT16 STBC:1;
-	UINT16 eTxBF:1;
-	UINT16 iTxBF:1;
-	UINT16 PHYMODE:3;  
-#endif /* RT_BIG_ENDIAN */
-}HW_RATE_CTRL_STRUCT;
 
 
 /* ================================================================================= */
@@ -671,10 +445,38 @@ typedef union _TSO_CTRL_STRUC {
 #endif /* RT_BIG_ENDIAN */
 
 
+#define TX_FBK_LIMIT	0x1398
+#ifdef RT_BIG_ENDIAN
+typedef union _TX_FBK_LIMIT_STRUC {
+	struct {
+		UINT32 rsv:13;
+		UINT32 TX_RATE_LUT_EN:1;
+		UINT32 TX_AMPDU_UP_CLEAR:1;
+		UINT32 TX_MPDU_UP_CLEAR:1;
+		UINT32 TX_AMPDU_FBK_LIMIT:8;
+		UINT32 TX_MPDU_FBK_LIMIT:8;
+	} field;
+	UINT32 word;
+} TX_FBK_LIMIT_STRUC;
+#else
+typedef union _TX_FBK_LIMIT_STRUC {
+	struct {
+		UINT32 TX_MPDU_FBK_LIMIT:8;
+		UINT32 TX_AMPDU_FBK_LIMIT:8;
+		UINT32 TX_MPDU_UP_CLEAR:1;
+		UINT32 TX_AMPDU_UP_CLEAR:1;
+		UINT32 TX_RATE_LUT_EN:1;
+		UINT32 rsv:13;
+	} field;
+	UINT32 word;
+} TX_FBK_LIMIT_STRUC;
+#endif /* RT_BIG_ENDIAN */
+
 #define TX_PROT_CFG6    0x13E0    // VHT 20 Protection
 #define TX_PROT_CFG7    0x13E4    // VHT 40 Protection
 #define TX_PROT_CFG8    0x13E8    // VHT 80 Protection
 #define PIFS_TX_CFG     0x13EC    // PIFS setting
+
 
 //----------------------------------------------------------------
 // Header Translation 
@@ -685,11 +487,7 @@ typedef union _TSO_CTRL_STRUC {
 	|TXINO|TXWI|WIFI INFO|802.3 MAC Header|Pyaload| 
 */
 
-#ifdef HDR_TRANS_SUPPORT
 #define WIFI_INFO_SIZE		4
-#else
-#define WIFI_INFO_SIZE		0
-#endif
 #ifdef RT_BIG_ENDIAN
 typedef union GNU_PACKED _WIFI_INFO_STRUC {
 	struct {
@@ -765,7 +563,7 @@ typedef union GNU_PACKED _HDR_TRANS_CTRL_STRUC {
 /* RX header translation enable by WCID */ 
 #define HT_RX_WCID_EN_BASE	0x0264
 #define HT_RX_WCID_OFFSET	32
-#ifdef RT63xx
+#if defined(MT7601)
 #define HT_RX_WCID_SIZE		(HT_RX_WCID_OFFSET * 4)	/* 128 WCIDs */
 #elif defined(RT65xx)
 #define HT_RX_WCID_SIZE		(HT_RX_WCID_OFFSET * 8)	/*	256 WCIDs */
@@ -906,7 +704,6 @@ typedef union GNU_PACKED _HT_BSS_VLAN_STRUC {
 #define PBF_MAX_PCNT	0x0408 //actually, it's the TX_MAX_PCNT
 // TODO:shiang-6590 --------------------------
 
-
 #define PAIRWISE_KEY_TABLE_BASE     0x8000      /* 32-byte * 256-entry =  -byte */
 #define HW_KEY_ENTRY_SIZE           0x20
 
@@ -919,9 +716,6 @@ typedef union GNU_PACKED _HT_BSS_VLAN_STRUC {
 
 #define SHARED_KEY_TABLE_BASE       0xac00      /* 32-byte * 16-entry = 512-byte */
 #define SHARED_KEY_MODE_BASE       0xb000      /* 32-byte * 16-entry = 512-byte */
-
-#define SHARED_KEY_TABLE_BASE_EXT      0xb400      /* for BSS_IDX=8~15, 32-byte * 16-entry = 512-byte */
-#define SHARED_KEY_MODE_BASE_EXT       0xb3f0      /* for BSS_IDX=8~15, 32-byte * 16-entry = 512-byte */
 
 #define HW_SHARED_KEY_MODE_SIZE   4
 #define SHAREDKEYTABLE			0
@@ -960,6 +754,13 @@ VOID ral_wlan_chip_onoff(
 	IN BOOLEAN bOn,
 	IN BOOLEAN bResetWLAN);
 
+#ifdef MT7601
+VOID MT7601_WLAN_ChipOnOff(
+	IN struct _RTMP_ADAPTER *pAd,
+	IN BOOLEAN bOn,
+	IN BOOLEAN bResetWLAN);
+#endif /* MT7601 */
+
 #define AUX_CLK_CFG		0x120C
 #define BB_PA_MODE_CFG0	0x1214
 #define BB_PA_MODE_CFG1	0x1218
@@ -973,8 +774,8 @@ VOID ral_wlan_chip_onoff(
 #define TX0_BB_GAIN_ATTEN	0x13C0
 #define TX_ALC_VGA3			0x13C8
 
-#ifdef RT65xx
-#define CPU_CTL				0x0704
+
+#if defined(RT65xx) || defined(MT7601)
 #define RESET_CTL			0x070C
 #define INT_LEVEL			0x0718
 #define COM_REG0			0x0730
@@ -984,30 +785,13 @@ VOID ral_wlan_chip_onoff(
 #define PCIE_REMAP_BASE1	0x0740
 #define PCIE_REMAP_BASE2	0x0744
 #define PCIE_REMAP_BASE3	0x0748
-#define	PCIE_REMAP_BASE4	0x074C
-#define LED_CTRL			0x0770
+#define PCIE_REMAP_BASE4	0x074C
+#define LED_CTRL				0x0770
 #define LED_TX_BLINK_0		0x0774
-#define	LED_TX_BLINK_1		0x0778
+#define LED_TX_BLINK_1		0x0778
 #define LED0_S0				0x077C
 #define LED0_S1				0x0780
 #define SEMAPHORE_00		0x07B0
 #endif /* RT65xx */
-
-#define APCLI_BSSID_IDX			8
-#define MAC_APCLI_BSSID_DW0		0x1090
-#define MAC_APCLI_BSSID_DW1		0x1094
-
-#ifdef MAC_REPEATER_SUPPORT
-#define MAC_ADDR_EXT_EN			0x147C
-#define MAC_ADDR_EXT0_31_0		0x1480
-#define MAC_ADDR_EXT0_47_32		0x1484
-#define MAX_EXT_MAC_ADDR_SIZE	16
-
-#define UNKOWN_APCLI_IDX		0xFF
-
-#define CLIENT_APCLI			0x00
-#define CLIENT_STA				0x01
-#define CLIENT_ETH				0x02
-#endif /* MAC_REPEATER_SUPPORT */
-
 #endif /* __RAL_NMAC_H__ */
+

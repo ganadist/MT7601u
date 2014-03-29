@@ -28,7 +28,8 @@
 #include "rt_config.h"
 
 
-#ifdef RTMP_MAC
+//#ifdef RTMP_MAC
+#if defined(RTMP_MAC) || defined(MT7601)
 
 /* BBP register initialization set*/
 REG_PAIR   BBPRegTable[] = {
@@ -69,6 +70,17 @@ NDIS_STATUS NICInitBBP(RTMP_ADAPTER *pAd)
 	for (Index = 0; Index < NUM_BBP_REG_PARMS; Index++)
 	{
 
+#ifdef MICROWAVE_OVEN_SUPPORT
+#ifdef MT7601
+		if (	BBPRegTable[Index].Register == BBP_R65)
+		{
+			/* Backup BBP_R65 and B5.R6 and B5.R7 */	
+			pAd->CommonCfg.MO_Cfg.Stored_BBP_R65 = BBPRegTable[Index].Value;
+			DBGPRINT(RT_DEBUG_TRACE, ("Stored_BBP_R65=%x @%s \n", pAd->CommonCfg.MO_Cfg.Stored_BBP_R65, __FUNCTION__));
+		}
+#endif /* MT7601 */
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd,
 				BBPRegTable[Index].Register,
 				BBPRegTable[Index].Value);
@@ -99,7 +111,7 @@ NDIS_STATUS NICInitBBP(RTMP_ADAPTER *pAd)
 		3070/71/72,3090,3090A( are included in RT30xx),3572,3390
 	*/
 	if (((pAd->MACVersion & 0xffff) != 0x0101) &&
-		!(IS_RT30xx(pAd)|| IS_RT3572(pAd) || IS_RT5390(pAd) || IS_RT5392(pAd) || IS_RT3290(pAd)))
+		!(IS_RT30xx(pAd)|| IS_RT3572(pAd) || IS_RT5390(pAd) || IS_RT5392(pAd) || IS_RT3290(pAd) || IS_MT7601(pAd)))
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R84, 0x19);
 
 
@@ -111,41 +123,6 @@ NDIS_STATUS NICInitBBP(RTMP_ADAPTER *pAd)
 
 	return NDIS_STATUS_SUCCESS;
 	
-}
-
-
-INT rtmp_bbp_get_temp(struct _RTMP_ADAPTER *pAd, CHAR *temp_val)
-{
-	BBP_R49_STRUC bbp_val;
-
-	bbp_val.byte = 0;
-	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R49, &bbp_val.byte);
-	*temp_val = (CHAR)bbp_val.byte;
-
-	pAd->curr_temp = (bbp_val & 0xff);
-
-	return TRUE;
-}
-
-
-INT rtmp_bbp_tx_comp_init(RTMP_ADAPTER *pAd, INT adc_insel, INT tssi_mode)
-{
-	UCHAR bbp_val, rf_val;
-
-	
-	/* Set BBP_R47 */
-	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R47, &bbp_val);
-	bbp_val &= 0xe7;
-	bbp_val |= ((tssi_mode << 3) & 0x18);
-	bbp_val |= 0x80;
-	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R47, bbp_val);
-
-	/*  Set RF_R27 */
-	RT30xxReadRFRegister(pAd, RF_R27, &rf_val);
-	rf_val &= 0x3f;
-	rf_val |= ((adc_insel << 6) & 0xc0);
-	RT30xxWriteRFRegister(pAd, RF_R27, rf_val);
-	DBGPRINT(RT_DEBUG_TRACE, ("[temp. compensation] Set RF_R27 to 0x%x\n", rf_val));
 }
 
 
@@ -395,7 +372,7 @@ NDIS_STATUS AsicBBPReadWithRxChain(
 
 INT rtmp_bbp_get_agc(struct _RTMP_ADAPTER *pAd, CHAR *agc, RX_CHAIN_IDX idx)
 {
-	return AsicBBPReadWithRxChain(pAd, agc, idx);
+	return AsicBBPReadWithRxChain(pAd, BBP_R66, agc, idx);
 }
 
 
@@ -466,6 +443,166 @@ INT rtmp_bbp_is_ready(struct _RTMP_ADAPTER *pAd)
 #ifdef CFO_TRACK
 #endif /* CFO_TRACK */
 
+
+#ifdef MT7601
+NDIS_STATUS MT7601_BBP_write(
+	IN PRTMP_ADAPTER pAd,
+	IN UCHAR regID,
+	IN UCHAR value)
+{
+	BBP_CSR_CFG_STRUC  BbpCsr = { { 0 } };
+	UINT i = 0;
+	NDIS_STATUS	 ret;
+
+#ifdef MT7601FPGA
+	return;
+#endif /*MT7601FPGA */
+
+
+	if (pAd->WlanFunCtrl.field.WLAN_EN == 0)
+	{
+		DBGPRINT_ERR(("rlt_rf_write. Not allow to write BBP 0x%x : fail\n",  regID));	
+		return STATUS_UNSUCCESSFUL;
+	}
+
+#ifdef RTMP_MAC_USB
+	if (IS_USB_INF(pAd)) {
+		RTMP_SEM_EVENT_WAIT(&pAd->reg_atomic, ret);
+		if (ret != 0) {
+			DBGPRINT(RT_DEBUG_ERROR, ("reg_atomic get failed(ret=%d)\n", ret));
+			return STATUS_UNSUCCESSFUL;
+		}
+	}
+#endif /* RTMP_MAC_USB */
+
+	ASSERT((regID <= pAd->chipCap.MaxNumOfBbpId));
+
+	ret = STATUS_UNSUCCESSFUL;
+	do
+	{
+		RTMP_IO_READ32(pAd, BBP_CSR_CFG, &BbpCsr.word);
+
+		if (!BbpCsr.field.Busy)
+			break;
+		i++;
+	}
+	while ((i < MAX_BUSY_COUNT) && (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)));
+
+	if ((i == MAX_BUSY_COUNT) || (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
+	{
+		DBGPRINT_RAW(RT_DEBUG_ERROR, ("Retry count exhausted or device removed!!!\n"));
+		goto done;
+	}
+
+	BbpCsr.word = 0;
+	BbpCsr.field.fRead = 0;
+	BbpCsr.field.BBP_RW_MODE = 1;
+	BbpCsr.field.Busy = 1;
+	BbpCsr.field.Value = value;
+	BbpCsr.field.RegNum = regID;
+
+
+	RTMP_IO_WRITE32(pAd, BBP_CSR_CFG, BbpCsr.word);
+
+	ret = NDIS_STATUS_SUCCESS;
+done:
+
+
+#ifdef RTMP_MAC_USB
+	if (IS_USB_INF(pAd)) {
+		RTMP_SEM_EVENT_UP(&pAd->reg_atomic);
+	}
+#endif /* RTMP_MAC_USB */
+
+	return ret;
+}
+
+
+NDIS_STATUS MT7601_BBP_read(
+	IN RTMP_ADAPTER *pAd,
+	IN UCHAR regID,
+	IN UCHAR *pValue)
+{
+	BBP_CSR_CFG_STRUC  BbpCsr = { { 0 } };
+	UINT i=0, k=0;
+	NDIS_STATUS	 ret = STATUS_UNSUCCESSFUL;
+
+
+	if (pAd->WlanFunCtrl.field.WLAN_EN == 0)
+	{
+		DBGPRINT_ERR(("MT7601_BBP_read. Not allow to read BBP 0x%x : fail\n",  regID));	
+		return STATUS_UNSUCCESSFUL;
+	}
+
+#ifdef RTMP_MAC_USB
+	if (IS_USB_INF(pAd)) {
+		RTMP_SEM_EVENT_WAIT(&pAd->reg_atomic, i);
+		if (i != 0) {
+			DBGPRINT(RT_DEBUG_ERROR, ("reg_atomic get failed(ret=%d)\n", i));
+			return STATUS_UNSUCCESSFUL;
+		}
+	}
+#endif /* RTMP_MAC_USB */
+
+	ASSERT((regID <= pAd->chipCap.MaxNumOfBbpId));
+
+	for (i=0; i<MAX_BUSY_COUNT; i++)
+	{
+		if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
+			goto done;
+			
+		RTMP_IO_READ32(pAd, BBP_CSR_CFG, &BbpCsr.word);
+
+		if (BbpCsr.field.Busy == BUSY)
+				continue;
+		
+		BbpCsr.word = 0;
+		BbpCsr.field.fRead = 1;
+		BbpCsr.field.BBP_RW_MODE = 1;
+		BbpCsr.field.Busy = 1;
+		BbpCsr.field.RegNum = regID;
+
+		
+		RTMP_IO_WRITE32(pAd, BBP_CSR_CFG, BbpCsr.word);
+		
+		for (k=0; k<MAX_BUSY_COUNT; k++)
+		{
+			if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
+				goto done;
+				
+			RTMP_IO_READ32(pAd, BBP_CSR_CFG, &BbpCsr.word);
+
+			if (BbpCsr.field.Busy == IDLE)
+				break;
+		}
+		
+		if ((BbpCsr.field.Busy == IDLE) &&
+			(BbpCsr.field.RegNum == regID) )
+		{
+			*pValue = (UCHAR)(BbpCsr.field.Value);
+			break;
+		}
+	}
+
+	if (BbpCsr.field.Busy == BUSY)
+	{																	
+		DBGPRINT_ERR(("BBP read R%d=0x%X fail, i[%d], k[%d]\n", regID, BbpCsr.word,i,k));
+		goto done;
+	}
+	ret = STATUS_SUCCESS;
+
+done:
+#ifdef RTMP_MAC_USB
+	if (IS_USB_INF(pAd)) {
+		RTMP_SEM_EVENT_UP(&pAd->reg_atomic);
+	}
+#endif /* RTMP_MAC_USB */
+
+	return ret;
+}
+
+
+#endif /* MT7601 */
 
 #endif /* RTMP_MAC */
 

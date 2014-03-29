@@ -33,7 +33,7 @@ INT get_pkt_phymode_by_rxwi(RXWI_STRUC *rxwi)
 	return rxwi->RXWI_O.phy_mode;
 }
 
-INT get_pkt_rssi_by_rxwi(RXWI_STRUC *rxwi, INT size, CHAR *rssi)
+INT get_pkt_rssi_by_rxwi(struct _RTMP_ADAPTER *pAd, RXWI_STRUC *rxwi, INT size, CHAR *rssi)
 {
 	switch (size) {
 		case 3:
@@ -42,7 +42,12 @@ INT get_pkt_rssi_by_rxwi(RXWI_STRUC *rxwi, INT size, CHAR *rssi)
 			rssi[1] = rxwi->RxWIRSSI1;
 		case 1:
 		default:
-			rssi[0] = rxwi->RxWIRSSI0;
+#ifdef MT7601
+			if ( IS_MT7601(pAd) )
+				rssi[0] = rxwi->RxWISNR2;
+			else
+#endif /* MT7601 */
+				rssi[0] = rxwi->RxWIRSSI0;
 			break;
 	}
 
@@ -50,8 +55,24 @@ INT get_pkt_rssi_by_rxwi(RXWI_STRUC *rxwi, INT size, CHAR *rssi)
 }
 
 
-INT get_pkt_snr_by_rxwi(RXWI_STRUC *rxwi, INT size, UCHAR *snr)
+INT get_pkt_snr_by_rxwi(struct _RTMP_ADAPTER *pAd, RXWI_STRUC *rxwi, INT size, UCHAR *snr)
 {
+
+#ifdef MT7601
+	/*
+		snr[2] = Gain Report 
+		snr[1] = Antenna report
+	*/
+		
+	if ( IS_MT7601(pAd) )
+	{
+		snr[0] = rxwi->RxWISNR0;
+		snr[1] = 0;
+		snr[2] = 0;
+		return 0;
+	}
+#endif /* MT7601 */
+
 	switch (size) {
 		case 3:
 			snr[2] = rxwi->RxWISNR2;

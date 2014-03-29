@@ -57,7 +57,7 @@ typedef VOID	pregs;
 
 #ifdef RTMP_MAC_USB
 #define STA_PROFILE_PATH			"/etc/Wireless/RT2870STA/RT2870STA.dat"
-#define STA_DRIVER_VERSION			"3.0.0.2"
+#define STA_DRIVER_VERSION			"3.0.0.3"
 #ifdef MULTIPLE_CARD_SUPPORT
 #define CARD_INFO_PATH			"/etc/Wireless/RT2870STA/RT2870STACard.dat"
 #endif /* MULTIPLE_CARD_SUPPORT */
@@ -65,6 +65,9 @@ typedef VOID	pregs;
 
 #endif /* CONFIG_STA_SUPPORT */
 
+#ifdef SINGLE_SKU_V2
+#define SINGLE_SKU_TABLE_FILE_NAME	"/etc/Wireless/RT2870STA/SingleSKU.dat"
+#endif /* SINGLE_SKU_V2 */
 
 /***********************************************************************************
  *	Compiler related definitions
@@ -265,11 +268,7 @@ struct os_cookie {
 #ifdef RTMP_MAC_USB
 	VOID					*pUsb_Dev;
 #ifdef CONFIG_STA_SUPPORT
-#ifdef CONFIG_PM
-#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 	VOID					 *intf;
-#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-#endif /* CONFIG_PM */
 #endif /* CONFIG_STA_SUPPORT */
 
 #endif /* RTMP_MAC_USB */
@@ -302,12 +301,14 @@ struct os_cookie {
 	RTMP_NET_TASK_STRUCT	pspoll_frame_complete_task;
 #endif /* RTMP_MAC_USB */
 
+#ifdef CONFIG_MULTI_CHANNEL
+	RTMP_NET_TASK_STRUCT	hcca_null_frame_complete_task;
+#endif /* CONFIG_MULTI_CHANNEL */
+
 	RTMP_OS_PID				apd_pid; /*802.1x daemon pid */
 	unsigned long			apd_pid_nr;
 	INT						ioctl_if_type;
 	INT 					ioctl_if;
-
-	RTMP_OS_COMPLETION SentToMCUDone;
 };
 
 typedef struct os_cookie	* POS_COOKIE;
@@ -468,39 +469,15 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 			RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE);		\
 	}while(0)
 
-
-#ifdef CONFIG_ANDES_SUPPORT
-#define RTMP_IO_READ32(_A, _R, _pV)								\
-do {															\
-	if (RTMP_TEST_FLAG(_A, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD))	\
-		BURST_READ(_A, _R, 1, _pV);								\
-	else														\
-		RTUSBReadMACRegister((_A), (_R), (PUINT32) (_pV));		\
-} while (0)
-
-#define RTMP_IO_WRITE32(_A, _R, _V)								\
-do {															\
-	if (RTMP_TEST_FLAG(_A, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD))	\
-	{															\
-		UINT32 Val = _V;										\
-		BURST_WRITE(_A, _R, &Val, 1);							\
-	}															\
-	else														\
-	{															\
-		RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE);\
-	}															\
-} while (0)
-#else
 #define RTMP_IO_READ32(_A, _R, _pV)								\
 	RTUSBReadMACRegister((_A), (_R), (PUINT32) (_pV))
 
-#define RTMP_IO_WRITE32(_A, _R, _V)								\
-	RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE)
-
-#endif
 #define RTMP_IO_READ8(_A, _R, _pV)								\
 {																\
 }
+
+#define RTMP_IO_WRITE32(_A, _R, _V)								\
+	RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE)
 
 #define RTMP_IO_WRITE8(_A, _R, _V)								\
 {																\
@@ -843,6 +820,10 @@ extern ULONG RtmpOsGetUnalignedlong(
 
 
 
+#if defined(CONFIG_CSO_SUPPORT) || defined(CONFIG_RX_CSO_SUPPORT)
+#define RTMP_SET_TCP_CHKSUM_FAIL(_p, _flg) 	(PACKET_CB(_p, 30) = _flg);
+#define RTMP_GET_TCP_CHKSUM_FAIL(_p)		(PACKET_CB(_p, 30))
+#endif /* defined(CONFIG_CSO_SUPPORT) || defined(CONFIG_RX_CSO_SUPPORT) */
 
 
 
@@ -876,14 +857,11 @@ void RTMP_GetCurrentSystemTime(LARGE_INTEGER *time);
 #define RTUSB_SUBMIT_URB			rausb_submit_urb
 #define RTUSB_URB_ALLOC_BUFFER		rausb_buffer_alloc
 #define RTUSB_URB_FREE_BUFFER		rausb_buffer_free
-#define RTUSB_FILL_BULK_URB			rausb_fill_bulk_urb
 #define RTUSB_FREE_URB				rausb_free_urb
 #define RTUSB_UNLINK_URB			rausb_kill_urb
 #define USB_CONTROL_MSG				rausb_control_msg
 #define usb_sndctrlpipe				rausb_sndctrlpipe
 #define usb_rcvctrlpipe				rausb_rcvctrlpipe
-#define usb_sndbulkpipe				rausb_sndbulkpipe
-#define usb_rcvbulkpipe				rausb_rcvbulkpipe
 #define RTUSB_AUTOPM_PUT_INTERFACE	rausb_autopm_put_interface
 #define RTUSB_AUTOPM_GET_INTERFACE	rausb_autopm_get_interface
 
@@ -913,6 +891,10 @@ typedef VOID (*usb_complete_t)(VOID *);
 #define RtmpUsbBulkOutDataPacketComplete		pRtmpDrvNetOps->RtmpNetUsbBulkOutDataPacketComplete
 #define RtmpUsbBulkOutMLMEPacketComplete		pRtmpDrvNetOps->RtmpNetUsbBulkOutMLMEPacketComplete
 #define RtmpUsbBulkOutNullFrameComplete			pRtmpDrvNetOps->RtmpNetUsbBulkOutNullFrameComplete
+#ifdef CONFIG_MULTI_CHANNEL
+#define RtmpUsbBulkOutHCCANullFrameComplete			pRtmpDrvNetOps->RtmpNetUsbBulkOutHCCANullFrameComplete
+#endif /* CONFIG_MULTI_CHANNEL */
+
 #define RtmpUsbBulkOutRTSFrameComplete			pRtmpDrvNetOps->RtmpNetUsbBulkOutRTSFrameComplete
 #define RtmpUsbBulkOutPsPollComplete			pRtmpDrvNetOps->RtmpNetUsbBulkOutPsPollComplete
 #define RtmpUsbBulkRxComplete					pRtmpDrvNetOps->RtmpNetUsbBulkRxComplete
@@ -925,6 +907,12 @@ typedef VOID (*usb_complete_t)(VOID *);
 #define RTUSBBulkOutPsPollComplete(Status, pURB, pt_regs)        RTUSBBulkOutPsPollComplete(pURB)
 #define RTUSBBulkRxComplete(Status, pURB, pt_regs)               RTUSBBulkRxComplete(pURB)
 #define RTUSBBulkCmdRspEventComplete(Status, pURB, pt_regs)	 	 RTUSBBulkCmdRspEventComplete(pURB)
+#define USBUploadFWComplete(Status, pURB, pt_regs)               USBUploadFWComplete(pURB)
+#define USBKickOutCmdComplete(Status, pURB, pt_regs)               USBKickOutCmdComplete(pURB)
+#ifdef CONFIG_MULTI_CHANNEL
+#define RTUSBBulkOutHCCANullFrameComplete(Status, pURB, pt_regs)	RTUSBBulkOutHCCANullFrameComplete(pURB)
+#endif /* CONFIG_MULTI_CHANNEL */
+
 
 USBHST_STATUS RTUSBBulkOutDataPacketComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 USBHST_STATUS RTUSBBulkOutMLMEPacketComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
@@ -933,6 +921,9 @@ USBHST_STATUS RTUSBBulkOutRTSFrameComplete(URBCompleteStatus Status, purbb_t pUR
 USBHST_STATUS RTUSBBulkOutPsPollComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 USBHST_STATUS RTUSBBulkRxComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 USBHST_STATUS RTUSBBulkCmdRspEventComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
+#ifdef CONFIG_MULTI_CHANNEL
+USBHST_STATUS RTUSBBulkOutHCCANullFrameComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
+#endif /* CONFIG_MULTI_CHANNEL */
 
 #define rtusb_urb_context  context
 #define rtusb_urb_status   status

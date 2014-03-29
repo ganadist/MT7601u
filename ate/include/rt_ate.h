@@ -28,12 +28,6 @@
 #ifndef __RT_ATE_H__
 #define __RT_ATE_H__
 
-#ifdef RALINK_ATE
-#ifndef STATS_COUNT_SUPPORT
-#error "For ATE support, please set HAS_ATE=y and HAS_STATS_COUNT=y."
-#endif /* !STATS_COUNT_SUPPORT */
-#endif /* RALINK_ATE */
-
 typedef struct _ATE_CHIP_STRUCT {
 	/* functions */
 	VOID	(*ChannelSwitch)(PRTMP_ADAPTER pAd);
@@ -44,6 +38,7 @@ typedef struct _ATE_CHIP_STRUCT {
 	VOID	(*AsicSetTxRxPath)(PRTMP_ADAPTER pAd);
 	VOID	(*AdjustTxPower)(PRTMP_ADAPTER pAd);
 	VOID	(*AsicExtraPowerOverMAC)(PRTMP_ADAPTER pAd);
+	VOID 	(*TemperCompensation)(PRTMP_ADAPTER *pAd);
 	
 	/* command handlers */
 	INT		(*Set_BW_Proc)(PRTMP_ADAPTER pAd, PSTRING arg);
@@ -85,11 +80,6 @@ typedef struct _ATE_INFO {
 	CHAR MaxTxPowerBandA; /* Power range of early chipsets is -7~15 in A band */
 	CHAR TxAntennaSel;
 	CHAR RxAntennaSel;
-#ifdef RLT_MAC
-	USHORT TxInfoLen;
-	USHORT TxWILen;
-#endif /* RLT_MAC */
-	TXINFO_STRUC TxInfo;	/* TxInfo */
 	TXWI_STRUC TxWI;	/* TXWI */
 	USHORT QID;
 	UCHAR Addr1[MAC_ADDR_LEN];
@@ -108,7 +98,6 @@ typedef struct _ATE_INFO {
 	BOOLEAN bQATxStart;	/* Have compiled QA in and use it to ATE tx. */
 	BOOLEAN bQARxStart;	/* Have compiled QA in and use it to ATE rx. */
 	BOOLEAN bAutoTxAlc;	/* Set Auto Tx Alc */
-	BOOLEAN bAutoVcoCal;/* Set Auto VCO periodic calibration. */
 #ifdef RTMP_INTERNAL_TX_ALC
 #if defined(RT3350) || defined(RT3352)
 	BOOLEAN bTSSICalbrEnableG; /* Enable TSSI calibration */
@@ -116,18 +105,6 @@ typedef struct _ATE_INFO {
 	CHAR	TssiDeltaPerChannel[CFG80211_NUM_OF_CHAN_2GHZ];
 #endif /* defined(RT3350) || defined(RT3352) */
 #endif /* RTMP_INTERNAL_TX_ALC */
-#if defined(RT5592) || defined(RT6352)
-#ifdef RTMP_TEMPERATURE_COMPENSATION
-	BOOLEAN bTSSICalbrEnableG; /* Enable G-band TSSI calibration */
-	BOOLEAN bTSSICalbrEnableA; /* Enable A-band TSSI calibration */
-	CHAR	TssiReadSampleG[TSSI_READ_SAMPLE_NUM];
-	CHAR	TssiReadSampleA[TSSI_READ_SAMPLE_NUM];
-#endif /* RTMP_TEMPERATURE_COMPENSATION */
-	UCHAR	rx_agc_fc_offset20M;
-	UCHAR	rx_agc_fc_offset40M;
-	UCHAR	CaliBW20RfR24;
-	UCHAR	CaliBW40RfR24;
-#endif /* defined(RT5592) || defined(RT6352) */
 #ifdef TXBF_SUPPORT
 	BOOLEAN bTxBF;		/* Enable Tx Bean Forming */
 	SHORT	txSoundingMode;	/* Sounding mode for non-QA ATE. 0=none, 1=Data Sounding, 2=NDP */
@@ -152,13 +129,12 @@ typedef struct _ATE_INFO {
 	SHORT AvgRssi1X8;	/* sum of last 8 frames' RSSI */
 	SHORT AvgRssi2X8;	/* sum of last 8 frames' RSSI */
 	UINT32 NumOfAvgRssiSample;
-	UINT32 Default_TX_PIN_CFG;
 	USHORT HLen;		/* Header Length */
 
 #ifdef RALINK_QA
 	/* Tx frame */
 #ifdef RTMP_MAC_USB
-//	TXINFO_STRUC TxInfo;	/* TxInfo */
+	TXINFO_STRUC TxInfo;	/* TxInfo */
 #endif /* RTMP_MAC_USB */
 	USHORT PLen;		/* Pattern Length */
 	UCHAR Header[32];	/* Header buffer */
@@ -202,7 +178,6 @@ typedef struct _ATE_INFO {
 #endif /* TXBF_SUPPORT */
 	RALINK_TIMER_STRUCT PeriodicTimer;
 	ULONG OneSecPeriodicRound;
-	ULONG PeriodicRound;
 } ATE_INFO, *PATE_INFO;
 
 /* 
@@ -250,12 +225,6 @@ typedef struct _ATE_INFO {
 #define ATE_ON(_p)              (((_p)->ate.Mode) != ATE_STOP)
 #define TX_METHOD_0 0 /* Early chipsets must be applied this original TXCONT/TXCARR/TXCARS mechanism. */
 #define TX_METHOD_1 1 /* Default TXCONT/TXCARR/TXCARS mechanism is TX_METHOD_1 */
-#define ANT_ALL 0
-#define ANT_0 1
-#define ANT_1 2
-#ifdef DOT11N_SS3_SUPPORT
-#define ANT_2 3
-#endif /* DOT11N_SS3_SUPPORT */
 
 #define ATE_MAC_TX_ENABLE(_A, _I, _pV)	\
 {										\
@@ -302,22 +271,12 @@ typedef struct _ATE_INFO {
 }
 
 /* Clear BBP R22 to reset Tx Mode (bit7~bit0) = 0. */
-#ifdef RT65xx
-#define ATE_BBP_RESET_TX_MODE(_A, _I, _pV)			\
-{													\
-	UINT32 _bbp_val;\
-	RTMP_BBP_IO_READ32(_A, _I, &_bbp_val);	\
-	(*(_pV)) &= (0x00);						\
-	RTMP_BBP_IO_WRITE32(_A, _I, _bbp_val);	\
-}
-#else
 #define ATE_BBP_RESET_TX_MODE(_A, _I, _pV)			\
 {													\
 	ATE_BBP_IO_READ8_BY_REG_ID(_A, _I, _pV);		\
 	(*(_pV)) &= (0x00);							\
 	ATE_BBP_IO_WRITE8_BY_REG_ID(_A, _I, (*(_pV)));	\
 }
-#endif /* RT65xx */
 
 /* Set BBP R22 to start Continuous Tx Mode (bit7) = 1. */
 #define ATE_BBP_START_CTS_TX_MODE(_A, _I, _pV)		\
@@ -399,6 +358,10 @@ INT ATEResetBulkOut(
 	IN PRTMP_ADAPTER	pAd);
 #endif /* RTMP_MAC_USB */
 
+INT DefaultATETxPwrHandler(
+	IN PRTMP_ADAPTER pAd,
+	IN char index);
+
 
 
 
@@ -456,15 +419,7 @@ INT Set_RFWrite_Proc(
 #endif /* DBG */ 
 #endif /* RALINK_QA */
 
-#ifdef RLT_RF
-/* for MT7650 */
-#define ATE_RF_IO_READ8_BY_REG_ID(_A, _B, _I, _pV)     rlt_rf_read(_A, _B, _I, _pV)
-#define ATE_RF_IO_WRITE8_BY_REG_ID(_A, _B, _I, _V)     rlt_rf_write(_A, _B, _I, _V)
-#endif /* RLT_RF */
-#ifndef RLT_RF
-#define ATE_RF_IO_READ8_BY_REG_ID(_A, _I, _pV)     RT30xxReadRFRegister(_A, _I, _pV)
-#define ATE_RF_IO_WRITE8_BY_REG_ID(_A, _I, _V)     RT30xxWriteRFRegister(_A, _I, _V)
-#endif /* !RLT_RF */
+
 
 #ifdef RALINK_QA
 #define SYNC_CHANNEL_WITH_QA(_A, _pV)\
@@ -518,6 +473,10 @@ INT	Set_ATE_INIT_CHAN_Proc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg);
 
+INT	Set_ATE_CAL_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg);
+
 INT Set_ADCDump_Proc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg);
@@ -554,21 +513,6 @@ CHAR ATEGetDesiredTSSI(
 #endif /* RTMP_INTERNAL_TX_ALC */
 
 #ifdef RTMP_TEMPERATURE_COMPENSATION
-
-INT Set_ATE_TEMP_CAL_Proc(
-	IN	PRTMP_ADAPTER	pAd,
-	IN	PSTRING			arg);
-
-INT Set_ATE_SHOW_TSSI_Proc(
-	IN	PRTMP_ADAPTER	pAd,
-	IN	PSTRING			arg);
-
-#ifdef MT76x0
-INT MT76x0_ATETempCalibration(
-	IN struct _RTMP_ADAPTER		*pAd,
-	IN PSTRING					arg);
-#endif /* MT76x0 */
-
 
 INT Set_ATE_READ_EXTERNAL_TSSI_Proc(
 	IN	PRTMP_ADAPTER	pAd,
@@ -608,6 +552,10 @@ INT	Set_ATE_PA_Bias_Proc(
 	IN	PSTRING			arg);
 #endif /* RT3350 */
 
+INT	Default_Set_ATE_TX_FREQ_OFFSET_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+
 
 
 
@@ -620,6 +568,10 @@ INT	RT28xx_Set_ATE_TX_FREQ_OFFSET_Proc(
 
 
 INT	Set_ATE_TX_FREQ_OFFSET_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+
+INT	Default_Set_ATE_TX_BW_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
 
@@ -650,10 +602,6 @@ INT	Set_ATE_TX_MCS_Proc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg);
 
-INT	Set_ATE_TX_STBC_Proc(
-	IN	PRTMP_ADAPTER	pAd,
-	IN	PSTRING			arg);
-
 INT	Set_ATE_TX_MODE_Proc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg);
@@ -671,7 +619,6 @@ INT Set_ATE_Read_RF_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
 
-#if (!defined(RTMP_RF_RW_SUPPORT)) && (!defined(RLT_RF))
 INT Set_ATE_Write_RF1_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
@@ -687,11 +634,20 @@ INT Set_ATE_Write_RF3_Proc(
 INT Set_ATE_Write_RF4_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
-#endif /* (!defined(RTMP_RF_RW_SUPPORT)) && (!defined(RLT_RF)) */
 
 INT Set_ATE_Load_E2P_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
+
+#ifdef RTMP_EFUSE_SUPPORT
+INT Set_ATE_Load_E2P_From_Buf_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+
+INT Set_ATE_Cal_Free_Info_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+#endif /* RTMP_EFUSE_SUPPORT */
 
 INT Set_ATE_Read_E2P_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
@@ -711,7 +667,6 @@ INT	Set_ATE_IPG_Proc(
 INT Set_ATE_Payload_Proc(
     IN  PRTMP_ADAPTER   pAd, 
     IN  PSTRING         arg);
-
 
 #ifdef TXBF_SUPPORT
 INT	Set_ATE_TXBF_Proc(
@@ -764,10 +719,22 @@ INT	Set_ATE_Help_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
 
+VOID DefaultATEAsicAdjustTxPower(
+	IN PRTMP_ADAPTER pAd);
+
+
+#ifdef MT7601
+INT Set_ATE_Read_Temperature_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+
+INT Set_ATE_Read_TSSI_DC_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+#endif /* MT7601 */
 
 VOID ATEAsicAdjustTxPower(
 	IN PRTMP_ADAPTER pAd);
-
 
 VOID ATESampleRssi(
 	IN PRTMP_ADAPTER	pAd,
@@ -805,13 +772,11 @@ VOID ReadQATxTypeFromBBP(
  IN	PRTMP_ADAPTER	pAd);
 #endif /* RALINK_QA */
 
-#ifdef RTMP_MAC
 NDIS_STATUS ATEBBPWriteWithRxChain(
  IN RTMP_ADAPTER *pAd,
  IN UCHAR bbpId,
  IN CHAR bbpVal,
  IN RX_CHAIN_IDX rx_ch_idx);
-#endif /* RTMP_MAC */
 
 
 
@@ -841,11 +806,6 @@ VOID ATEAsicSwitchChannel(
 
 VOID BbpSoftReset(
 	IN PRTMP_ADAPTER pAd);
-
-#ifdef MT76x0
-void mt76x0_ate_adjust_per_rate_pwr(
-	IN PRTMP_ADAPTER pAd);
-#endif /* MT76x0 */
 
 #endif /* __RT_ATE_H__ */
 

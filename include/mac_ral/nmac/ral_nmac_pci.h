@@ -360,6 +360,11 @@ typedef union _PDMA_INT_MASK{
 #define RX_RING_CNT		(RX_RING_BASE + 0x04)
 #define RX_RING_CIDX	(RX_RING_BASE + 0x08)
 #define RX_RING_DIDX	(RX_RING_BASE + 0x0c)
+#define RX_CTRL_BASE	(RX_RING_BASE + RINGREG_DIFF)
+#define RX_CTRL_PTR		RX_CTRL_BASE
+#define RX_CTRL_CNT		(RX_CTRL_BASE + 0x04)
+#define RX_CTRL_CIDX	(RX_CTRL_BASE + 0x08)
+#define RX_CTRL_DIDX	(RX_CTRL_BASE + 0x0c)
 
 #endif /*__RAL_NMAC_PCI_H__ */
 

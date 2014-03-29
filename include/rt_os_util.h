@@ -44,8 +44,6 @@ VOID RtmpOsMsDelay(
 void RTMP_GetCurrentSystemTime(
 	IN	LARGE_INTEGER			*time);
 
-ULONG RTMPMsecsToJiffies(UINT msec);
-
 void RTMP_GetCurrentSystemTick(
 	IN	ULONG					*pNow);
 
@@ -204,6 +202,14 @@ void wlan_802_11_to_802_3_packet(
 	IN  UCHAR					FromWhichBSSID,
 	IN	UCHAR					*TPID);
 
+#ifdef HDR_TRANS_SUPPORT
+VOID RtmpOsSetPacket(
+	IN PNET_DEV pNetDev,
+	IN PNDIS_PACKET pRxPacket,
+	IN UCHAR *pData,
+	IN ULONG DataSize);
+#endif /* HDR_TRANS_SUPPORT */
+
 void send_monitor_packets(
 	IN	PNET_DEV				pNetDev,
 	IN	PNDIS_PACKET			pRxPacket,
@@ -299,12 +305,6 @@ PNDIS_PACKET RtmpOsPktIappMakeUp(
 
 BOOLEAN RtmpOsPktOffsetInit(VOID);
 
-/*
-========================================================================
-Routine Description:
-	Initialize the OS atomic_t.
-*/
-
 UINT16 RtmpOsNtohs(
 	IN	UINT16					Value);
 
@@ -351,6 +351,15 @@ INT RtmpOSNetDevAlloc(
 INT RtmpOSNetDevOpsAlloc(
 	IN	PVOID					*pNetDevOps);
 
+#ifdef CONFIG_STA_SUPPORT
+INT RtmpOSNotifyRawData(
+	IN PNET_DEV pNetDev, 
+	IN PUCHAR buff,
+	IN INT len, 
+	IN ULONG type,
+	IN USHORT protocol);
+
+#endif /* CONFIG_STA_SUPPORT */
 
 PNET_DEV RtmpOSNetDevGetByName(
 	IN	PNET_DEV				pNetDev,
@@ -430,15 +439,10 @@ VOID RtmpOsSetNetDevTypeMonitor(VOID *pDev);
 VOID RtmpOsCmdUp(RTMP_OS_TASK *pCmdQTask);
 BOOLEAN RtmpOsSemaInitLocked(RTMP_OS_SEM *pSemOrg, LIST_HEADER *pSemList);
 BOOLEAN RtmpOsSemaInit(RTMP_OS_SEM *pSemOrg, LIST_HEADER *pSemList);
-BOOLEAN RtmpOsSemaDestroy(RTMP_OS_SEM *pSemOrg);
+BOOLEAN RtmpOsSemaDestory(RTMP_OS_SEM *pSemOrg);
 INT RtmpOsSemaWaitInterruptible(RTMP_OS_SEM *pSemOrg);
 VOID RtmpOsSemaWakeUp(RTMP_OS_SEM *pSemOrg);
 VOID RtmpOsMlmeUp(RTMP_OS_TASK *pMlmeQTask);
-
-VOID RtmpOsInitCompletion(RTMP_OS_COMPLETION *pCompletion);
-VOID RtmpOsExitCompletion(RTMP_OS_COMPLETION *pCompletion);
-VOID RtmpOsComplete(RTMP_OS_COMPLETION *pCompletion);
-ULONG RtmpOsWaitForCompletionTimeout(RTMP_OS_COMPLETION *pCompletion, ULONG Timeout); 
 
 /* OS Task */
 BOOLEAN RtmpOsTaskletSche(RTMP_NET_TASK_STRUCT *pTasklet);
@@ -734,6 +738,13 @@ VOID    SendAssocIEsToWpaSupplicant(
 	IN	UCHAR					*ReqVarIEs,
 	IN	UINT32					ReqVarIELen);
 
+PVOID RtmpInitCompletion(VOID);
+
+ULONG RtmpWaitForCompletionTimeout(VOID *Completion, ULONG Expire);
+
+VOID RtmpComplete(VOID *Completion);
+
+ULONG RtmpMsecsToJiffies(UINT32 msecs);
 /* ============================ rt_rbus_pci_util.c ========================== */
 void RtmpAllocDescBuf(
 	IN PPCI_DEV pPciDev,
@@ -788,7 +799,11 @@ int  RTMP_Usb_AutoPM_Get_Interface(
 #endif /* CONFIG_PM */
 #endif /* CONFIG_STA_SUPPORT */
 
+int rausb_autopm_put_interface (
+	IN	VOID			*intfsrc);
 
+int rausb_autopm_get_interface (
+	IN	VOID			*intfsrc);
 
 ra_dma_addr_t linux_pci_map_single(void *pPciDev, void *ptr, size_t size, int sd_idx, int direction);
 
@@ -796,8 +811,6 @@ void linux_pci_unmap_single(void *pPciDev, ra_dma_addr_t dma_addr, size_t size, 
 
 /* ============================ rt_usb_util.c =============================== */
 #ifdef RTMP_MAC_USB
-typedef VOID (*USB_COMPLETE_HANDLER)(VOID *);
-
 void dump_urb(VOID *purb);
 
 int rausb_register(VOID * new_driver);
@@ -833,21 +846,9 @@ int rausb_control_msg(VOID *dev,
 						__u16 size,
 						int timeout);
 
-void rausb_fill_bulk_urb(void *urb,
-						 void *dev,
-						 unsigned int pipe,
-						 void *transfer_buffer,
-						 int buffer_length,
-						 USB_COMPLETE_HANDLER complete_fn,
-						 void *context);
-
 unsigned int rausb_sndctrlpipe(VOID *dev, ULONG address);
 
 unsigned int rausb_rcvctrlpipe(VOID *dev, ULONG address);
-
-
-unsigned int rausb_sndbulkpipe(void *dev, ULONG address);
-unsigned int rausb_rcvbulkpipe(void *dev, ULONG address);
 
 void rausb_kill_urb(VOID *urb);
 
@@ -856,6 +857,7 @@ VOID RtmpOsUsbEmptyUrbCheck(
 	IN	NDIS_SPIN_LOCK		*pBulkInLock,
 	IN	UCHAR				*pPendingRx);
 
+typedef VOID (*USB_COMPLETE_HANDLER)(VOID *);
 
 VOID	RtmpOsUsbInitHTTxDesc(
 	IN	VOID			*pUrbSrc,
@@ -1024,17 +1026,5 @@ extern UINT32 RT_RateSize;
 #endif /* PLATFORM_UBM_IPX8 */
 
 INT32  RtPrivIoctlSetVal(VOID);
-
-void OS_SPIN_LOCK_IRQSAVE(NDIS_SPIN_LOCK *lock, unsigned long *flags);
-void OS_SPIN_UNLOCK_IRQRESTORE(NDIS_SPIN_LOCK *lock, unsigned long *flags);
-void OS_SPIN_LOCK_IRQ(NDIS_SPIN_LOCK *lock);
-void OS_SPIN_UNLOCK_IRQ(NDIS_SPIN_LOCK *lock);
-void RtmpOsSpinLockIrqSave(NDIS_SPIN_LOCK *lock, unsigned long *flags);
-void RtmpOsSpinUnlockIrqRestore(NDIS_SPIN_LOCK *lock, unsigned long *flags);
-void RtmpOsSpinLockIrq(NDIS_SPIN_LOCK *lock);
-void RtmpOsSpinUnlockIrq(NDIS_SPIN_LOCK *lock);
-int OS_TEST_BIT(int bit, unsigned long *flags);
-void OS_SET_BIT(int bit, unsigned long *flags);
-void OS_CLEAR_BIT(int bit, unsigned long *flags);
 
 #endif /* __RT_OS_UTIL_H__ */

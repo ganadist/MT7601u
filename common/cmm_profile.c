@@ -815,45 +815,8 @@ static void VHTParametersHook(
 		else
 			pAd->CommonCfg.vht_bw = VHT_BW_2040;
 
-		DBGPRINT(RT_DEBUG_TRACE, ("VHT: Channel Width = %s\n",
-					(pAd->CommonCfg.vht_bw == VHT_BW_80) ? "80 MHz" : "20/40 MHz" ));
+		DBGPRINT(RT_DEBUG_TRACE, ("VHT: Channel Width = %s\n", (Value==VHT_BW_80) ? "80 MHz" : "20/40 MHz" ));
 	}
-
-	/* VHT GI setting */
-	if (RTMPGetKeyParameter("VHT_SGI", pValueStr, 25, pInput, TRUE))
-	{
-		Value = simple_strtol(pValueStr, 0, 10);
-
-		if (Value == GI_800)
-			pAd->CommonCfg.vht_sgi_80 = GI_800;
-		else
-			pAd->CommonCfg.vht_sgi_80 = GI_400;
-
-		DBGPRINT(RT_DEBUG_TRACE, ("VHT: Short GI for 80Mhz  = %s\n",
-					(pAd->CommonCfg.vht_sgi_80==GI_800) ? "Disabled" : "Enable" ));
-	}
-
-	/* VHT STBC */
-	if (RTMPGetKeyParameter("VHT_STBC", pValueStr, 25, pInput, TRUE))
-	{
-		Value = simple_strtol(pValueStr, 0, 10);
-
-		pAd->CommonCfg.vht_stbc = (Value == 1 ? STBC_USE : STBC_NONE);
-		DBGPRINT(RT_DEBUG_TRACE, ("VHT: STBC = %d\n",
-					pAd->CommonCfg.vht_stbc));
-	}
-
-	/* bandwidth signaling */
-	if (RTMPGetKeyParameter("VHT_BW_SIGNAL", pValueStr, 25, pInput, TRUE))
-	{
-		Value = simple_strtol(pValueStr, 0, 10);
-
-		if (Value >= 0 && Value <= 2)
-			pAd->CommonCfg.vht_bw_signal = Value;
-		else
-			pAd->CommonCfg.vht_bw_signal = 0;
-		DBGPRINT(RT_DEBUG_TRACE, ("VHT: BW SIGNALING = %d\n", pAd->CommonCfg.vht_bw_signal));
-	}	
 }
 
 #endif /* DOT11_VHT_AC */
@@ -2118,19 +2081,6 @@ NDIS_STATUS	RTMPSetProfileParameters(
 				VHTParametersHook(pAd, tmpbuf, pBuffer);
 #endif /* DOT11_VHT_AC */
 
-#ifdef CONFIG_FPGA_MODE
-#ifdef CAPTURE_MODE
-				if(RTMPGetKeyParameter("cap_support", tmpbuf, 25, pBuffer, TRUE))
-				{
-					ULONG cap_support = simple_strtol(tmpbuf, 0, 10);
-
-					pAd->cap_support = cap_support > 0 ? TRUE : FALSE;
-					DBGPRINT(RT_DEBUG_OFF, ("%s(): CaptureMode=%d\n",
-								__FUNCTION__, pAd->cap_support));
-				}
-#endif /* CAPTURE_MODE */
-#endif /* CONFIG_FPGA_MODE */
-
 
 #ifdef CARRIER_DETECTION_SUPPORT
 					/*CarrierDetect*/
@@ -2300,8 +2250,7 @@ NDIS_STATUS	RTMPSetProfileParameters(
 
 
 
-#ifdef WOW_SUPPORT
-#ifdef RTMP_MAC_USB	
+#if (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT)
 		/* set GPIO pin for wake-up signal */
 		if (RTMPGetKeyParameter("WOW_GPIO", tmpbuf, 10, pBuffer, TRUE))
 			Set_WOW_GPIO(pAd, tmpbuf);
@@ -2318,9 +2267,25 @@ NDIS_STATUS	RTMPSetProfileParameters(
 		if (RTMPGetKeyParameter("WOW_Hold", tmpbuf, 10, pBuffer, TRUE))
 			Set_WOW_Hold(pAd, tmpbuf);
 
+		/* set wakeup signal type */
+		if (RTMPGetKeyParameter("WOW_InBand", tmpbuf, 10, pBuffer, TRUE))
+			Set_WOW_InBand(pAd, tmpbuf);
+#endif /* (defined(WOW_SUPPORT) && defined(RTMP_MAC_USB)) || defined(NEW_WOW_SUPPORT) */
 
-#endif /* RTMP_MAC_USB */
-#endif /* WOW_SUPPORT */
+#ifdef MICROWAVE_OVEN_SUPPORT
+		if (RTMPGetKeyParameter("MO_FalseCCATh", tmpbuf, 10, pBuffer, TRUE))
+		{
+			Set_MO_FalseCCATh_Proc(pAd, tmpbuf);
+		}
+#endif /* MICROWAVE_OVEN_SUPPORT */
+
+#ifdef ED_MONITOR
+		if(RTMPGetKeyParameter("ED_CCA", tmpbuf, 10, pBuffer, TRUE))
+		{
+			INT ed_chk = simple_strtol(tmpbuf, 0, 10);
+			pAd->ed_chk = (ed_chk > 0 ? TRUE : FALSE);
+		}
+#endif /* ED_MONITOR */
 
 	}while(0);
 
@@ -2405,17 +2370,10 @@ BOOLEAN RTMP_CardInfoRead(
 		(antenna.field.RfIcType == RFIC_2750) || 
 		(antenna.field.RfIcType == RFIC_2853) || 
 		(antenna.field.RfIcType == RFIC_3853) ||
-		(antenna.field.RfIcType == RFIC_7650) ||
-		(antenna.field.RfIcType == RFIC_7610U) ||
 		(antenna.field.RfIcType == RFIC_5592))
 	{
 		/* ABGN card */
 		strcpy(RFIC_word, "abgn");
-	}
-	else if (antenna.field.RfIcType == RFIC_7610E)
-	{
-		/* ABGN card */
-		strcpy(RFIC_word, "an");
 	}
 	else
 	{
@@ -2697,6 +2655,270 @@ return flg_match_ok;
 
 
 
+
+VOID rtmp_read_multest_from_file(
+	IN PRTMP_ADAPTER pAd,
+	IN PSTRING tmpbuf,
+	IN PSTRING buffer)
+{
+	PSTRING		macptr;
+	INT			i=0, j;
+	STRING		tok_str[16];
+	BOOLEAN		bUsePrevFormat = FALSE;
+	UCHAR		macAddress[MAC_ADDR_LEN];
+	UCHAR	    keyMaterial[40];	
+	UCHAR		KeyLen, CipherAlg = CIPHER_NONE, KeyIdx;
+	PRT_802_11_WDS_ENTRY pWdsEntry;
+		
+	/*WdsPhyMode */
+	if (RTMPGetKeyParameter("WdsPhyMode", tmpbuf, MAX_PARAM_BUFFER_SIZE, buffer, TRUE))
+	{	
+		for (i=0, macptr = rstrtok(tmpbuf,";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL,";"), i++) 
+		{
+	        if ((strncmp(macptr, "CCK", 3) == 0) || (strncmp(macptr, "cck", 3) == 0))
+	            pAd->MulTestTab.WdsEntry[i].PhyMode = MODE_CCK;
+	        else if ((strncmp(macptr, "OFDM", 4) == 0) || (strncmp(macptr, "ofdm", 4) == 0))
+	            pAd->MulTestTab.WdsEntry[i].PhyMode = MODE_OFDM;
+#ifdef DOT11_N_SUPPORT
+	        else if ((strncmp(macptr, "HTMIX", 5) == 0) || (strncmp(macptr, "htmix", 5) == 0))
+	            pAd->MulTestTab.WdsEntry[i].PhyMode = MODE_HTMIX;
+	        else if ((strncmp(macptr, "GREENFIELD", 10) == 0) || (strncmp(macptr, "greenfield", 10) == 0))
+	            pAd->MulTestTab.WdsEntry[i].PhyMode = MODE_HTGREENFIELD;
+#endif /* DOT11_N_SUPPORT */
+	        else
+	            pAd->MulTestTab.WdsEntry[i].PhyMode = 0xff;
+		
+	        DBGPRINT(RT_DEBUG_TRACE, ("If/wds%d - WdsPhyMode=%d\n", i, pAd->MulTestTab.WdsEntry[i].PhyMode));	    
+		}
+	}
+	
+	/*WdsList */
+	if (RTMPGetKeyParameter("WdsList", tmpbuf, MAX_PARAM_BUFFER_SIZE, buffer, TRUE))
+	{
+		for (i=0, macptr = rstrtok(tmpbuf,";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL,";"), i++) 
+		{				
+			if(strlen(macptr) != 17)  /*Mac address acceptable format 01:02:03:04:05:06 length 17 */
+				continue; 
+			if(strcmp(macptr,"00:00:00:00:00:00") == 0)
+				continue; 
+			if(i >= MAX_WDS_ENTRY)
+				break; 
+
+			for (j=0; j<ETH_LENGTH_OF_ADDRESS; j++)
+			{
+				AtoH(macptr, &macAddress[j], 1);
+				macptr=macptr+3;
+			}	
+
+			{
+				INT iii;
+				LONG WdsTabIdx = -1;
+				
+				for (iii = 0; iii < MAX_WDS_ENTRY; iii++)
+				{
+					if (pAd->MulTestTab.WdsEntry[iii].Valid == FALSE)
+					{
+						pAd->MulTestTab.WdsEntry[iii].Valid = TRUE;
+						pAd->MulTestTab.Size ++;
+						COPY_MAC_ADDR(pAd->MulTestTab.WdsEntry[iii].PeerWdsAddr, macAddress);
+						WdsTabIdx = iii;
+						break;
+					}
+					else if (MAC_ADDR_EQUAL(pAd->MulTestTab.WdsEntry[iii].PeerWdsAddr, macAddress))
+					{
+						WdsTabIdx = iii;
+						break;
+					}
+				}
+				
+				if (iii == MAX_WDS_ENTRY)
+					DBGPRINT(RT_DEBUG_ERROR, ("%s: Unable to allocate MulTestEntry.\n", __FUNCTION__));
+			}			
+		}
+	}
+
+	/*WdsEncrypType */
+	if (RTMPGetKeyParameter("WdsEncrypType", tmpbuf, 128, buffer, TRUE))
+	{				
+	    for (i = 0, macptr = rstrtok(tmpbuf,";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL,";"), i++)
+	    {
+	        if ((strncmp(macptr, "NONE", 4) == 0) || (strncmp(macptr, "none", 4) == 0))
+	            pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11WEPDisabled;
+	        else if ((strncmp(macptr, "WEP", 3) == 0) || (strncmp(macptr, "wep", 3) == 0))
+	            pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11WEPEnabled;
+	        else if ((strncmp(macptr, "TKIP", 4) == 0) || (strncmp(macptr, "tkip", 4) == 0))
+	            pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11Encryption2Enabled;
+	        else if ((strncmp(macptr, "AES", 3) == 0) || (strncmp(macptr, "aes", 3) == 0))
+	            pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11Encryption3Enabled;
+	        else
+	            pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11WEPDisabled;
+
+	        DBGPRINT(RT_DEBUG_TRACE, ("WdsEncrypType[%d]=%d(%s)\n", i, pAd->MulTestTab.WdsEntry[i].WepStatus, GetEncryptType(pAd->MulTestTab.WdsEntry[i].WepStatus)));
+	    }
+		
+		/* Previous WDS only supports single encryption type. */
+		/* For backward compatible, other wds link encryption type shall be the same with the first. */
+		if (i == 1)
+		{
+			for (j = 1; j < MAX_WDS_ENTRY; j++)
+			{
+				pAd->MulTestTab.WdsEntry[j].WepStatus = pAd->MulTestTab.WdsEntry[0].WepStatus;	
+				DBGPRINT(RT_DEBUG_TRACE, ("@WdsEncrypType[%d]=%d(%s)\n", j, pAd->MulTestTab.WdsEntry[i].WepStatus, GetEncryptType(pAd->MulTestTab.WdsEntry[i].WepStatus)));	
+			}
+		}
+	}
+
+	/* WdsKey */
+	/* This is a previous parameter and it only stores WPA key material, not WEP key */
+	if (RTMPGetKeyParameter("WdsKey", tmpbuf, 255, buffer, FALSE))
+	{			
+		for (i = 0; i < MAX_WDS_ENTRY; i++)
+			NdisZeroMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey, sizeof(CIPHER_KEY));
+
+		if (strlen(tmpbuf) > 0)
+			bUsePrevFormat = TRUE;
+
+		/* check if the wds-0 link key material is valid */
+		if (((pAd->MulTestTab.WdsEntry[0].WepStatus == Ndis802_11Encryption2Enabled)
+				|| (pAd->MulTestTab.WdsEntry[0].WepStatus == Ndis802_11Encryption3Enabled))
+			&& (strlen(tmpbuf) >= 8) && (strlen(tmpbuf) <= 64))
+		{
+			RT_CfgSetWPAPSKKey(pAd, tmpbuf, strlen(tmpbuf), (PUCHAR)RALINK_PASSPHRASE, sizeof(RALINK_PASSPHRASE), keyMaterial);
+			if (pAd->MulTestTab.WdsEntry[0].WepStatus == Ndis802_11Encryption3Enabled)
+				pAd->MulTestTab.WdsEntry[0].WdsKey.CipherAlg = CIPHER_AES;
+			else
+				pAd->MulTestTab.WdsEntry[0].WdsKey.CipherAlg = CIPHER_TKIP;
+			
+			NdisMoveMemory(&pAd->MulTestTab.WdsEntry[0].WdsKey.Key, keyMaterial, 16);
+			pAd->MulTestTab.WdsEntry[0].WdsKey.KeyLen = 16;
+			NdisMoveMemory(&pAd->MulTestTab.WdsEntry[0].WdsKey.RxMic, keyMaterial+16, 8);
+			NdisMoveMemory(&pAd->MulTestTab.WdsEntry[0].WdsKey.TxMic, keyMaterial+16, 8);
+		}
+
+		/* Previous WDS only supports single key-material. */
+		/* For backward compatible, other wds link key-material shall be the same with the first. */
+		if (pAd->MulTestTab.WdsEntry[0].WdsKey.KeyLen == 16)
+		{
+			for (j = 1; j < MAX_WDS_ENTRY; j++)
+			{
+				NdisMoveMemory(&pAd->MulTestTab.WdsEntry[j].WdsKey, &pAd->MulTestTab.WdsEntry[0].WdsKey, sizeof(CIPHER_KEY));								
+			}
+		}
+	
+	}
+
+	/* The parameters can provide different key information for each WDS-Link */
+	/* no matter WEP or WPA */
+	if (!bUsePrevFormat)
+	{
+		for (i = 0; i < MAX_WDS_ENTRY; i++)
+		{
+			AP_WDS_KeyNameMakeUp(tok_str, sizeof(tok_str), i);
+
+			/* WdsXKey (X=0~MAX_WDS_ENTRY-1) */
+			if (RTMPGetKeyParameter(tok_str, tmpbuf, 128, buffer, FALSE))
+			{			
+				if (pAd->MulTestTab.WdsEntry[i].WepStatus == Ndis802_11Encryption1Enabled)
+				{
+					/* Ascii type */
+					if (strlen(tmpbuf) == 5 || strlen(tmpbuf) == 13)
+					{		
+						KeyLen = strlen(tmpbuf);
+						pAd->MulTestTab.WdsEntry[i].WdsKey.KeyLen = KeyLen;
+						NdisMoveMemory(pAd->MulTestTab.WdsEntry[i].WdsKey.Key, tmpbuf, KeyLen);
+						if (KeyLen == 5)
+							CipherAlg = CIPHER_WEP64;
+						else
+							CipherAlg = CIPHER_WEP128;	
+
+						pAd->MulTestTab.WdsEntry[i].WdsKey.CipherAlg = CipherAlg;
+						DBGPRINT(RT_DEBUG_TRACE, ("IF/wds%d Key=%s ,type=Ascii, CipherAlg(%s)\n", i, tmpbuf, (CipherAlg == CIPHER_WEP64 ? "wep64" : "wep128")));
+					}
+					/* Hex type */
+					else if (strlen(tmpbuf) == 10 || strlen(tmpbuf) == 26)
+					{		
+						KeyLen = strlen(tmpbuf);
+						pAd->MulTestTab.WdsEntry[i].WdsKey.KeyLen = KeyLen / 2;
+						AtoH(tmpbuf, pAd->MulTestTab.WdsEntry[i].WdsKey.Key, KeyLen / 2);						
+						if (KeyLen == 10)
+							CipherAlg = CIPHER_WEP64;
+						else
+							CipherAlg = CIPHER_WEP128;	
+
+						pAd->MulTestTab.WdsEntry[i].WdsKey.CipherAlg = CipherAlg;
+						DBGPRINT(RT_DEBUG_TRACE, ("IF/wds%d Key=%s ,type=Hex, CipherAlg(%s)\n", i, tmpbuf, (CipherAlg == CIPHER_WEP64 ? "wep64" : "wep128")));
+					}
+					/* Invalid type */
+					else
+					{
+						pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11EncryptionDisabled;
+						NdisZeroMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey, sizeof(CIPHER_KEY));
+						DBGPRINT(RT_DEBUG_TRACE, ("IF/wds%d has invalid key for WEP, reset encryption to OPEN\n", i));
+					}
+				}
+				else if ((pAd->MulTestTab.WdsEntry[i].WepStatus == Ndis802_11Encryption2Enabled)
+					|| (pAd->MulTestTab.WdsEntry[i].WepStatus == Ndis802_11Encryption3Enabled)
+					)					
+				{
+					if ((strlen(tmpbuf) >= 8) && (strlen(tmpbuf) <= 64))
+					{
+						RT_CfgSetWPAPSKKey(pAd, tmpbuf, strlen(tmpbuf), (PUCHAR) RALINK_PASSPHRASE, sizeof(RALINK_PASSPHRASE), keyMaterial);
+
+						if (pAd->MulTestTab.WdsEntry[i].WepStatus == Ndis802_11Encryption3Enabled)
+						{
+							pAd->MulTestTab.WdsEntry[i].WdsKey.CipherAlg = CIPHER_AES;
+							CipherAlg = CIPHER_AES;
+						}
+						else
+						{
+							pAd->MulTestTab.WdsEntry[i].WdsKey.CipherAlg = CIPHER_TKIP;
+							CipherAlg = CIPHER_TKIP;
+						}
+						
+						NdisMoveMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey.Key, keyMaterial, 16);
+						pAd->MulTestTab.WdsEntry[i].WdsKey.KeyLen = 16;
+						NdisMoveMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey.RxMic, keyMaterial+16, 8);
+						NdisMoveMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey.TxMic, keyMaterial+16, 8);
+						DBGPRINT(RT_DEBUG_TRACE, ("IF/wds%d Key=%s, CipherAlg(%s)\n", i, tmpbuf, (CipherAlg == CIPHER_AES ? "AES" : "TKIP")));
+					}
+					else
+					{
+						DBGPRINT(RT_DEBUG_TRACE, ("IF/wds%d has invalid key for WPA, reset encryption to OPEN\n", i));
+						pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11EncryptionDisabled;
+						NdisZeroMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey, sizeof(CIPHER_KEY));
+					}
+
+				}
+				else
+				{									
+					pAd->MulTestTab.WdsEntry[i].WepStatus = Ndis802_11EncryptionDisabled;
+					NdisZeroMemory(&pAd->MulTestTab.WdsEntry[i].WdsKey, sizeof(CIPHER_KEY));
+				}								
+			}
+		}
+	}
+
+	/* WdsDefaultKeyID */
+	if(RTMPGetKeyParameter("WdsDefaultKeyID", tmpbuf, 10, buffer, TRUE))
+	{
+		for (i = 0, macptr = rstrtok(tmpbuf,";"); (macptr && i < MAX_WDS_ENTRY); macptr = rstrtok(NULL,";"), i++)
+		{
+			KeyIdx = (UCHAR) simple_strtol(macptr, 0, 10);
+			if((KeyIdx >= 1 ) && (KeyIdx <= 4))
+				pAd->MulTestTab.WdsEntry[i].KeyIdx = (UCHAR) (KeyIdx - 1);
+			else
+				pAd->MulTestTab.WdsEntry[i].KeyIdx = 0;
+
+			if ((pAd->MulTestTab.WdsEntry[i].WepStatus == Ndis802_11Encryption2Enabled)
+					|| (pAd->MulTestTab.WdsEntry[i].WepStatus == Ndis802_11Encryption3Enabled))
+				pAd->MulTestTab.WdsEntry[i].KeyIdx = 0;	
+
+			DBGPRINT(RT_DEBUG_TRACE, ("IF/wds%d - WdsDefaultKeyID(0~3)=%d\n", i, pAd->MulTestTab.WdsEntry[i].KeyIdx));	
+		}				
+	}
+}
+
+
 #ifdef SINGLE_SKU_V2
 NDIS_STATUS	RTMPSetSingleSKUParameters(
 	IN RTMP_ADAPTER *pAd)
@@ -2708,6 +2930,8 @@ NDIS_STATUS	RTMPSetSingleSKUParameters(
 	PSTRING ptr;
 	int index, i;
 	CH_POWER *StartCh = NULL;
+	UCHAR MaxPwr;
+	UCHAR channel, *temp;
 	RTMP_OS_FS_INFO osFSInfo;
 
 	DlListInit(&pAd->SingleSkuPwrList);
@@ -2727,7 +2951,12 @@ NDIS_STATUS	RTMPSetSingleSKUParameters(
 				("--> Error opening %s\n", SINGLE_SKU_TABLE_FILE_NAME));
 		goto  free_resource;
 	}
-	
+
+#ifdef RTMP_INTERNAL_TX_ALC
+	if (pAd->TxPowerCtrl.bInternalTxALC != TRUE)
+#endif /* RTMP_INTERNAL_TX_ALC */
+		MT7601_InitPAModeTable(pAd);
+
 	/* card information file exists so reading the card information */
 	NdisZeroMemory(buffer, MAX_INI_BUFFER_SIZE);
 	retval = RtmpOSFileRead(srcf, buffer, MAX_INI_BUFFER_SIZE);
@@ -2749,23 +2978,21 @@ NDIS_STATUS	RTMPSetSingleSKUParameters(
 			if ( !strncmp(readline, "ch", 2) )
 			{
 
-				CH_POWER *pwr = NULL;
+				CH_POWER *pwr;
 
 				os_alloc_mem(NULL, (UCHAR **)&pwr, sizeof(*pwr));
 				NdisZeroMemory(pwr, sizeof(*pwr));
 
 				token= rstrtok(readline +2 ," ");
-				pwr->channel = simple_strtol(token, 0, 10);
-				
-				if (pwr->channel <= 14)
+				channel = simple_strtol(token, 0, 10);
+				pwr->StartChannel = channel;
+
+				for ( i= 0 ; i < SINGLE_SKU_TABLE_CCK_LENGTH ; i++ )
 				{
-					for ( i= 0 ; i < SINGLE_SKU_TABLE_CCK_LENGTH ; i++ )
-					{
-						token = rstrtok(NULL ," ");
-						if ( token == NULL )
-							break;
-						pwr->PwrCCK[i] = simple_strtol(token, 0, 10) * 2;
-					}
+					token = rstrtok(NULL ," ");
+					if ( token == NULL )
+						break;
+					pwr->PwrCCK[i] = simple_strtol(token, 0, 10) * 2;
 				}
 
 				for ( i= 0 ; i < SINGLE_SKU_TABLE_OFDM_LENGTH ; i++ )
@@ -2791,63 +3018,132 @@ NDIS_STATUS	RTMPSetSingleSKUParameters(
 						break;
 					pwr->PwrHT40[i] = simple_strtol(token, 0, 10) *2;
 				}
-
-				for ( i= 0 ; i < SINGLE_SKU_TABLE_VHT_LENGTH ; i++ )
-				{
-					token = rstrtok(NULL ," ");
-					if ( token == NULL )
-						break;
-					pwr->PwrVHT80[i] = simple_strtol(token, 0, 10) *2;
-				}
 				
+
+				if ( StartCh == NULL )
 				{
 					StartCh = pwr;
 					DlListAddTail(&pAd->SingleSkuPwrList, &pwr->List);
 				}
-				StartCh->num ++;
+				else
+				{
+					BOOLEAN isSame = TRUE;
 
+				for ( i= 0 ; i < SINGLE_SKU_TABLE_CCK_LENGTH ; i++ )
+				{
+						if ( StartCh->PwrCCK[i] != pwr->PwrCCK[i] )
+						{
+							isSame = FALSE;
+						break;
+						}
+				}
+
+					if ( isSame == TRUE )
+					{
+				for ( i= 0 ; i < SINGLE_SKU_TABLE_OFDM_LENGTH ; i++ )
+				{
+							if ( StartCh->PwrOFDM[i] != pwr->PwrOFDM[i] )
+							{
+								isSame = FALSE;
+						break;
+							}
+						}
+				}
+
+					if ( isSame == TRUE )
+					{
+				for ( i= 0 ; i < SINGLE_SKU_TABLE_HT_LENGTH ; i++ )
+				{
+							if ( StartCh->PwrHT20[i] != pwr->PwrHT20[i] )
+							{
+								isSame = FALSE;
+						break;
+							}
+						}
+				}
+
+					if ( isSame == TRUE )
+					{
+				for ( i= 0 ; i < SINGLE_SKU_TABLE_HT_LENGTH ; i++ )
+				{
+							if ( StartCh->PwrHT40[i] != pwr->PwrHT40[i] )
+							{
+								isSame = FALSE;
+						break;
+							}
+						}
+				}
+
+					if ( isSame == TRUE )
+					{
+						os_free_mem(NULL, pwr);
+					}
+					else
+					{
+						StartCh = pwr;
+						DlListAddTail(&pAd->SingleSkuPwrList, &StartCh->List);
+						pwr = NULL;
+				}
+			
+
+				}
+
+
+				StartCh->num ++;
+				os_alloc_mem(pAd, (PUCHAR *)&temp, StartCh->num);
+				if ( StartCh->Channel != NULL )
+				{
+					NdisMoveMemory(temp, StartCh->Channel, StartCh->num-1);
+					os_free_mem(pAd, StartCh->Channel);
+				}
+				StartCh->Channel = temp;
+				StartCh->Channel[StartCh->num-1] = channel;
 			}
 		}
-
-
-	}
+				
+				
+				}
 
 	{
 		CH_POWER *ch, *ch_temp;
 		DlListForEachSafe(ch, ch_temp, &pAd->SingleSkuPwrList, CH_POWER, List)
 		{
 			int i;
-			printk("start ch = %d, ch->num = %d\n", ch->channel, ch->num);
+			DBGPRINT(RT_DEBUG_TRACE,("start ch = %d, ch->num = %d\n", ch->StartChannel, ch->num));
 
+			DBGPRINT(RT_DEBUG_TRACE, ("Channel: "));
+			for ( i = 0 ; i < ch->num ; i++ )
+				DBGPRINT(RT_DEBUG_TRACE,("%d ", ch->Channel[i]));
+			DBGPRINT(RT_DEBUG_TRACE,("\n"));
+
+			DBGPRINT(RT_DEBUG_TRACE, ("CCK: "));
 			for ( i= 0 ; i < SINGLE_SKU_TABLE_CCK_LENGTH ; i++ )
 			{
-				printk("%d ", ch->PwrCCK[i]);
+				DBGPRINT(RT_DEBUG_TRACE,("%d ", ch->PwrCCK[i]));
 			}
-			printk("\n");
+			DBGPRINT(RT_DEBUG_TRACE,("\n"));
 
+			DBGPRINT(RT_DEBUG_TRACE, ("OFDM: "));
 			for ( i= 0 ; i < SINGLE_SKU_TABLE_OFDM_LENGTH ; i++ )
 			{
-				printk("%d ", ch->PwrOFDM[i]);
+				DBGPRINT(RT_DEBUG_TRACE,("%d ", ch->PwrOFDM[i]));
 			}
-			printk("\n");		
+			DBGPRINT(RT_DEBUG_TRACE,("\n"));
 
+			DBGPRINT(RT_DEBUG_TRACE, ("HT20: "));
 			for ( i= 0 ; i < SINGLE_SKU_TABLE_HT_LENGTH ; i++ )
 			{
-				printk("%d ", ch->PwrHT20[i]);
+				DBGPRINT(RT_DEBUG_TRACE, ("%d ", ch->PwrHT20[i]));
 			}
-			printk("\n");
+			DBGPRINT(RT_DEBUG_TRACE,("\n"));
 
+			DBGPRINT(RT_DEBUG_TRACE, ("HT40: "));
 			for ( i= 0 ; i < SINGLE_SKU_TABLE_HT_LENGTH ; i++ )
 			{
-				printk("%d ", ch->PwrHT40[i]);
+				DBGPRINT(RT_DEBUG_TRACE,("%d ", ch->PwrHT40[i]));
 			}
-			printk("\n");
+			DBGPRINT(RT_DEBUG_TRACE,("\n"));
 
-			for ( i= 0 ; i < SINGLE_SKU_TABLE_VHT_LENGTH ; i++ )
-			{
-				printk("%d ", ch->PwrVHT80[i]);
-			}
-			printk("\n");
 		}
 	}
 
@@ -2858,7 +3154,394 @@ free_resource:
 	RtmpOSFSInfoChange(&osFSInfo, FALSE);
 
 	os_free_mem(NULL, buffer);
-	return TRUE;
+
 }
+
+
+UCHAR GetSkuChannelBasePwr(
+	IN PRTMP_ADAPTER 	pAd,
+	IN UCHAR 			channel)
+{
+	CH_POWER *ch, *ch_temp;
+	UCHAR start_ch;
+	UCHAR base_pwr = pAd->DefaultTargetPwr;
+	UINT8 i, j;
+	
+	DlListForEachSafe(ch, ch_temp, &pAd->SingleSkuPwrList, CH_POWER, List)
+	{
+		start_ch = ch->StartChannel;
+
+		if ( channel >= start_ch )
+		{
+			for ( j = 0; j < ch->num; j++ )
+			{
+				if ( channel == ch->Channel[j] )
+				{
+					for ( i= 0 ; i < SINGLE_SKU_TABLE_CCK_LENGTH ; i++ )
+					{
+						if ( base_pwr > ch->PwrCCK[i] )
+							base_pwr = ch->PwrCCK[i];
+					}
+
+					for ( i= 0 ; i < SINGLE_SKU_TABLE_OFDM_LENGTH ; i++ )
+					{
+						if ( base_pwr > ch->PwrOFDM[i] )
+							base_pwr = ch->PwrOFDM[i];
+					}
+
+					for ( i= 0 ; i < SINGLE_SKU_TABLE_HT_LENGTH ; i++ )
+					{
+						if ( base_pwr > ch->PwrHT20[i] )
+							base_pwr = ch->PwrHT20[i];
+					}
+						
+					if (pAd->CommonCfg.BBPCurrentBW == BW_40)
+					{
+						for ( i= 0 ; i < SINGLE_SKU_TABLE_HT_LENGTH ; i++ )
+						{
+							if ( ch->PwrHT40[i] == 0 )
+								break;
+
+							if ( base_pwr > ch->PwrHT40[i] )
+								base_pwr = ch->PwrHT40[i];
+						}
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	return base_pwr;
+
+}
+
+#define	SKU_PHYMODE_CCK_1M_2M				0
+#define	SKU_PHYMODE_CCK_5M_11M				1
+#define	SKU_PHYMODE_OFDM_6M_9M				2
+#define	SKU_PHYMODE_OFDM_12M_18M			3
+#define	SKU_PHYMODE_OFDM_24M_36M			4
+#define	SKU_PHYMODE_OFDM_48M_54M			5
+#define	SKU_PHYMODE_HT_MCS0_MCS1			6
+#define	SKU_PHYMODE_HT_MCS2_MCS3			7
+#define	SKU_PHYMODE_HT_MCS4_MCS5			8
+#define	SKU_PHYMODE_HT_MCS6_MCS7			9
+#define	SKU_PHYMODE_HT_MCS8_MCS9			10
+#define	SKU_PHYMODE_HT_MCS10_MCS11			11
+#define	SKU_PHYMODE_HT_MCS12_MCS13			12
+#define	SKU_PHYMODE_HT_MCS14_MCS15			13
+#define	SKU_PHYMODE_STBC_MCS0_MCS1			14
+#define	SKU_PHYMODE_STBC_MCS2_MCS3			15
+#define	SKU_PHYMODE_STBC_MCS4_MCS5			16
+#define	SKU_PHYMODE_STBC_MCS6_MCS7			17
+
+
+VOID InitSkuRateDiffTable(
+	IN PRTMP_ADAPTER 	pAd )
+{
+	USHORT		i, value;
+	CHAR		BasePwr, Pwr;
+
+	RT28xx_EEPROM_READ16(pAd, EEPROM_TXPOWER_BYRATE_20MHZ_2_4G + 4, value);
+	BasePwr = (value >> 8) & 0xFF;
+	BasePwr = (BasePwr > 0x1F ) ? BasePwr - 0x40: BasePwr;
+
+	for ( i = 0 ; i < 9; i++ )
+	{
+		RT28xx_EEPROM_READ16(pAd, EEPROM_TXPOWER_BYRATE_20MHZ_2_4G + i*2, value);
+		Pwr = value & 0xFF ;
+		Pwr = (Pwr > 0x1F ) ? Pwr - 0x40: Pwr;
+		pAd->SingleSkuRatePwrDiff[i *2] = Pwr - BasePwr;
+		Pwr = (value >> 8) & 0xFF;
+		Pwr = (Pwr > 0x1F ) ? Pwr - 0x40: Pwr;
+		pAd->SingleSkuRatePwrDiff[i *2 + 1] = Pwr - BasePwr;
+	}
+}
+
+INT32 GetSkuPAModePwr(
+	IN PRTMP_ADAPTER 	pAd,
+	IN UCHAR			PAMode)
+{
+	INT32 pa_mode_pwr = 0;
+	
+	switch ( PAMode )
+	{
+		case SKU_PHYMODE_CCK_1M_2M:
+			pa_mode_pwr = RF_PA_MODE_CCK_1M;
+			break;
+		case SKU_PHYMODE_CCK_5M_11M:
+			pa_mode_pwr = RF_PA_MODE_CCK_5M;
+			break;
+		case SKU_PHYMODE_OFDM_6M_9M:
+			pa_mode_pwr = RF_PA_MODE_OFDM_6M;
+			break;
+		case SKU_PHYMODE_OFDM_12M_18M:
+			pa_mode_pwr = RF_PA_MODE_OFDM_12M;
+			break;
+		case SKU_PHYMODE_OFDM_24M_36M:
+			pa_mode_pwr = RF_PA_MODE_OFDM_24M;
+			break;
+		case SKU_PHYMODE_OFDM_48M_54M:
+			pa_mode_pwr = RF_PA_MODE_OFDM_48M;
+			break;
+		case SKU_PHYMODE_HT_MCS0_MCS1:
+		case SKU_PHYMODE_STBC_MCS0_MCS1:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS0;
+			break;
+		case SKU_PHYMODE_HT_MCS2_MCS3:
+		case SKU_PHYMODE_STBC_MCS2_MCS3:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS2;
+			break;
+		case SKU_PHYMODE_HT_MCS4_MCS5:
+		case SKU_PHYMODE_STBC_MCS4_MCS5:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS4;
+			break;
+		case SKU_PHYMODE_HT_MCS6_MCS7:
+		case SKU_PHYMODE_STBC_MCS6_MCS7:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS6;
+			break;
+		case SKU_PHYMODE_HT_MCS8_MCS9:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS8;
+			break;
+		case SKU_PHYMODE_HT_MCS10_MCS11:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS10;
+			break;
+		case SKU_PHYMODE_HT_MCS12_MCS13:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS12;
+			break;
+		case SKU_PHYMODE_HT_MCS14_MCS15:
+			pa_mode_pwr = RF_PA_MODE_HT_MCS14;
+			break;
+		default:
+			break;
+	}
+
+	return pa_mode_pwr;
+}
+
+
+UCHAR GetSkuRatePwr(
+	IN PRTMP_ADAPTER 	pAd,
+	IN CHAR 				phymode,
+	IN UCHAR 			channel,
+	IN UCHAR			bw)
+{
+	UINT8 i;
+	CH_POWER *ch, *ch_temp;
+	UCHAR start_ch;
+	UCHAR rate_pwr = pAd->DefaultTargetPwr;
+	UCHAR max_pwr;
+	INT32 pwr_diff;
+
+	DlListForEachSafe(ch, ch_temp, &pAd->SingleSkuPwrList, CH_POWER, List)
+	{
+		start_ch = ch->StartChannel;
+
+		if ( channel >= start_ch )
+		{
+			for ( i = 0; i < ch->num; i++ )
+			{
+				if ( channel == ch->Channel[i] )
+				{
+					switch ( phymode )
+					{
+						case SKU_PHYMODE_CCK_1M_2M:
+							rate_pwr = ch->PwrCCK[0];
+							break;
+						case SKU_PHYMODE_CCK_5M_11M:
+							rate_pwr = ch->PwrCCK[2];
+							break;
+						case SKU_PHYMODE_OFDM_6M_9M:
+							rate_pwr = ch->PwrOFDM[0];
+							break;
+						case SKU_PHYMODE_OFDM_12M_18M:
+							rate_pwr = ch->PwrOFDM[2];
+							break;
+						case SKU_PHYMODE_OFDM_24M_36M:
+							rate_pwr = ch->PwrOFDM[4];
+							break;
+						case SKU_PHYMODE_OFDM_48M_54M:
+							rate_pwr = ch->PwrOFDM[6];
+							break;
+						case SKU_PHYMODE_HT_MCS0_MCS1:
+						case SKU_PHYMODE_STBC_MCS0_MCS1:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[0];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[0];
+							break;
+						case SKU_PHYMODE_HT_MCS2_MCS3:
+						case SKU_PHYMODE_STBC_MCS2_MCS3:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[2];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[2];
+							break;
+						case SKU_PHYMODE_HT_MCS4_MCS5:
+						case SKU_PHYMODE_STBC_MCS4_MCS5:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[4];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[4];
+							break;
+						case SKU_PHYMODE_HT_MCS6_MCS7:
+						case SKU_PHYMODE_STBC_MCS6_MCS7:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[6];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[6];
+							break;
+						case SKU_PHYMODE_HT_MCS8_MCS9:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[8];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[8];
+							break;
+						case SKU_PHYMODE_HT_MCS10_MCS11:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[10];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[10];
+							break;
+						case SKU_PHYMODE_HT_MCS12_MCS13:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[12];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[12];
+							break;
+						case SKU_PHYMODE_HT_MCS14_MCS15:
+							if ( bw == BW_20 )
+								rate_pwr = ch->PwrHT20[14];
+							else if ( bw == BW_40 )
+								rate_pwr = ch->PwrHT40[14];
+							break;
+						default:
+							break;
+					}
+					break;
+				}
+			}
+		}
+	}
+
+	pwr_diff = GetSkuPAModePwr(pAd, phymode) + (pAd->SingleSkuRatePwrDiff[phymode] << 12) + 2048;
+	pwr_diff = pwr_diff >> 12;
+	max_pwr = pAd->DefaultTargetPwr + pwr_diff;
+
+	if ( rate_pwr > max_pwr )
+		rate_pwr = max_pwr;
+
+	return rate_pwr;
+
+}
+
+
+VOID UpdateSkuRatePwr(
+	IN PRTMP_ADAPTER 	pAd,
+	IN UCHAR 			channel,
+	IN UCHAR			bw,
+	IN CHAR				base_pwr)
+{
+	INT32	sku_rate_pwr;
+	INT32	rate_pwr;
+	INT32	mcs_digital_pwr, pa_mode_pwr, diff_pwr;
+	UINT32	data, Adata, Gdata;
+	UCHAR 	BBPR4, BBPR178;
+	UCHAR	i;
+	CHAR	rate_table[18];
+
+	printk("channel = %d, bw = %d\n", channel, bw);
+
+	for ( i = 0 ; i < 18; i++ )
+	{
+		sku_rate_pwr = GetSkuRatePwr(pAd, i, channel, bw);
+		printk("sku_rate_pwr = %d", sku_rate_pwr);
+		sku_rate_pwr = sku_rate_pwr << 12;			// sku_rate_power * 4096
+		printk("\tsku_rate_pwr = %d\n", sku_rate_pwr);
+
+		if ( i < SKU_PHYMODE_CCK_5M_11M )
+		{
+			RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R4, &BBPR4);
+			RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R178, &BBPR178);
+			if ( BBPR4 & 0x20 )
+			{
+				if ( BBPR178 == 0 )
+				{
+					mcs_digital_pwr = 9830;		// 8192 * 1.2
+				}
+				else
+				{
+					mcs_digital_pwr = 18022;		// 8192 * 2.2
+				}
+			}
+			else
+			{
+				if ( BBPR178 == 0 )
+				{
+					mcs_digital_pwr = 24576;		// 8192 * 3
+				}
+				else
+				{
+					mcs_digital_pwr = 819;			/// 8192 * 0.1
+				}
+
+			}
+		}
+		else
+		{
+			mcs_digital_pwr = 0;
+		}
+
+		pa_mode_pwr = GetSkuPAModePwr(pAd, i);
+
+		printk("base_pwr = %d", base_pwr);
+		rate_pwr = base_pwr << 12;
+		printk("\t base_pwr = %d\n", rate_pwr);
+		printk("mcs_digital_pwr = %d\n", mcs_digital_pwr);
+		printk("pa_mode_pwr = %d\n", pa_mode_pwr);
+		rate_pwr = rate_pwr + mcs_digital_pwr + pa_mode_pwr;
+		printk("rate_pwr = %d\n", rate_pwr);
+		diff_pwr = sku_rate_pwr - rate_pwr;
+		printk("diff_pwr = %d", diff_pwr);
+		diff_pwr = diff_pwr >> 12;
+		printk("\tdiff_pwr = %d\n", diff_pwr);
+
+		rate_table[i] = diff_pwr -1;
+	}
+
+	for ( i = 0 ; i < 5; i++ )
+	{
+		data = 0;
+		Adata = 0;
+		Gdata = 0;
+
+		data = (rate_table[i*4] & 0x3F )+ ((rate_table[i*4 + 1] &0x3F) << 8);
+		Adata = ((rate_table[i*4] + pAd->chipCap.Apwrdelta ) & 0x3F )+ ( ((rate_table[i*4 + 1] + pAd->chipCap.Apwrdelta) & 0x3F) << 8);
+		Gdata = ((rate_table[i*4] + pAd->chipCap.Gpwrdelta ) & 0x3F ) + ( ((rate_table[i*4 + 1] + pAd->chipCap.Gpwrdelta) & 0x3F) << 8);
+		
+		if ( i != 4 )
+		{
+			data |= ((rate_table[i*4 + 2] &0x3F) << 16 )+ ((rate_table[i*4 + 3] & 0x3F) << 24);
+			Adata |= ( ((rate_table[i*4 + 2] + pAd->chipCap.Apwrdelta ) & 0x3F) << 16) + ( ((rate_table[i*4 + 3] + pAd->chipCap.Apwrdelta) & 0x3F) << 24);
+			Gdata |= ( ((rate_table[i*4 + 2] + pAd->chipCap.Gpwrdelta ) & 0x3F) << 16) + ( ((rate_table[i*4 + 3] + pAd->chipCap.Gpwrdelta) & 0x3F) << 24);
+		}
+
+		/* For 20M/40M Power Delta issue */		
+		pAd->Tx20MPwrCfgABand[i] = data;
+		pAd->Tx20MPwrCfgGBand[i] = data;
+		pAd->Tx40MPwrCfgABand[i] = Adata;
+		pAd->Tx40MPwrCfgGBand[i] = Gdata;
+
+		RTMP_IO_WRITE32(pAd, TX_PWR_CFG_0 + i*4, data);
+
+		DBGPRINT_RAW(RT_DEBUG_TRACE, ("20MHz BW, 2.4G band-%08x,  Adata = %08x,  Gdata = %08x \n", data, Adata, Gdata));
+	}
+
+	/* Extra set MAC registers to compensate Tx power if any */
+	RTMP_CHIP_ASIC_EXTRA_POWER_OVER_MAC(pAd);
+
+}
+
+
 #endif /* SINGLE_SKU_V2 */
 

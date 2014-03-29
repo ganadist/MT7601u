@@ -68,7 +68,7 @@
 				0: do nothing        
 				1: kick read/write process
 			Read - Polling RF register read/write
-				0: idle
+				0: idle                   
 				1: busy
 	RF_CSR_RW:1
 			0: read  1: write
@@ -87,15 +87,25 @@ typedef	union _RLT_RF_CSR_CFG {
 		UINT RF_CSR_KICK:1;
 		UINT RF_CSR_WR:1;
 		UINT rsv:12;
+#ifdef MT7601
+		UINT RF_CSR_REG_BANK:4;
+		UINT RF_CSR_REG_ID:6;
+#else
 		UINT RF_CSR_REG_BANK:3;
 		UINT RF_CSR_REG_ID:7;
+#endif /* MT7601 */
 		UINT RF_CSR_DATA:8;
 	} field;
 #else
 	struct {
 		UINT RF_CSR_DATA:8;
+#ifdef MT7601
+		UINT RF_CSR_REG_ID:6;
+		UINT RF_CSR_REG_BANK:4;
+#else
 		UINT RF_CSR_REG_ID:7;
 		UINT RF_CSR_REG_BANK:3;
+#endif /* MT7601 */
 		UINT rsv:12;
 		UINT RF_CSR_WR:1;
 		UINT RF_CSR_KICK:1;

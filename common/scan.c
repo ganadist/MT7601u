@@ -35,8 +35,7 @@ static INT scan_ch_restore(RTMP_ADAPTER *pAd, UCHAR OpMode)
 	USHORT Status;
 #endif /* CONFIG_STA_SUPPORT */
 	INT bw, ch;
-	
-	//printk("pAd->hw_cfg.bbp_bw = %d\n", pAd->hw_cfg.bbp_bw);	
+		
 	if (pAd->CommonCfg.BBPCurrentBW != pAd->hw_cfg.bbp_bw)
 	{	
 		rtmp_bbp_set_bw(pAd, pAd->hw_cfg.bbp_bw);
@@ -72,7 +71,7 @@ static INT scan_ch_restore(RTMP_ADAPTER *pAd, UCHAR OpMode)
 	}
 	DBGPRINT(RT_DEBUG_TRACE, ("SYNC - End of SCAN, restore to %dMHz channel %d, Total BSS[%02d]\n",
 				bw, ch, pAd->ScanTab.BssNr));
-
+		
 #ifdef CONFIG_STA_SUPPORT
 	if (OpMode == OPMODE_STA)
 	{

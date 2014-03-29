@@ -33,57 +33,35 @@ extern UCHAR EpToQueue[];
 /* 802.11 MAC Header, Type:Data, Length:24bytes + 6 bytes QOS/HTC + 2 bytes padding */
 extern UCHAR TemplateFrame[32];
 
-extern VOID rlt_usb_write_txinfo(
-	IN RTMP_ADAPTER *pAd,
-	IN TXINFO_STRUC *pTxInfo,
-	IN USHORT USBDMApktLen,
-	IN BOOLEAN bWiv,
-	IN UCHAR QueueSel,
-	IN UCHAR NextValid,
-	IN UCHAR TxBurst);
-
-
-INT TxDmaBusy(RTMP_ADAPTER *pAd)
+INT TxDmaBusy(
+	IN PRTMP_ADAPTER pAd)
 {
 	INT result;
 	USB_DMA_CFG_STRUC UsbCfg;
-	BOOLEAN is_busy;
 
-	USB_CFG_READ(pAd, &UsbCfg.word);
-#ifdef MT7601
-	if (IS_MT7601(pAd))
-		is_busy = UsbCfg.field_7601.TxBusy;
-	else
-#endif /* MT7601 */
-		is_busy = UsbCfg.field.TxBusy;
-
-	result = (is_busy) ? TRUE : FALSE;
+	RTMP_IO_READ32(pAd, USB_DMA_CFG, &UsbCfg.word);	/* disable DMA */
+	result = (UsbCfg.field.TxBusy) ? TRUE : FALSE;
 
 	return result;
 }
 
 
-INT RxDmaBusy(RTMP_ADAPTER *pAd)
+INT RxDmaBusy(
+	IN PRTMP_ADAPTER pAd)
 {
 	INT result;
 	USB_DMA_CFG_STRUC UsbCfg;
-	BOOLEAN is_busy;
 
-	USB_CFG_READ(pAd, &UsbCfg.word);
-#ifdef MT7601
-	if (IS_MT7601(pAd))
-		is_busy = UsbCfg.field_7601.RxBusy;
-	else
-#endif /* MT7601 */
-		is_busy = UsbCfg.field.RxBusy;
-
-	result = (is_busy) ? TRUE : FALSE;
+	RTMP_IO_READ32(pAd, USB_DMA_CFG, &UsbCfg.word);	/* disable DMA */
+	result = (UsbCfg.field.RxBusy) ? TRUE : FALSE;
 
 	return result;
 }
 
 
-VOID RtmpDmaEnable(RTMP_ADAPTER *pAd, INT Enable)
+VOID RtmpDmaEnable(
+	IN PRTMP_ADAPTER pAd,
+	IN INT Enable)
 {
 	BOOLEAN value;
 	ULONG WaitCnt;
@@ -100,21 +78,10 @@ VOID RtmpDmaEnable(RTMP_ADAPTER *pAd, INT Enable)
 		if (WaitCnt++ > 100)
 			break;
 	}
-
-	USB_CFG_READ(pAd, &UsbCfg.word);
-#ifdef MT7601
-	if (IS_MT7601(pAd)) {
-		UsbCfg.field_7601.TxBulkEn = value;
-		UsbCfg.field_7601.RxBulkEn = value;
-	}
-	else
-#endif /* MT7601 */
-	{
-		UsbCfg.field.TxBulkEn = value;
-		UsbCfg.field.RxBulkEn = value;
-	}
-
-	USB_CFG_WRITE(pAd, UsbCfg.word);
+	RTMP_IO_READ32(pAd, USB_DMA_CFG, &UsbCfg.word);	/* disable DMA */
+	UsbCfg.field.TxBulkEn = value;
+	UsbCfg.field.RxBulkEn = value;
+	RTMP_IO_WRITE32(pAd, USB_DMA_CFG, UsbCfg.word);	/* abort all TX rings */
 	RtmpOsMsDelay(5);
 
 	return;
@@ -139,63 +106,30 @@ static VOID ATEWriteTxWI(
 	IN	HTTRANSMIT_SETTING	Transmit)
 {
 	OPSTATUS_CLEAR_FLAG(pAd, fOP_STATUS_SHORT_PREAMBLE_INUSED);
-#ifdef RLT_MAC
-	{
-		struct  _TXWI_NMAC *txwi_n = (struct  _TXWI_NMAC *)pTxWI;
+	pTxWI->TxWIFRAG= FRAG;
+	pTxWI->TxWITS= InsTimestamp;
+	pTxWI->TxWIAMPDU = AMPDU;
 
-		txwi_n->FRAG = FRAG;
-		txwi_n->TS = InsTimestamp;
-		txwi_n->AMPDU = AMPDU;
+	pTxWI->TxWIMIMOps = PWR_ACTIVE;
+	pTxWI->TxWIMpduDensity = 4;
+	pTxWI->TxWIACK = Ack;
+	pTxWI->TxWITXOP = Txopmode;
+	pTxWI->TxWINSEQ = NSeq;
+	//pTxWI->TxWIBAWinSize = BASize;	
+	pTxWI->TxWIBAWinSize = 21;	
 
-		txwi_n->MIMOps = PWR_ACTIVE;
-		txwi_n->MpduDensity = 4;
-		txwi_n->ACK = Ack;
-		txwi_n->txop = Txopmode;
-		txwi_n->NSEQ = NSeq;
-		txwi_n->BAWinSize = BASize;	
-
-		txwi_n->wcid = WCID;
-		txwi_n->MPDUtotalByteCnt = Length; 
-		txwi_n->TxPktId = PID; 
-		
-		txwi_n->BW = Transmit.field.BW;
-		txwi_n->ShortGI = Transmit.field.ShortGI;
-		txwi_n->STBC= Transmit.field.STBC;
-		
-		txwi_n->MCS = Transmit.field.MCS;
-		txwi_n->PHYMODE= Transmit.field.MODE;
-		txwi_n->CFACK = CfAck;
-	}
-#endif /* RLT_MAC */
-
-#ifdef RTMP_MAC
-	{
-		struct  _TXWI_OMAC *txwi_o = (struct  _TXWI_OMAC *)pTxWI;
-
-		txwi_o->FRAG= FRAG;
-		txwi_o->TS = InsTimestamp;
-		txwi_o->AMPDU = AMPDU;
-
-		txwi_o->MIMOps = PWR_ACTIVE;
-		txwi_o->MpduDensity = 4;
-		txwi_o->ACK = Ack;
-		txwi_o->txop = Txopmode;
-		txwi_o->NSEQ = NSeq;
-		txwi_o->BAWinSize = BASize;	
-
-		txwi_o->wcid = WCID;
-		txwi_o->MPDUtotalByteCnt = Length; 
-		txwi_o->PacketId = PID; 
-		
-		txwi_o->BW = Transmit.field.BW;
-		txwi_o->ShortGI = Transmit.field.ShortGI;
-		txwi_o->STBC= Transmit.field.STBC;
-		
-		txwi_o->MCS = Transmit.field.MCS;
-		txwi_o->PHYMODE= Transmit.field.MODE;
-		txwi_o->CFACK = CfAck;
-	}
-#endif /* RTMP_MAC */
+	pTxWI->TxWIWirelessCliID = WCID;
+	pTxWI->TxWIMPDUByteCnt = Length; 
+	//pTxWI->TxWIPacketId = PID; 
+	pTxWI->TxWIPacketId = 7; 
+	
+	pTxWI->TxWIBW = Transmit.field.BW;
+	pTxWI->TxWIShortGI = Transmit.field.ShortGI;
+	pTxWI->TxWISTBC= Transmit.field.STBC;
+	
+	pTxWI->TxWIMCS = Transmit.field.MCS;
+	pTxWI->TxWIPHYMODE= Transmit.field.MODE;
+	pTxWI->TxWICFACK = CfAck;
 
 	return;
 }
@@ -219,7 +153,41 @@ static VOID ATEWriteTxInfo(
 	IN	UCHAR			NextValid,
 	IN	UCHAR			TxBurst)
 {
-	rlt_usb_write_txinfo(pAd, pTxInfo, USBDMApktLen, bWiv, QueueSel, NextValid, TxBurst);
+#ifdef RLT_MAC
+	struct _TXINFO_NMAC_PKT *nmac_info;
+
+	nmac_info = (struct _TXINFO_NMAC_PKT *)pTxInfo;
+	nmac_info->pkt_80211 = 1;
+	nmac_info->info_type = 0;
+	nmac_info->d_port = 0;
+	nmac_info->cso = 0;
+	nmac_info->tso = 0;
+#endif /* RLT_MAC */
+
+#ifdef RTMP_MAC
+	/* ATE doesn't support checksum offload. */
+	pTxInfo->TxInfoCSO = 1;
+	pTxInfo->TxInfoUSO = 0;
+	pTxInfo->TxInfoTCPOffset = 0;
+	pTxInfo->TxInfoIPOffset = 0;
+#endif /* RTMP_MAC */
+
+	pTxInfo->TxInfoPktLen = USBDMApktLen;
+	pTxInfo->TxInfoQSEL = QueueSel;
+
+	if (QueueSel != FIFO_EDCA)
+		DBGPRINT(RT_DEBUG_TRACE, ("======= QueueSel != FIFO_EDCA =======\n"));
+
+	pTxInfo->TxInfoUDMANextVld = NextValid;
+	pTxInfo->TxInfoUDMATxburst = TxBurst;
+	pTxInfo->TxInfoWIV = bWiv;
+#ifndef USB_BULK_BUF_ALIGMENT
+	pTxInfo->TxInfoSwLstRnd = 0;
+#else
+	pTxInfo->bFragLasAlignmentsectiontRound = 0;
+#endif /* USB_BULK_BUF_ALIGMENT */
+
+	return;
 }
 
 
@@ -237,15 +205,10 @@ INT ATESetUpFrame(
 	UINT32			TransferBufferLength, OrgBufferLength = 0;
 	UCHAR			padLen = 0;
 	UINT8 TXWISize = pAd->chipCap.TXWISize;
-	UCHAR bw, sgi, stbc, mcs, phymode, frag, ts, ampdu, ack, nseq, basize, pid, txop, cfack;
-	USHORT mpdu_len;
 #ifdef RALINK_QA
 	PHEADER_802_11	pHeader80211 = NULL;
 #endif /* RALINK_QA */
-
-	bw = sgi = stbc = mcs = phymode = frag = ts = ampdu = ack = nseq = basize = pid = txop = cfack = 0;
-	mpdu_len = 0;
-
+	
 	if ((RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RESET_IN_PROGRESS)) ||
 		(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_BULKOUT_RESET)) ||
 		(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS)) ||
@@ -256,7 +219,7 @@ INT ATESetUpFrame(
 
 	/* We always use QID_AC_BE and FIFO_EDCA in ATE mode. */
 
-	pNullContext = &(pAd->NullContext);
+	pNullContext = &(pAd->NullContext[0]);
 	ASSERT(pNullContext != NULL);
 	
 	if (pNullContext->InUse == FALSE)
@@ -305,8 +268,8 @@ INT ATESetUpFrame(
 			COPY_MAC_ADDR(pAd->NullFrame.Addr3, pATEInfo->Addr3);
 		}
 
-		RTMPZeroMemory(&pAd->NullContext.TransferBuffer->field.WirelessPacket[0], TX_BUFFER_NORMSIZE);
-		pTxInfo = (TXINFO_STRUC *)&pAd->NullContext.TransferBuffer->field.WirelessPacket[0];
+		RTMPZeroMemory(&pAd->NullContext[0].TransferBuffer->field.WirelessPacket[0], TX_BUFFER_NORMSIZE);
+		pTxInfo = (TXINFO_STRUC *)&pAd->NullContext[0].TransferBuffer->field.WirelessPacket[0];
 
 #ifdef RALINK_QA
 		if (pATEInfo->bQATxStart == TRUE) 
@@ -323,84 +286,50 @@ INT ATESetUpFrame(
 
 			/* pTxInfo->TxInfoPktLen will be updated to include padding later */
 			ATEWriteTxInfo(pAd, pTxInfo, (USHORT)(TXWISize + pATEInfo->TxLength)
-			, TRUE, FIFO_EDCA, FALSE,  FALSE);
+			, TRUE, EpToQueue[MGMTPIPEIDX], FALSE,  FALSE);
+			pTxInfo->TxInfoQSEL = FIFO_EDCA;
 		}
 
-		pTxWI = (TXWI_STRUC *)&pAd->NullContext.TransferBuffer->field.WirelessPacket[TXINFO_SIZE];
-
-#ifdef RLT_MAC
-		{
-			bw = pATEInfo->TxWI.TXWI_N.BW;
-			sgi = pATEInfo->TxWI.TXWI_N.ShortGI;
-			stbc = pATEInfo->TxWI.TXWI_N.STBC;
-			mcs = pATEInfo->TxWI.TXWI_N.MCS;
-			phymode = pATEInfo->TxWI.TXWI_N.PHYMODE;
-			frag = pATEInfo->TxWI.TXWI_N.FRAG;
-			ts = pATEInfo->TxWI.TXWI_N.TS;
-			ampdu = pATEInfo->TxWI.TXWI_N.AMPDU;
-			ack =pATEInfo->TxWI.TXWI_N.ACK;
-			nseq = pATEInfo->TxWI.TXWI_N.NSEQ;
-			basize = pATEInfo->TxWI.TXWI_N.BAWinSize;
-			mpdu_len = pATEInfo->TxWI.TXWI_N.MPDUtotalByteCnt;
-			pid = pATEInfo->TxWI.TXWI_N.TxPktId;
-			txop = pATEInfo->TxWI.TXWI_N.txop;
-			cfack = pATEInfo->TxWI.TXWI_N.CFACK;
-		}
-#endif /* RLT_MAC */
-
-#ifdef RTMP_MAC
-		{
-			bw = pATEInfo->TxWI.TXWI_O.BW;
-			sgi = pATEInfo->TxWI.TXWI_O.ShortGI;
-			stbc = pATEInfo->TxWI.TXWI_O.STBC;
-			mcs = pATEInfo->TxWI.TXWI_O.MCS;
-			phymode = pATEInfo->TxWI.TXWI_O.PHYMODE;
-			frag = pATEInfo->TxWI.TXWI_O.FRAG;
-			ts = pATEInfo->TxWI.TXWI_O.TS;
-			ampdu = pATEInfo->TxWI.TXWI_O.AMPDU;
-			ack =pATEInfo->TxWI.TXWI_O.ACK;
-			nseq = pATEInfo->TxWI.TXWI_O.NSEQ;
-			basize = pATEInfo->TxWI.TXWI_O.BAWinSize;
-			mpdu_len = pATEInfo->TxWI.TXWI_O.MPDUtotalByteCnt;
-			pid = pATEInfo->TxWI.TXWI_O.PacketId;
-			txop = pATEInfo->TxWI.TXWI_O.txop;
-			cfack = pATEInfo->TxWI.TXWI_O.CFACK;
-		}
-#endif /* RTMP_MAC */
+		pTxWI = (TXWI_STRUC *)&pAd->NullContext[0].TransferBuffer->field.WirelessPacket[TXINFO_SIZE];
 
 		/* fill TxWI */
 		if (pATEInfo->bQATxStart == TRUE) 
 		{
-			TxHTPhyMode.field.BW = bw;
-			TxHTPhyMode.field.ShortGI = sgi;
-			TxHTPhyMode.field.STBC = stbc;
-			TxHTPhyMode.field.MCS = mcs;
-			TxHTPhyMode.field.MODE = phymode;
-			ATEWriteTxWI(pAd, pTxWI, frag, ts,
-				ampdu, ack, nseq, 
-				basize, BSSID_WCID,
-				mpdu_len /* include 802.11 header */,
-				pid,
-				0, txop/*IFS_HTTXOP*/, cfack
+			TxHTPhyMode.field.BW = pATEInfo->TxWI.TxWIBW;
+			TxHTPhyMode.field.ShortGI = pATEInfo->TxWI.TxWIShortGI;
+			TxHTPhyMode.field.STBC = pATEInfo->TxWI.TxWISTBC;
+			TxHTPhyMode.field.MCS = pATEInfo->TxWI.TxWIMCS;
+			TxHTPhyMode.field.MODE = pATEInfo->TxWI.TxWIPHYMODE;
+			ATEWriteTxWI(pAd, pTxWI, pATEInfo->TxWI.TxWIFRAG, pATEInfo->TxWI.TxWITS,
+				pATEInfo->TxWI.TxWIAMPDU, pATEInfo->TxWI.TxWIACK, pATEInfo->TxWI.TxWINSEQ, 
+				pATEInfo->TxWI.TxWIBAWinSize, BSSID_WCID,
+				pATEInfo->TxWI.TxWIMPDUByteCnt/* include 802.11 header */,
+				pATEInfo->TxWI.TxWIPacketId,
+				0, pATEInfo->TxWI.TxWITXOP/*IFS_HTTXOP*/, pATEInfo->TxWI.TxWICFACK
 				/*FALSE*/, TxHTPhyMode);
 		}
 		else
 		{
-			TxHTPhyMode.field.BW = bw;
-			TxHTPhyMode.field.ShortGI = sgi;
+			TxHTPhyMode.field.BW = pATEInfo->TxWI.TxWIBW;
+			TxHTPhyMode.field.ShortGI = pATEInfo->TxWI.TxWIShortGI;
 			TxHTPhyMode.field.STBC = 0;
-			TxHTPhyMode.field.MCS = mcs;
-			TxHTPhyMode.field.MODE = phymode;
+			TxHTPhyMode.field.MCS = pATEInfo->TxWI.TxWIMCS;
+			TxHTPhyMode.field.MODE = pATEInfo->TxWI.TxWIPHYMODE;
 
 			ATEWriteTxWI(pAd, pTxWI,  FALSE, FALSE, FALSE, FALSE
 				/* No ack required. */, FALSE, 0, BSSID_WCID, pATEInfo->TxLength,
 				0, 0, IFS_HTTXOP, FALSE, TxHTPhyMode);
 		}
 
-		RTMPMoveMemory(&pAd->NullContext.TransferBuffer->field.WirelessPacket[TXINFO_SIZE + TXWISize],
+		hex_dump("ATE", pAd->NullContext[0].TransferBuffer->field.WirelessPacket, 24);
+		dump_txinfo(pAd, pTxInfo);
+		dumpTxWI(pAd, pTxWI);
+		
+		
+		RTMPMoveMemory(&pAd->NullContext[0].TransferBuffer->field.WirelessPacket[TXINFO_SIZE + TXWISize],
 			&pAd->NullFrame, sizeof(HEADER_802_11));
 
-		pDest = &(pAd->NullContext.TransferBuffer->field.WirelessPacket[TXINFO_SIZE + TXWISize + sizeof(HEADER_802_11)]);
+		pDest = &(pAd->NullContext[0].TransferBuffer->field.WirelessPacket[TXINFO_SIZE + TXWISize + sizeof(HEADER_802_11)]);
 
 		/* prepare frame payload */
 #ifdef RALINK_QA
@@ -415,7 +344,7 @@ INT ATESetUpFrame(
 					pDest += pATEInfo->PLen;
 				}
 			}
-			TransferBufferLength = TXINFO_SIZE + TXWISize + mpdu_len;
+			TransferBufferLength = TXINFO_SIZE + TXWISize + pATEInfo->TxWI.TxWIMPDUByteCnt;
 		}
 		else
 #endif /* RALINK_QA */
@@ -458,7 +387,7 @@ INT ATESetUpFrame(
 		}
 
 		/* Fill out frame length information for global Bulk out arbitor. */
-		pAd->NullContext.BulkOutSize = TransferBufferLength;
+		pAd->NullContext[0].BulkOutSize = TransferBufferLength;
 	}
 
 #ifdef RT_BIG_ENDIAN
@@ -466,6 +395,8 @@ INT ATESetUpFrame(
 	RTMPFrameEndianChange(pAd, (((PUCHAR)pTxInfo) + TXWISize + TXINFO_SIZE), DIR_WRITE, FALSE);
 	RTMPDescriptorEndianChange((PUCHAR)pTxInfo, TYPE_TXINFO);
 #endif /* RT_BIG_ENDIAN */
+
+	hex_dump("ATE TX", &pAd->NullContext[0].TransferBuffer->field.WirelessPacket[0], TXWISize + TXINFO_SIZE);
 
 	return 0;
 }
@@ -489,7 +420,7 @@ VOID ATE_RTUSBBulkOutDataPacket(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	UCHAR			BulkOutPipeId)
 {
-	PTX_CONTEXT		pNullContext = &(pAd->NullContext);
+	PTX_CONTEXT		pNullContext = &(pAd->NullContext[0]);
 	PURB			pUrb;
 	INT			ret = 0;
 	ULONG			IrqFlags;

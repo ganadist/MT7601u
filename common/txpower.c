@@ -34,7 +34,6 @@
 #define MDSM_ADD_TX_POWER_BY_6dBm						0x03
 #define MDSM_BBP_R1_STATIC_TX_POWER_CONTROL_MASK		0x03
 
-
 VOID AsicGetTxPowerOffset(RTMP_ADAPTER *pAd, ULONG *TxPwr)
 {
 	CONFIGURATION_OF_TX_POWER_CONTROL_OVER_MAC CfgOfTxPwrCtrlOverMAC;
@@ -276,6 +275,8 @@ VOID AsicGetAutoAgcOffsetForExternalTxAlc(
 VOID AsicAdjustTxPower(
 	IN PRTMP_ADAPTER pAd) 
 {
+	INT			i, j;
+	CHAR 		Value;
 	CHAR		Rssi = -127;
 	CHAR		DeltaPwr = 0;
 	CHAR		TxAgcCompensate = 0;
@@ -311,7 +312,6 @@ VOID AsicAdjustTxPower(
 
 	/* Get Tx rate offset table which from EEPROM 0xDEh ~ 0xEFh */
 	RTMP_CHIP_ASIC_TX_POWER_OFFSET_GET(pAd, (PULONG)&CfgOfTxPwrCtrlOverMAC);
-
 	/* Get temperature compensation delta power value */
 	RTMP_CHIP_ASIC_AUTO_AGC_OFFSET_GET(
 		pAd, &DeltaPwr, &TotalDeltaPower, &TxAgcCompensate, &DeltaPowerByBbpR1);
@@ -324,7 +324,7 @@ VOID AsicAdjustTxPower(
 			DeltaPowerByBbpR1));
 		
 	/* Get delta power based on the percentage specified from UI */
-	AsicPercentageDeltaPower(pAd, Rssi, &DeltaPwr,&DeltaPowerByBbpR1);
+	//AsicPercentageDeltaPower(pAd, Rssi, &DeltaPwr,&DeltaPowerByBbpR1);
 
 	/* The transmit power controlled by the BBP */
 	TotalDeltaPower += DeltaPowerByBbpR1; 
@@ -345,6 +345,110 @@ VOID AsicAdjustTxPower(
 		AsicCompensatePowerViaBBP(pAd, &TotalDeltaPower);
 	}			
 
+#ifdef MT7601
+	if ( IS_MT7601(pAd) )
+		return;
+#endif /* MT7601 */
+
+	/* Power will be updated each 4 sec. */
+	if (pAd->Mlme.OneSecPeriodicRound % 4 == 0)
+	{
+/*****************************************************************************/
+		/* Set new Tx power for different Tx rates */
+		for (i=0; i < CfgOfTxPwrCtrlOverMAC.NumOfEntries; i++)
+		{
+			TX_POWER_CONTROL_OVER_MAC_ENTRY *pTxPwrEntry;
+			ULONG reg_val;
+
+			pTxPwrEntry = &CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[i];
+			reg_val = pTxPwrEntry->RegisterValue;
+			if (reg_val != 0xffffffff)
+			{	
+				for (j=0; j<8; j++)
+				{
+					CHAR _upbound, _lowbound, t_pwr;
+					BOOLEAN _bValid;
+
+					_lowbound = 0;
+					_bValid = TRUE;
+											
+					Value = (CHAR)((reg_val >> j*4) & 0x0F);
+#ifdef SINGLE_SKU
+					if (pAd->CommonCfg.bSKUMode == TRUE)
+					{
+						TotalDeltaPower = SingleSKUBbpR1Offset + TotalDeltaPowerOri - (CHAR)((SingleSKUTotalDeltaPwr[i] >> j*4) & 0x0F);	
+
+						DBGPRINT(RT_DEBUG_INFO, ("%s: BbpR1Offset(%d) + TX ALC(%d) - SingleSKU[%d/%d](%d) = TotalDeltaPower(%d)\n",
+							__FUNCTION__, SingleSKUBbpR1Offset,
+							TotalDeltaPowerOri, i, j,
+							(CHAR)((SingleSKUTotalDeltaPwr[i] >> j*4) & 0x0F),
+							TotalDeltaPower));
+					}
+#endif /* SINGLE_SKU */
+
+#if defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION)
+					/* The upper bounds of MAC 0x1314 ~ 0x1324 are variable */
+					if ((pAd->TxPowerCtrl.bInternalTxALC == TRUE)^(pAd->chipCap.bTempCompTxALC == TRUE))
+					{
+						switch (0x1314 + (i * 4))
+						{
+							case 0x1314: 
+								_upbound = 0xe;
+							break;
+
+							case 0x1318: 
+								_upbound = (j <= 3) ? 0xc : 0xe;
+							break;
+
+							case 0x131C: 
+								_upbound = ((j == 0) || (j == 2) || (j == 3)) ? 0xc : 0xe;
+							break;
+
+							case 0x1320: 
+								_upbound = (j == 1) ? 0xe : 0xc;
+							break;
+
+							case 0x1324: 
+								_upbound = 0xc;
+							break;
+
+							default: 
+							{
+								/* do nothing */
+								_bValid = FALSE;
+								DBGPRINT(RT_DEBUG_ERROR, ("%s: Unknown register = 0x%x\n", __FUNCTION__, (0x1314 + (i * 4))));
+							}
+							break;
+						}
+					}
+					else
+#endif /* RTMP_INTERNAL_TX_ALC || RTMP_TEMPERATURE_COMPENSATION */
+						_upbound = 0xc;
+
+					if (_bValid)
+					{
+						t_pwr = Value + TotalDeltaPower;
+						if (t_pwr < _lowbound)
+							Value = _lowbound;
+						else if (t_pwr > _upbound)
+							Value = _upbound;
+						else
+							Value = t_pwr;
+					}
+
+					/* Fill new value into the corresponding MAC offset */
+					reg_val  = (reg_val & ~(0x0000000F << j*4)) | (Value << j*4);
+				}
+
+				pTxPwrEntry->RegisterValue = reg_val;
+				RTMP_IO_WRITE32(pAd, pTxPwrEntry->MACRegisterOffset, pTxPwrEntry->RegisterValue);
+
+			}
+		}
+		
+		/* Extra set MAC registers to compensate Tx power if any */
+		RTMP_CHIP_ASIC_EXTRA_POWER_OVER_MAC(pAd);
+	}
 
 }
 
@@ -603,6 +707,12 @@ VOID AsicCompensatePowerViaBBP(
 	
 	DBGPRINT(RT_DEBUG_INFO, ("%s: <Before BBP R1> TotalDeltaPower = %d dBm\n", __FUNCTION__, *pTotalDeltaPower));
 
+#ifdef MT7601
+	if (IS_MT7601(pAd))
+	{
+		return;
+	}
+#endif /* MT7601 */
 
 	if (*pTotalDeltaPower <= -12)
 	{
@@ -627,6 +737,13 @@ VOID AsicCompensatePowerViaBBP(
 #ifdef RT65xx
 	if (IS_RT65XX(pAd))
 	{
+		UINT32 bbp_val = 0;
+
+		RTMP_BBP_IO_READ32(pAd, TXBE_R4, &bbp_val);
+		bbp_val &= (~0x3);
+		bbp_val |= mdsm_drop_pwr;
+		RTMP_BBP_IO_WRITE32(pAd, TXBE_R4, bbp_val);
+		DBGPRINT(RT_DEBUG_INFO, ("%s: <After TXBE_R4> TotalDeltaPower = %d dBm, TXBE_R4 = 0x%0x\n", __FUNCTION__, *pTotalDeltaPower, bbp_val));
 	}
 	else
 #endif /* RT65xx */
@@ -681,14 +798,20 @@ VOID RTMPReadTxPwrPerRate(RTMP_ADAPTER *pAd)
 	}
 #endif /* RT8592 */
 
-#ifdef MT76x0
-	if (IS_MT76x0(pAd)) {
-		mt76x0_read_per_rate_tx_pwr(pAd);
+#ifdef RT65xx
+	if (IS_RT6590(pAd)) {
+		RT6590ReadTxPwrPerRate(pAd);
 		return;
 	}
-#endif
+#endif /* RT65xx */
 
 
+#ifdef MT7601
+	if (IS_MT7601(pAd)) {
+		MT7601_ReadTxPwrPerRate(pAd);
+		return;
+	}
+#endif /* MT7601 */
 
 	/* For default one, go here!! */
 	{	
@@ -897,6 +1020,10 @@ VOID RTMPReadTxPwrPerRate(RTMP_ADAPTER *pAd)
 			DBGPRINT_RAW(RT_DEBUG_TRACE, ("20MHz BW, 2.4G band-%lx,  Adata = %lx,  Gdata = %lx \n", data, Adata, Gdata));
 		}
 	}
+
+	/* Extra set MAC registers to compensate Tx power if any */
+	RTMP_CHIP_ASIC_EXTRA_POWER_OVER_MAC(pAd);
+
 }
 
 

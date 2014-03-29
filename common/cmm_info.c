@@ -44,7 +44,7 @@ INT Set_DriverVersion_Proc(
 
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
-		DBGPRINT(RT_DEBUG_TRACE, ("Driver version-%s %s %s\n", STA_DRIVER_VERSION, __DATE__, __TIME__));
+		DBGPRINT(RT_DEBUG_TRACE, ("Driver version-%s\n", STA_DRIVER_VERSION));
 #endif /* CONFIG_STA_SUPPORT */
 
     return TRUE;
@@ -1081,7 +1081,7 @@ INT	Set_DebugFunc_Proc(
 {
 	DBGPRINT_S(RT_DEBUG_TRACE, ("==>%s()\n", __FUNCTION__));
 	RTDebugFunc = simple_strtol(arg, 0, 10);
-	DBGPRINT_S(RT_DEBUG_TRACE, ("Set RTDebugFunc = 0x%x\n", RTDebugFunc));
+	DBGPRINT_S(RT_DEBUG_TRACE, ("Set RTDebugFunc = 0x%x\n",__FUNCTION__, RTDebugFunc));
 
 	return TRUE;
 }
@@ -2179,8 +2179,8 @@ LabelOK:
 		os_free_mem(NULL, pMacTab);
 }
 
-#ifdef INF_AR9
-#ifdef AR9_MAPI_SUPPORT
+#if defined(INF_AR9) || defined(BB_SOC)
+#if defined(AR9_MAPI_SUPPORT) || defined(BB_SOC)
 #endif/*AR9_MAPI_SUPPORT*/
 #endif/* INF_AR9 */
 
@@ -2963,6 +2963,7 @@ INT	Set_VhtBw_Proc(
 	else
 		pAd->CommonCfg.vht_bw = VHT_BW_2040;
 
+#ifdef DOT11_VHT_AC
 	if (!WMODE_CAP_AC(pAd->CommonCfg.PhyMode))
 		goto direct_done;
 	
@@ -2983,25 +2984,9 @@ INT	Set_VhtBw_Proc(
 						(pAd->CommonCfg.BBPCurrentBW == BW_80 ? "VHT" : "HT"), cent_ch));
 
 direct_done:
+#endif /* DOT11_VHT_AC */
 
 	DBGPRINT(RT_DEBUG_TRACE, ("Set_VhtBw_Proc::(VHT_BW=%d)\n", pAd->CommonCfg.vht_bw));
-
-	return TRUE;
-}
-
-
-INT Set_VhtBwSignal_Proc(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG bw_signal = simple_strtol(arg, 0, 10);
-
-	if (bw_signal <= 2)
-		pAd->CommonCfg.vht_bw_signal = bw_signal;
-	else
-		pAd->CommonCfg.vht_bw_signal = 0;
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): vht_bw_signal=%d(%s)\n",
-				__FUNCTION__, pAd->CommonCfg.vht_bw_signal,
-				(pAd->CommonCfg.vht_bw_signal == 2 ? "Dynamic" :
-				(pAd->CommonCfg.vht_bw_signal == 1 ? "Static" : "Disable"))));
 
 	return TRUE;
 }
@@ -3016,15 +3001,15 @@ INT	Set_VhtStbc_Proc(
 	Value = simple_strtol(arg, 0, 10);
 	
 	if (Value == STBC_USE)
-		pAd->CommonCfg.vht_stbc = STBC_USE;
+		pAd->CommonCfg.RegTransmitSetting.field.STBC = STBC_USE;
 	else if ( Value == STBC_NONE )
-		pAd->CommonCfg.vht_stbc = STBC_NONE;
+		pAd->CommonCfg.RegTransmitSetting.field.STBC = STBC_NONE;
 	else 
 		return FALSE; /*Invalid argument */
 
 	SetCommonHT(pAd);
 	
-	DBGPRINT(RT_DEBUG_TRACE, ("Set_VhtStbc_Proc::(VhtStbc=%d)\n", pAd->CommonCfg.vht_stbc));
+	DBGPRINT(RT_DEBUG_TRACE, ("Set_Stbc_Proc::(HtStbc=%d)\n",pAd->CommonCfg.RegTransmitSetting.field.STBC));
 
 	return TRUE;											
 }
@@ -3676,7 +3661,6 @@ INT	Show_WirelessMode_Proc(
 	OUT	PSTRING			pBuf,
 	IN	ULONG			BufLen)
 {
-
 	switch(pAd->CommonCfg.PhyMode)
 	{
 		case (WMODE_B | WMODE_G):
@@ -4258,12 +4242,14 @@ INT	Show_STA_RAInfo_Proc(
 }
 
 
-INT Show_MacTable_Proc(RTMP_ADAPTER *pAd, PSTRING *arg)
+
+INT	Show_MacTable_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
 {
 	INT i;
     	UINT32 RegValue;
 	ULONG DataRate=0;
-
 	
 	printk("\n");
 	RTMP_IO_READ32(pAd, BKOFF_SLOT_CFG, &RegValue);
@@ -4283,11 +4269,14 @@ INT Show_MacTable_Proc(RTMP_ADAPTER *pAd, PSTRING *arg)
 	for (i=0; i<MAX_LEN_OF_MAC_TABLE; i++)
 	{
 		PMAC_TABLE_ENTRY pEntry = &pAd->MacTab.Content[i];
+
 		if ((IS_ENTRY_CLIENT(pEntry) || IS_ENTRY_APCLI(pEntry))
 			&& (pEntry->Sst == SST_ASSOC))
 		{
 			DataRate=0;
 			getRate(pEntry->HTPhyMode, &DataRate);
+
+
 			printk("%02X:%02X:%02X:%02X:%02X:%02X  ", PRINT_MAC(pEntry->Addr));
 			printk("%-4d", (int)pEntry->Aid);
 			printk("%-4d", (int)pEntry->apidx);
@@ -4303,7 +4292,7 @@ INT Show_MacTable_Proc(RTMP_ADAPTER *pAd, PSTRING *arg)
 			printk("%-6s", get_bw_str(pEntry->HTPhyMode.field.BW));
 #ifdef DOT11_VHT_AC
 			if (pEntry->HTPhyMode.field.MODE == MODE_VHT)
-				printk("%dS-M%d  ", ((pEntry->HTPhyMode.field.MCS>>4) + 1), (pEntry->HTPhyMode.field.MCS & 0xf));
+				printk("%dS-M%d", ((pEntry->HTPhyMode.field.MCS>>4) + 1), (pEntry->HTPhyMode.field.MCS & 0xf));
 			else
 #endif /* DOT11_VHT_AC */
 			printk("%-6d", pEntry->HTPhyMode.field.MCS);
@@ -4314,17 +4303,17 @@ INT Show_MacTable_Proc(RTMP_ADAPTER *pAd, PSTRING *arg)
 			printk("%-10d, %d, %d%%\n", pEntry->DebugFIFOCount, pEntry->DebugTxCount, 
 						(pEntry->DebugTxCount) ? ((pEntry->DebugTxCount-pEntry->DebugFIFOCount)*100/pEntry->DebugTxCount) : 0);
 
-			printk("\t\t\t\t\t\t\t%-10s", get_phymode_str(pEntry->MaxHTPhyMode.field.MODE));
+			printk("\t\t\t\t%-10s", get_phymode_str(pEntry->MaxHTPhyMode.field.MODE));
 			printk("%-6s", get_bw_str(pEntry->MaxHTPhyMode.field.BW));
 #ifdef DOT11_VHT_AC
 			if (pEntry->MaxHTPhyMode.field.MODE == MODE_VHT)
-				printk("%dS-M%d  ", ((pEntry->MaxHTPhyMode.field.MCS>>4) + 1), (pEntry->MaxHTPhyMode.field.MCS & 0xf));
+				printk("%dS-M%d", ((pEntry->MaxHTPhyMode.field.MCS>>4) + 1), (pEntry->MaxHTPhyMode.field.MCS & 0xf));
 			else
 #endif /* DOT11_VHT_AC */
 			printk("%-6d", pEntry->MaxHTPhyMode.field.MCS);
 			printk("%-6d", pEntry->MaxHTPhyMode.field.ShortGI);
 			printk("%-6d\n", pEntry->MaxHTPhyMode.field.STBC);
-
+			
 			printk("\n");
 		}
 	} 
@@ -4382,13 +4371,9 @@ INT show_devinfo_proc(RTMP_ADAPTER *pAd, PSTRING arg)
 
 	DBGPRINT(RT_DEBUG_OFF, ("Security\n"));
 
-	return TRUE;
-}
-
-
-INT show_trinfo_proc(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-
+	DBGPRINT(RT_DEBUG_OFF, ("MAC Ver: %s\n", MAC_VERSION));
+	DBGPRINT(RT_DEBUG_OFF, ("BBP Ver: %s\n", BBP_VERSION));
+	DBGPRINT(RT_DEBUG_OFF, ("RF Ver: %s\n", RF_VERSION));
 
 	return TRUE;
 }
@@ -5633,162 +5618,11 @@ INT Set_ModuleTxpower_Proc(
 #endif /* SINGLE_SKU */
 
 
-#ifdef CONFIG_FPGA_MODE
-#ifdef CAPTURE_MODE
-INT set_cap_dump(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG seg = simple_strtol(arg, 0, 10);;
-	CHAR *buf1, *buf2;
-	UINT32 offset = 0;
-	
-	seg = ((seg > 0 && seg <= 4)  ? seg : 1);
-	if (pAd->cap_done == TRUE && (pAd->cap_buf != NULL)) {
-		switch (seg)
-		{
-			case 1:
-				offset = 0;
-				break;
-			case 2:
-				offset = 0x2000;
-				break;
-			case 3:
-				offset = 0x4000;
-				break;
-			case 4:
-				offset = 0x6000;
-				break;
-		}
-		cap_dump(pAd, (pAd->cap_buf + offset), (pAd->cap_buf + 0x8000 + offset), 0x2000);
-	}
-
-	return TRUE;
-}
-
-
-INT set_cap_start(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG cap_start;
-	BOOLEAN do_cap;
-	BOOLEAN cap_done;	/* 1: capture done, 0: capture not finish yet */
-
-
-	cap_start = simple_strtol(arg, 0, 10);
-	do_cap = cap_start == 1 ? TRUE : FALSE;
-
-	if (!pAd->cap_support) {
-		DBGPRINT(RT_DEBUG_ERROR, ("%s(): cap mode is not support yet!\n", __FUNCTION__));
-		return FALSE;
-	}
-
-	if (do_cap)
-	{
-		/*
-			start to do cap,
-			if auto 	=>will triggered depends on trigger condition,
-			if manual =>start immediately
-		*/
-		if (pAd->do_cap == FALSE)
-			asic_cap_start(pAd);
-		else
-		{
-			DBGPRINT(RT_DEBUG_OFF, ("%s(): alreay in captureing\n", __FUNCTION__));
-		}
-	}
-	else
-	{
-		
-		if (pAd->do_cap == TRUE) {
-			DBGPRINT(RT_DEBUG_OFF, ("%s(): force stop captureing\n", __FUNCTION__));
-			// TODO: force stop capture!
-			asic_cap_stop(pAd);
-		}
-		else
-		{
-
-		}
-		pAd->do_cap = FALSE;
-	}
-	return TRUE;
-}
-
-
-INT set_cap_trigger_offset(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG trigger_offset;	/* in unit of us */
-
-	trigger_offset = simple_strtol(arg, 0, 10);
-
-	pAd->trigger_offset = (UINT32)trigger_offset;
-	DBGPRINT(RT_DEBUG_OFF, ("%s():set trigger_offset=%d\n", __FUNCTION__, pAd->trigger_offset));
-
-	return TRUE;
-}
-
-
-
-INT set_cap_trigger(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG trigger;	/* 1: manual trigger, 2: auto trigger */
-
-
-	trigger = simple_strtol(arg, 0, 10);
-	pAd->cap_trigger = trigger <= 2 ? trigger : 0;
-	DBGPRINT(RT_DEBUG_OFF, ("%s():set cap_trigger=%s trigger\n", __FUNCTION__,
-						(pAd->cap_trigger == 0 ? "Invalid" :
-						(pAd->cap_trigger == 1 ? "Manual" : "Auto"))));
-
-	return TRUE;
-}
-
-
-INT set_cap_type(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG cap_type;			/* 1: ADC6, 2: ADC8, 3: FEQ */
-	
-	cap_type = simple_strtol(arg, 0, 10);
-
-	pAd->cap_type = cap_type <= 3 ? cap_type : 0;
-	DBGPRINT(RT_DEBUG_OFF, ("%s():set cap_type=%s\n",
-				__FUNCTION__,
-				pAd->cap_type == 1 ? "ADC6" :\
-				(pAd->cap_type == 2  ? "ADC8" : "FEQ")));
-	
-	return TRUE;
-}
-
-
-INT set_cap_support(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	UCHAR cap_support;	/* 0: no cap mode; 1: cap mode enable */
-
-	cap_support = simple_strtol(arg, 0, 10);
-	pAd->cap_support = (cap_support == 1 ?  TRUE : FALSE);
-
-	DBGPRINT(RT_DEBUG_OFF, ("%s():set cap_support=%s\n",
-				__FUNCTION__,
-				(pAd->cap_support == TRUE ? "TRUE" : "FALSE")));
-
-	return TRUE;
-}
-#endif /* CAPTURE_MODE */
-
-
-INT set_tr_stop(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	UCHAR stop;
-
-	stop = simple_strtol(arg, 0, 10);
-	pAd->fpga_ctl.fpga_tr_stop = (stop <= 4 ? stop : 0);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): fpga_tr_stop=0x%x\n", __FUNCTION__, pAd->fpga_ctl.fpga_tr_stop));
-	
-	return TRUE;
-}
-
-
+#ifdef FPGA_MODE
 INT set_tx_kickcnt(RTMP_ADAPTER *pAd, PSTRING arg)
 {
-	pAd->fpga_ctl.tx_kick_cnt = (INT)simple_strtol(arg, 0, 10);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s():tx_kick_cnt=%d\n", __FUNCTION__, pAd->fpga_ctl.tx_kick_cnt));
+	pAd->tx_kick_cnt = (INT)simple_strtol(arg, 0, 10);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s():tx_kick_cnt=%d\n", __FUNCTION__, pAd->tx_kick_cnt));
 
 	return TRUE;
 }
@@ -5796,8 +5630,8 @@ INT set_tx_kickcnt(RTMP_ADAPTER *pAd, PSTRING arg)
 
 INT set_data_phy_mode(RTMP_ADAPTER *pAd, PSTRING arg)
 {
-	pAd->fpga_ctl.tx_data_phy = (INT)simple_strtol(arg, 0, 10);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): tx_data_phy=%d\n", __FUNCTION__, pAd->fpga_ctl.tx_data_phy));
+	pAd->data_phy = (INT)simple_strtol(arg, 0, 10);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_phy=%d\n", __FUNCTION__, pAd->data_phy));
 	
 	return TRUE;
 }
@@ -5805,8 +5639,8 @@ INT set_data_phy_mode(RTMP_ADAPTER *pAd, PSTRING arg)
 
 INT set_data_bw(RTMP_ADAPTER *pAd, PSTRING arg)
 {
-	pAd->fpga_ctl.tx_data_bw = (UCHAR)simple_strtol(arg, 0, 10);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): tx_data_bw=%d\n", __FUNCTION__, pAd->fpga_ctl.tx_data_bw));
+	pAd->data_bw = (UCHAR)simple_strtol(arg, 0, 10);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_bw=%d\n", __FUNCTION__, pAd->data_bw));
 
 	return TRUE;
 }
@@ -5816,24 +5650,17 @@ INT set_data_mcs(RTMP_ADAPTER *pAd, PSTRING arg)
 {
 	UCHAR mcs = (UCHAR)simple_strtol(arg, 0, 10);
 
-	pAd->fpga_ctl.tx_data_mcs = mcs;
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): tx_data_mcs=%d\n", __FUNCTION__, pAd->fpga_ctl.tx_data_mcs));
+	pAd->data_mcs = ((mcs / 10) <<4) | (mcs % 10);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_mcs=%d\n", __FUNCTION__, pAd->data_mcs));
 
 	return TRUE;
 }
 
-INT set_data_ldpc(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	pAd->fpga_ctl.tx_data_ldpc = (UCHAR)simple_strtol(arg, 0, 10);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): tx_data_ldpc=%d\n", __FUNCTION__, pAd->fpga_ctl.tx_data_ldpc));
-
-	return TRUE;
-}
 
 INT set_data_gi(RTMP_ADAPTER *pAd, PSTRING arg)
 {
-	pAd->fpga_ctl.tx_data_gi = (UCHAR)simple_strtol(arg, 0, 10);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): tx_data_gi=%d\n", __FUNCTION__, pAd->fpga_ctl.tx_data_gi));
+	pAd->data_gi = (UCHAR)simple_strtol(arg, 0, 10);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_gi=%d\n", __FUNCTION__, pAd->data_gi));
 
 	return TRUE;
 }
@@ -5841,8 +5668,8 @@ INT set_data_gi(RTMP_ADAPTER *pAd, PSTRING arg)
 
 INT set_data_basize(RTMP_ADAPTER *pAd, PSTRING arg)
 {
-	pAd->fpga_ctl.data_basize = (UCHAR)simple_strtol(arg, 0, 10);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_basize=%d\n", __FUNCTION__, pAd->fpga_ctl.data_basize));
+	pAd->data_basize = (UCHAR)simple_strtol(arg, 0, 10);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_basize=%d\n", __FUNCTION__, pAd->data_basize));
 
 	return TRUE;
 }
@@ -5855,37 +5682,34 @@ INT set_fpga_mode(RTMP_ADAPTER *pAd, PSTRING arg)
 	fpga_on = simple_strtol(arg, 0, 10);
 
 	if (fpga_on & 2)
-		pAd->fpga_ctl.tx_data_mcs = 7;
+	{
+		pAd->data_phy = MODE_VHT;
+		pAd->data_bw = BW_80;
+		pAd->data_gi = 1;
+		pAd->data_mcs = 7;
+		pAd->data_basize = 31;
+	} else {
+	}
 
 	if (fpga_on & 4)
-		pAd->fpga_ctl.tx_data_mcs = (1 << 4) | 7;
+		pAd->data_mcs = (1 <<4) | 7;
 
+	pAd->fpga_on = fpga_on;
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): fpga_on=%d\n", __FUNCTION__, pAd->fpga_on));
 
-	pAd->fpga_ctl.fpga_on = fpga_on;
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): fpga_on=%d\n", __FUNCTION__, pAd->fpga_ctl.fpga_on));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tdata_phy=%d\n", pAd->fpga_ctl.tx_data_phy));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tdata_bw=%d\n", pAd->fpga_ctl.tx_data_bw));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tdata_mcs=%d\n", pAd->fpga_ctl.tx_data_mcs));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tdata_gi=%d\n", pAd->fpga_ctl.tx_data_gi));
-	DBGPRINT(RT_DEBUG_TRACE, ("\tdata_basize=%d\n", pAd->fpga_ctl.data_basize));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_phy=%d\n", __FUNCTION__, pAd->data_phy));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_bw=%d\n", __FUNCTION__, pAd->data_bw));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_mcs=%d\n", __FUNCTION__, pAd->data_mcs));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_gi=%d\n", __FUNCTION__, pAd->data_gi));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s(): data_basize=%d\n", __FUNCTION__, pAd->data_basize));
 
 	
 	return TRUE;
 }
-#endif /* CONFIG_FPGA_MODE */
 
+#endif /* FPGA_MODE */
 
 #ifdef WFA_VHT_PF
-INT set_force_noack(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	pAd->force_noack = (simple_strtol(arg, 0, 10) > 0 ? TRUE : FALSE);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): force_noack=%d\n",
-				__FUNCTION__, pAd->force_noack));
-	
-	return TRUE;
-}
-
-
 INT set_force_amsdu(RTMP_ADAPTER *pAd, PSTRING arg)
 {
 	pAd->force_amsdu = (simple_strtol(arg, 0, 10) > 0 ? TRUE : FALSE);
@@ -5893,60 +5717,6 @@ INT set_force_amsdu(RTMP_ADAPTER *pAd, PSTRING arg)
 				__FUNCTION__, pAd->force_amsdu));
 	return TRUE;
 }
-
-
-INT set_force_vht_sgi(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	pAd->vht_force_sgi = (simple_strtol(arg, 0, 10) > 0 ? TRUE : FALSE);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): vht_force_sgi=%d\n",
-				__FUNCTION__, pAd->vht_force_sgi));
-	
-	return TRUE;
-}
-
-
-INT set_force_vht_tx_stbc(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	pAd->vht_force_tx_stbc = (simple_strtol(arg, 0, 10) > 0 ? TRUE : FALSE);
-	if (pAd->CommonCfg.TxStream < 2)
-	{
-		DBGPRINT(RT_DEBUG_TRACE, ("%s(): TxStream=%d is not enough for TxSTBC!\n",
-				__FUNCTION__, pAd->CommonCfg.TxStream));
-		pAd->vht_force_tx_stbc = 0;
-	}
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): vht_force_tx_stbc=%d\n",
-				__FUNCTION__, pAd->vht_force_tx_stbc));
-	
-	return TRUE;
-}
-
-
-INT set_force_ext_cca(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	ULONG cca_cfg;
-	UINT32 mac_val;
-
-	cca_cfg = (simple_strtol(arg, 0, 10) > 0 ? TRUE : FALSE);
-	if (cca_cfg)
-		mac_val = 0x0410243f;
-	else
-		mac_val = 0x583f;
-	RTMP_IO_WRITE32(pAd, TXOP_CTRL_CFG, mac_val);
-
-	return TRUE;
-}
-
-
-#ifdef IP_ASSEMBLY
-INT set_force_ip_assemble(RTMP_ADAPTER *pAd, PSTRING arg)
-{
-	pAd->ip_assemble = (simple_strtol(arg, 0, 10) > 0 ? TRUE : FALSE);
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): ip_assemble = %d\n",
-				__FUNCTION__, pAd->ip_assemble));
-	
-	return TRUE;	
-}
-#endif /* IP_ASSEMBLY */
 #endif /* WFA_VHT_PF */
 
 #ifdef RLT_RF

@@ -30,6 +30,8 @@
 
 #ifdef RLT_MAC
 
+#ifndef MT7601
+
 NDIS_STATUS NICInitBBP(RTMP_ADAPTER *pAd)
 {
 	INT idx;
@@ -37,8 +39,6 @@ NDIS_STATUS NICInitBBP(RTMP_ADAPTER *pAd)
 	/* Read BBP register, make sure BBP is up and running before write new data*/
 	if (rlt_bbp_is_ready(pAd) == FALSE)
 		return NDIS_STATUS_FAILURE;
-
-	DBGPRINT(RT_DEBUG_TRACE, ("%s(): Init BBP Registers\n", __FUNCTION__));
 
 	/* re-config specific BBP registers for individual chip */
 	if (pAd->chipCap.pBBPRegTable)
@@ -60,41 +60,6 @@ NDIS_STATUS NICInitBBP(RTMP_ADAPTER *pAd)
 
 	return NDIS_STATUS_SUCCESS;
 	
-}
-
-
-INT rtmp_bbp_get_temp(struct _RTMP_ADAPTER *pAd, CHAR *temp_val)
-{
-	UINT32 bbp_val;	
-
-#if defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION) 
-	RTMP_BBP_IO_READ32(pAd, CORE_R35, &bbp_val);
-	*temp_val = (CHAR)(bbp_val & 0xff);
-
-	pAd->curr_temp = (bbp_val & 0xff);
-#endif
-	return TRUE;
-}
-
-
-INT 	rtmp_bbp_tx_comp_init(RTMP_ADAPTER *pAd, INT adc_insel, INT tssi_mode)
-{
-	UINT32 bbp_val;
-	UCHAR rf_val;
-
-#if defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION) 
-	RTMP_BBP_IO_READ32(pAd, CORE_R34, &bbp_val);
-	bbp_val = (bbp_val & 0xe7);
-	bbp_val = (bbp_val | 0x80);
-	RTMP_BBP_IO_WRITE32(pAd, CORE_R34, bbp_val);
-	
-	RT30xxReadRFRegister(pAd, RF_R27, &rf_val);
-	rf_val = ((rf_val & 0x3f) | 0x40);
-	RT30xxWriteRFRegister(pAd, RF_R27, rf_val);
-
-	DBGPRINT(RT_DEBUG_TRACE, ("[temp. compensation] Set RF_R27 to 0x%x\n", rf_val));
-#endif
-	return 0;
 }
 
 
@@ -133,11 +98,6 @@ INT rtmp_bbp_set_rxpath(struct _RTMP_ADAPTER *pAd, INT rxpath)
 		agc |= (0x8);
 	else if(rxpath == 1)
 		agc |= (0x0);
-
-#ifdef RT85592
-	if (IS_RT8592(pAd))
-		agc |= (0x8);
-#endif /* RT85592 */
 
 	if (agc != agc_r0)
 		RTMP_BBP_IO_WRITE32(pAd, AGC1_R0, agc);
@@ -256,14 +216,100 @@ INT rtmp_bbp_set_ctrlch(struct _RTMP_ADAPTER *pAd, INT ext_ch)
 	return TRUE;
 }
 
-
+/*
+	<<Gamma2.1 Control Registers Rev1.3.pdf>>
+	BBP bandwidth (CORE_R1[4:3]) change procedure:
+	1. Hold BBP in reset by setting CORE_R4[0] to '1'
+	2. Wait 0.5 us to ensure BBP is in the idle State
+	3. Change BBP bandwidth with CORE_R1[4:3]
+		CORE_R1 (Bit4:3)
+		0: 20MHz
+		1: 10MHz (11J)
+		2: 40MHz
+		3: 80MHz
+	4. Wait 0.5 us for BBP clocks to settle
+	5. Release BBP from reset by clearing CORE_R4[0]
+*/
 INT rtmp_bbp_set_bw(struct _RTMP_ADAPTER *pAd, INT bw)
 {
-	andes_fun_set(pAd, BW_SETTING, bw);
+	UINT32 core, core_r1 = 0, core_r4 = 0;
+	UINT32 agc, agc_r0 = 0;
+
+	RTMP_BBP_IO_READ32(pAd, CORE_R1, &core_r1);
+	core = (core_r1 & (~0x18));
+	RTMP_BBP_IO_READ32(pAd, AGC1_R0, &agc_r0);
+	agc = agc_r0 & (~0x7000);
+	switch (bw)
+	{
+		case BW_80:
+			core |= 0x18;
+			agc |= 0x7000;
+			break;
+		case BW_40:
+			core |= 0x10;
+			agc |= 0x3000;
+			break;
+		case BW_20:
+			core &= (~0x18);
+			agc |= 0x1000;
+			break;
+		case BW_10:
+			core |= 0x08;
+			agc |= 0x1000;
+			break;
+	}
+
+	if (core != core_r1) 
+	{
+#ifdef RT65xx
+		if (IS_RT6590(pAd))
+		{
+			/*
+				Hold BBP in reset by setting CORE_R4[0]=1
+			*/
+			RTMP_BBP_IO_READ32(pAd, CORE_R4, &core_r4);
+			core_r4 |= 0x00000001;
+			RTMP_BBP_IO_WRITE32(pAd, CORE_R4, core_r4);
+
+			/*
+				Wait 0.5 us to ensure BBP is in the idle state.
+			*/
+			RtmpOsUsDelay(1);
+		}
+#endif /* RT65xx */
+	
+
+		RTMP_BBP_IO_WRITE32(pAd, CORE_R1, core);
+
+#ifdef RT65xx
+		if (IS_RT6590(pAd))
+		{
+			/*
+				Wait 0.5 us for BBP clocks to settle.
+			*/
+			RtmpOsUsDelay(1);
+
+			/*
+				Release BBP from reset by clearing CORE_R4[0].
+			*/
+			RTMP_BBP_IO_READ32(pAd, CORE_R4, &core_r4);
+			core_r4 &= ~(0x00000001);
+			RTMP_BBP_IO_WRITE32(pAd, CORE_R4, core_r4);
+		}
+#endif /* RT65xx */	
+	}
+
+	if (agc != agc_r0) {
+		RTMP_BBP_IO_WRITE32(pAd, AGC1_R0, agc);
+//DBGPRINT(RT_DEBUG_OFF, ("%s(): bw=%d, Set AGC1_R0=0x%x, agc_r0=0x%x\n", __FUNCTION__, bw, agc, agc_r0));
+//		RTMP_BBP_IO_READ32(pAd, AGC1_R0, &agc);
+//DBGPRINT(RT_DEBUG_OFF, ("%s(): bw=%d, After write, Get AGC1_R0=0x%x,\n", __FUNCTION__, bw, agc));
+	}
+
 	pAd->CommonCfg.BBPCurrentBW = bw;
+
 	return TRUE;
 }
-
 
 
 INT rtmp_bbp_set_mmps(struct _RTMP_ADAPTER *pAd, BOOLEAN ReduceCorePower)
@@ -405,6 +451,8 @@ INT rlt_bbp_is_ready(struct _RTMP_ADAPTER *pAd)
 
 	return (((val == 0xffffffff) || (val == 0x0)) ? FALSE : TRUE);
 }
+
+#endif /* MT7601 */
 
 #endif /* RLT_MAC */
 

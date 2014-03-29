@@ -28,9 +28,11 @@
 #define RTMP_MODULE_OS
 #define RTMP_MODULE_OS_UTIL
 
+
 #include "rtmp_comm.h"
 #include "rtmp_osabl.h"
 #include "rt_os_util.h"
+#include <linux/rtnetlink.h>
 
 #if defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
 #include "../../../../../../net/nat/hw_nat/ra_nat.h"
@@ -49,7 +51,7 @@
 #define RT_CONFIG_IF_OPMODE_ON_STA(__OpMode)
 #endif
 
-ULONG RTDebugLevel = RT_DEBUG_ERROR;
+ULONG RTDebugLevel = RT_DEBUG_TRACE;
 ULONG RTDebugFunc = 0;
 
 #ifdef OS_ABL_FUNC_SUPPORT
@@ -74,6 +76,7 @@ OS_NDIS_SPIN_LOCK UtilSemLock;
 
 BOOLEAN RTMP_OS_Alloc_RscOnly(VOID *pRscSrc, UINT32 RscLen);
 BOOLEAN RTMP_OS_Remove_Rsc(LIST_HEADER *pRscList, VOID *pRscSrc);
+
 /*
 ========================================================================
 Routine Description:
@@ -193,12 +196,6 @@ void RTMP_GetCurrentSystemTick(ULONG *pNow)
 	*pNow = jiffies;
 }
 
-ULONG RTMPMsecsToJiffies(UINT32 m)
-{
-
-	return msecs_to_jiffies(m);
-}
-
 /* pAd MUST allow to be NULL */
 
 NDIS_STATUS os_alloc_mem(
@@ -248,7 +245,7 @@ NDIS_STATUS os_free_mem(
 	return NDIS_STATUS_SUCCESS;
 }
 
-#if defined(RTMP_RBUS_SUPPORT) || defined(RTMP_FLASH_SUPPORT)
+#if defined(RTMP_RBUS_SUPPORT) || defined (RTMP_FLASH_SUPPORT)
 /* The flag "CONFIG_RALINK_FLASH_API" is used for APSoC Linux SDK */
 #ifdef CONFIG_RALINK_FLASH_API
 
@@ -264,7 +261,7 @@ int32_t FlashWrite(
 #else /* CONFIG_RALINK_FLASH_API */
 
 #ifdef RA_MTD_RW_BY_NUM
-#if defined(CONFIG_RT2880_FLASH_32M)
+#if defined (CONFIG_RT2880_FLASH_32M)
 #define MTD_NUM_FACTORY 5
 #else
 #define MTD_NUM_FACTORY 2
@@ -309,7 +306,7 @@ void RtmpFlashWrite(
 #endif
 #endif /* CONFIG_RALINK_FLASH_API */
 }
-#endif /* defined(RTMP_RBUS_SUPPORT) || defined(RTMP_FLASH_SUPPORT) */
+#endif /* defined(RTMP_RBUS_SUPPORT) || defined (RTMP_FLASH_SUPPORT) */
 
 
 PNDIS_PACKET RtmpOSNetPktAlloc(VOID *dummy, int size)
@@ -709,6 +706,27 @@ void wlan_802_11_to_802_3_packet(
 }
 
 
+#ifdef HDR_TRANS_SUPPORT
+VOID RtmpOsSetPacket(
+	IN PNET_DEV pNetDev,
+	IN PNDIS_PACKET pRxPacket,
+	IN UCHAR *pData,
+	IN ULONG DataSize)
+{
+
+	struct sk_buff *pOSPkt;
+
+	pOSPkt = RTPKT_TO_OSPKT(pRxPacket);
+
+	pOSPkt->dev = pNetDev;
+	pOSPkt->data = pData;
+	pOSPkt->len = DataSize;
+	pOSPkt->tail = pOSPkt->data + pOSPkt->len;
+}
+
+#endif /* HDR_TRANS_SUPPORT */
+
+
 void hex_dump(char *str, UCHAR *pSrcBufVA, UINT SrcBufLen)
 {
 #ifdef DBG
@@ -775,26 +793,20 @@ VOID RtmpOsSendWirelessEvent(
 
 #ifdef CONFIG_STA_SUPPORT
 INT32 ralinkrate[] = {
-	2,  4, 11, 22, 
-	12, 18, 24, 36, 48, 72, 96, 108, 109, 110, 111, 112, /* CCK and OFDM */
-	13, 26, 39, 52, 78, 104, 117, 130, 26, 52, 78, 104, 156, 208, 234, 260,
-	39, 78, 117, 156, 234, 312, 351, 390, /* BW 20, 800ns GI, MCS 0~23 */
-	27, 54, 81, 108, 162, 216, 243, 270, 54, 108, 162, 216, 324, 432, 486, 540,
-	81, 162, 243, 324, 486, 648, 729, 810, /* BW 40, 800ns GI, MCS 0~23 */
-	14, 29, 43, 57, 87, 115, 130, 144, 29, 59, 87, 115, 173, 230, 260, 288,
-	43, 87, 130, 173, 260, 317, 390, 433, /* BW 20, 400ns GI, MCS 0~23 */
-	30, 60, 90, 120, 180, 240, 270, 300, 60, 120, 180, 240, 360, 480, 540, 600,
-	90, 180, 270, 360, 540, 720, 810, 900, /* BW 40, 400ns GI, MCS 0~23 */
-	13, 26, 39, 52, 78, 104, 117, 130, 156, /* AC: 20Mhz, 800ns GI, MCS: 0~8 */
-	27, 54, 81, 108, 162, 216, 243, 270, 324, 360, /* AC: 40Mhz, 800ns GI, MCS: 0~9 */
-	59, 117, 176, 234, 351, 468, 527, 585, 702, 780, /* AC: 80Mhz, 800ns GI, MCS: 0~9 */
-	14, 29, 43, 57, 87, 115, 130, 144, 173, /* AC: 20Mhz, 400ns GI, MCS: 0~8 */
-	30, 60, 90, 120, 180, 240, 270, 300, 360, 400, /* AC: 40Mhz, 400ns GI, MCS: 0~9 */
-	65, 130, 195, 260, 390, 520, 585, 650, 780, 867, /* AC: 80Mhz, 400ns GI, MCS: 0~9 */
-	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
-	20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
-	40, 41, 42, 43, 44, 45, 46, 47 /* 3*3 */
-}; 
+2, 4, 11, 22,		/* CCK */
+12, 18, 24, 36, 48, 72, 96, 108,	/* OFDM */
+/* 20MHz, 800ns GI, MCS: 0 ~ 15 */
+13, 26, 39, 52, 78, 104, 117, 130, 26, 52, 78, 104, 156, 208, 234, 260,
+39, 78, 117, 156, 234, 312, 351, 390,	/* 20MHz, 800ns GI, MCS: 16 ~ 23 */
+/* 40MHz, 800ns GI, MCS: 0 ~ 15 */
+27, 54, 81, 108, 162, 216, 243, 270, 54, 108, 162, 216, 324, 432, 486, 540,
+81, 162, 243, 324, 486, 648, 729, 810,	/* 40MHz, 800ns GI, MCS: 16 ~ 23 */
+/* 20MHz, 400ns GI, MCS: 0 ~ 15 */
+14, 29, 43, 57, 87, 115, 130, 144, 29, 59, 87, 115, 173, 230, 260, 288,
+43, 87, 130, 173, 260, 317, 390, 433,	/* 20MHz, 400ns GI, MCS: 16 ~ 23 */
+/* 40MHz, 400ns GI, MCS: 0 ~ 15 */
+30, 60, 90, 120, 180, 240, 270, 300, 60, 120, 180, 240, 360, 480, 540, 600,
+90, 180, 270, 360, 540, 720, 810, 900};	/* 40MHz, 400ns GI, MCS: 16 ~ 23 */
 
 UINT32 RT_RateSize = sizeof (ralinkrate);
 
@@ -1649,13 +1661,20 @@ void RtmpOSNetDevDetach(PNET_DEV pNetDev)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31)
 	struct net_device_ops *pNetDevOps = (struct net_device_ops *)pNetDev->netdev_ops;
 #endif
+	int ret;
 
-	unregister_netdev(pNetDev);
+	 ret = rtnl_trylock();
+
+	unregister_netdevice(pNetDev);
+
+	if ( ret )
+		rtnl_unlock();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31)
 	vfree(pNetDevOps);
 #endif
 }
+
 
 void RtmpOSNetDevProtect(BOOLEAN lock_it)
 {
@@ -1667,6 +1686,7 @@ void RtmpOSNetDevProtect(BOOLEAN lock_it)
 		rtnl_unlock();
 */
 }
+
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
 static void RALINK_ET_DrvInfoGet(
@@ -1937,7 +1957,7 @@ VOID RtmpDrvAllMacPrint(
 			while (macAddr <= AddrEnd) {
 /*				RTMP_IO_READ32(pAd, macAddr, &macValue); // sample */
 				macValue = *pBufMac++;
-				sprintf(msg, "0x%04X = 0x%08X\n", macAddr, macValue);
+				sprintf(msg, "%04x = %08x\n", macAddr, macValue);
 
 				/* write data to file */
 				file_w->f_op->write(file_w, msg, strlen(msg), &file_w->f_pos);
@@ -2304,6 +2324,14 @@ VOID RtmpOsPktRcvHandle(PNDIS_PACKET pNetPkt)
 {
 	struct sk_buff *pRxPkt = RTPKT_TO_OSPKT(pNetPkt);
 
+#ifdef CONFIG_RX_CSO_SUPPORT
+
+	if (RTMP_GET_TCP_CHKSUM_FAIL(pNetPkt))
+		pRxPkt->ip_summed = CHECKSUM_NONE;
+	else
+		pRxPkt->ip_summed = CHECKSUM_UNNECESSARY;
+
+#endif
 
 	netif_rx(pRxPkt);
 }
@@ -2394,21 +2422,10 @@ PNDIS_PACKET RtmpOsPktIappMakeUp(
 
 VOID RtmpOsPktNatMagicTag(PNDIS_PACKET pNetPkt)
 {
-#ifndef CONFIG_RA_NAT_NONE
-#if defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
-	struct sk_buff *pRxPkt = RTPKT_TO_OSPKT(pNetPkt);
-	FOE_MAGIC_TAG(pRxPkt) = FOE_MAGIC_WLAN;
-#endif /* CONFIG_RA_HW_NAT || CONFIG_RA_HW_NAT_MODULE */
-#endif /* CONFIG_RA_NAT_NONE */
 }
 
 VOID RtmpOsPktNatNone(PNDIS_PACKET pNetPkt)
 {
-#ifdef CONFIG_RA_NAT_NONE
-#if defined(CONFIG_RA_HW_NAT) || defined(CONFIG_RA_HW_NAT_MODULE)
-	FOE_AI(((struct sk_buff *)pNetPkt)) = UN_HIT;
-#endif /* CONFIG_RA_HW_NAT || CONFIG_RA_HW_NAT_MODULE */
-#endif /* CONFIG_RA_NAT_NONE */
 }
 
 
@@ -2849,7 +2866,7 @@ BOOLEAN CFG80211OS_SupBandReInit(
 							pCfg80211_CB->pCfg80211_Channels,
 							pCfg80211_CB->pCfg80211_Rates);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32))
 		/* re-init PHY */
 		pWiphy->rts_threshold = pBandInfo->RtsThreshold;
 		pWiphy->frag_threshold = pBandInfo->FragmentThreshold;
@@ -2928,7 +2945,7 @@ VOID CFG80211OS_RegHint11D(
 	IN ULONG CountryIeLen)
 {
 	/* no regulatory_hint_11d() in 2.6.32 */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32))
 	CFG80211_CB *pCfg80211_CB = (CFG80211_CB *)pCB;
 
 
@@ -3089,7 +3106,7 @@ BOOLEAN CFG80211OS_ChanInfoInit(
 
 	pChan->center_freq = ieee80211_channel_to_frequency(ChanId);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32))
 	if (FlgIsNMode == TRUE)
 	{
 		if (FlgIsBW20M == TRUE)
@@ -3133,7 +3150,7 @@ VOID CFG80211OS_Scaning(
 	IN BOOLEAN					FlgIsNMode,
 	IN UINT8					BW)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
 #ifdef CONFIG_STA_SUPPORT
 	CFG80211_CB *pCfg80211_CB = (CFG80211_CB *)pCB;
 	UINT32 IdChan;
@@ -3189,7 +3206,7 @@ VOID CFG80211OS_ScanEnd(
 	IN VOID *pCB,
 	IN BOOLEAN FlgIsAborted)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,30))
 #ifdef CONFIG_STA_SUPPORT
 	CFG80211_CB *pCfg80211_CB = (CFG80211_CB *)pCB;
 
@@ -3230,7 +3247,7 @@ void CFG80211OS_ConnectResultInform(
 	IN UINT32 RspIeLen,
 	IN UCHAR FlgIsSuccess)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32))
 	CFG80211_CB *pCfg80211_CB = (CFG80211_CB *)pCB;
 
 
@@ -3398,42 +3415,46 @@ VOID RtmpDevPrivFlagsSet(VOID *pDev, USHORT PrivFlags)
 }
 
 
-
-
-void OS_SPIN_LOCK_IRQSAVE(NDIS_SPIN_LOCK *lock, unsigned long *flags)
+#ifdef CONFIG_STA_SUPPORT
+INT RtmpOSNotifyRawData(
+	IN PNET_DEV pNetDev, 
+	IN PUCHAR buff,
+	IN INT len, 
+	IN ULONG type,
+	IN USHORT protocol)
 {
-	spin_lock_irqsave((spinlock_t *)(lock), *flags);
+	struct sk_buff *skb = NULL;
+	
+	skb = dev_alloc_skb(len + 2);
+	
+	if (!skb) 
+	{
+		DBGPRINT(RT_DEBUG_ERROR,( "%s: failed to allocate sk_buff for notification\n", pNetDev->name));		
+		return -ENOMEM;		
+	} 
+	else 
+	{		
+		skb_reserve(skb, 2);		
+		memcpy(skb_put(skb, len), buff, len);		
+		skb->len = len;
+		skb->dev = pNetDev;
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21))
+		skb->mac.raw = skb->data;
+#else
+		skb_set_mac_header(skb, 0);
+#endif
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		skb->pkt_type = PACKET_OTHERHOST;
+		skb->protocol = htons(protocol);
+		memset(skb->cb, 0, sizeof(skb->cb));
+
+		netif_rx(skb);
+	}
+	return 0;
 }
 
-void OS_SPIN_UNLOCK_IRQRESTORE(NDIS_SPIN_LOCK *lock, unsigned long *flags)
-{
-	spin_unlock_irqrestore((spinlock_t *)(lock), *flags);
-}
 
-void OS_SPIN_LOCK_IRQ(NDIS_SPIN_LOCK *lock)
-{
-	spin_lock_irq((spinlock_t *)(lock));
-}
-
-void OS_SPIN_UNLOCK_IRQ(NDIS_SPIN_LOCK *lock)
-{
-	spin_unlock_irq((spinlock_t *)(lock));
-}
-
-int OS_TEST_BIT(int bit, unsigned long *flags)
-{
-	return test_bit(bit, flags);
-}
-
-void OS_SET_BIT(int bit, unsigned long *flags)
-{
-	set_bit(bit, flags);
-}
-
-void OS_CLEAR_BIT(int bit, unsigned long *flags)
-{
-	clear_bit(bit, flags);
-}
+#endif /* CONFIG_STA_SUPPORT */
 
 #ifdef OS_ABL_FUNC_SUPPORT
 /*
@@ -3480,39 +3501,6 @@ void RtmpOSFSInfoChange(RTMP_OS_FS_INFO *pOSFSInfoOrg, BOOLEAN bSet)
 			pOSFSInfoOrg->pContent = NULL;
 		}
 	}
-}
-
-VOID RtmpOsInitCompletion(RTMP_OS_COMPLETION *pCompletion)
-{
-
-	memset(pCompletion, 0x00, sizeof(RTMP_OS_COMPLETION));
-
-	RTMP_OS_Alloc_RscOnly(pCompletion, sizeof(struct completion));
-	
-	init_completion((struct completion *)(pCompletion->pContent));
-}
-
-void RtmpOsExitCompletion(RTMP_OS_COMPLETION *pCompletion)
-{
-	if (pCompletion->pContent == NULL)
-		return;
-
-	os_free_mem(NULL, pCompletion->pContent);
-	pCompletion->pContent = NULL;
-
-}
-
-VOID RtmpOsComplete(RTMP_OS_COMPLETION *pCompletion)
-{
-	if (pCompletion->pContent == NULL)
-		return;
-
-	complete((struct completion *)(pCompletion->pContent));
-}
-
-ULONG RtmpOsWaitForCompletionTimeout(RTMP_OS_COMPLETION *pCompletion, ULONG Timeout)
-{
-	return wait_for_completion_timeout((struct completion *)(pCompletion->pContent), Timeout);
 }
 
 
@@ -3599,9 +3587,7 @@ Note:
 BOOLEAN RtmpOsTaskletKill(RTMP_NET_TASK_STRUCT *pTasklet)
 {
 	if (pTasklet->pContent != NULL) {
-#ifdef WORKQUEUE_BH
-		cancel_work_sync((OS_NET_TASK_STRUCT *) (pTasklet->pContent));
-#else
+#ifndef WORKQUEUE_BH
 		tasklet_kill((OS_NET_TASK_STRUCT *) (pTasklet->pContent));
 #endif /* WORKQUEUE_BH */
 
@@ -4212,8 +4198,6 @@ Note:
 */
 BOOLEAN RtmpOsAllocateLock(NDIS_SPIN_LOCK *pLock, LIST_HEADER *pLockList)
 {
-	memset(pLock, 0x00, sizeof(NDIS_SPIN_LOCK));
-	
 	if (RTMP_OS_Alloc_RscOnly(pLock, sizeof (OS_NDIS_SPIN_LOCK)) == FALSE) {
 		DBGPRINT(RT_DEBUG_ERROR,
 			 ("%s: alloc lock fail!\n", __FUNCTION__));
@@ -4359,50 +4343,6 @@ VOID RtmpOsIntUnLock(NDIS_SPIN_LOCK *pLockOrg, ULONG IrqFlags)
 		printk("lock> warning! the lock was freed!\n");
 }
 
-void RtmpOsSpinLockIrqSave(NDIS_SPIN_LOCK *lock, unsigned long *flags)
-{
-	OS_NDIS_SPIN_LOCK *pLock;
-	pLock = (OS_NDIS_SPIN_LOCK *) (lock->pContent);
-
-	if (pLock != NULL)
-		spin_lock_irqsave((spinlock_t *)(pLock), *flags);
-	else
-		printk("lock> warning! the lock was freed!\n");
-		
-}
-
-void RtmpOsSpinUnlockIrqRestore(NDIS_SPIN_LOCK *lock, unsigned long *flags)
-{
-	OS_NDIS_SPIN_LOCK *pLock;
-	pLock = (OS_NDIS_SPIN_LOCK *) (lock->pContent);
-
-	if (pLock != NULL)
-		spin_unlock_irqrestore((spinlock_t *)(pLock), *flags);
-	else
-		printk("lock> warning! the lock was freed!\n");
-}
-
-void RtmpOsSpinLockIrq(NDIS_SPIN_LOCK *lock)
-{
-	OS_NDIS_SPIN_LOCK *pLock;
-	pLock = (OS_NDIS_SPIN_LOCK *) (lock->pContent);
-	
-	if (pLock != NULL)
-		spin_lock_irq((spinlock_t *)(pLock));
-	else
-		printk("lock> warning! the lock was freed!\n");
-}
-
-void RtmpOsSpinUnlockIrq(NDIS_SPIN_LOCK *lock)
-{
-	OS_NDIS_SPIN_LOCK *pLock;
-	pLock = (OS_NDIS_SPIN_LOCK *) (lock->pContent);
-
-	if (pLock != NULL)
-		spin_unlock_irq((spinlock_t *)(pLock));
-	else
-		printk("lock> warning! the lock was freed!\n");
-}
 
 /*
 ========================================================================
@@ -4941,13 +4881,13 @@ Return Value:
 Note:
 ========================================================================
 */
-BOOLEAN RtmpOsSemaDestroy(RTMP_OS_SEM *pSemOrg)
+BOOLEAN RtmpOsSemaDestory(RTMP_OS_SEM *pSemOrg)
 {
 	OS_SEM *pSem;
 
 	pSem = (OS_SEM *) (pSemOrg->pContent);
 	if (pSem != NULL) {
-		OS_SEM_EVENT_DESTROY(pSem);
+		OS_SEM_EVENT_DESTORY(pSem);
 
 		os_free_mem(NULL, pSem);
 		pSemOrg->pContent = NULL;
@@ -5315,6 +5255,7 @@ BOOLEAN RtmpOsPktOffsetInit(VOID)
 
 	return TRUE;
 }
+
 
 /*
 ========================================================================
