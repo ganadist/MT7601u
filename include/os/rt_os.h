@@ -47,17 +47,11 @@
 #define RTPRIV_IOCTL_BBP                            (SIOCIWFIRSTPRIV + 0x03)
 #define RTPRIV_IOCTL_MAC                            (SIOCIWFIRSTPRIV + 0x05)
 
-#ifdef RTMP_RF_RW_SUPPORT
 #define RTPRIV_IOCTL_RF                             (SIOCIWFIRSTPRIV + 0x13)  /* edit by johnli, fix read rf register problem */
-#endif /* RTMP_RF_RW_SUPPORT */
 #define RTPRIV_IOCTL_E2P                            (SIOCIWFIRSTPRIV + 0x07)
 #endif /* DBG */
 
-#ifdef RALINK_ATE
-#ifdef RALINK_QA
 #define RTPRIV_IOCTL_ATE							(SIOCIWFIRSTPRIV + 0x08)
-#endif /* RALINK_QA */
-#endif /* RALINK_ATE */
 
 #define RTPRIV_IOCTL_STATISTICS                     (SIOCIWFIRSTPRIV + 0x09)
 #define RTPRIV_IOCTL_ADD_PMKID_CACHE                (SIOCIWFIRSTPRIV + 0x0A)

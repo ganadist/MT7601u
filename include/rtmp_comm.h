@@ -56,6 +56,21 @@
     
     
 
+/* ======================== Before include files ============================ */ 
+/*
+	14 channels @2.4G +  12@UNII(lower/middle) + 16@HiperLAN2 + 11@UNII(upper) + 0 @Japan + 1 as NULL termination
+	Refer to CH_HZ_ID_MAP[] in rt_channel.c
+
+*/
+#ifdef DOT11_VHT_AC
+#define MAX_NUM_OF_CHS             		(54 + 5)	/* 5 channels for central channel of VHT 80MHz */
+#else
+#define MAX_NUM_OF_CHS             		54
+#endif /* DOT11_VHT_AC*/
+/* 14 channels @2.4G +  12@UNII + 4 @MMAC + 11 @HiperLAN2 + 7 @Japan + 1 as NULL termination */
+#define MAX_NUM_OF_CHANNELS             MAX_NUM_OF_CHS
+
+
 #include "rtmp_type.h"
 #include "rtmp_os.h"
 #include "link_list.h"
@@ -76,7 +91,10 @@
 #define RT_DEBUG_INFO       4
 #define RT_DEBUG_LOUD       5
     
-
+typedef enum{
+	DBG_FUNC_RA = 0x100,	/* debug flag for rate adaptation */
+	DBG_FUNC_SA = 0x200,	/* debug flag for smart antenna */
+}RT_DEBUG_FUNC;
 
 
 /* ======================== Definition ====================================== */ 
@@ -176,7 +194,6 @@ Ndis802_11InfrastructureMax	/* Not a real value, defined as upper bound */
 
 
 
-
 /* ======================== Memory ========================================== */ 
 #ifdef VENDOR_FEATURE2_SUPPORT
 
@@ -201,9 +218,16 @@ extern ULONG OS_NumOfPktAlloc, OS_NumOfPktFree;
 #ifdef DOT11_N_SUPPORT
 #define MODE_HTMIX	2
 #define MODE_HTGREENFIELD	3
-#endif	/* DOT11_N_SUPPORT */
-    
+#endif /* DOT11_N_SUPPORT */
+#define MODE_VHT	4
 
+#ifdef NO_CONSISTENT_MEM_SUPPORT
+/* current support RXD_SIZE = 16B and cache line = 16 or 32B */
+#define RTMP_DCACHE_FLUSH(__AddrStart, __Size)							\
+		RtmpOsDCacheFlush((ULONG)(__AddrStart), (ULONG)(__Size))
+#else
+#define RTMP_DCACHE_FLUSH(__AddrStart, __Size)
+#endif /* NO_CONSISTENT_MEM_SUPPORT */
 
 
 /* ======================== Interface ======================================= */
@@ -227,6 +251,14 @@ typedef enum _RTMP_INF_TYPE_
 #define RT_CONFIG_IF_OPMODE_ON_AP(__OpMode)
 #define RT_CONFIG_IF_OPMODE_ON_STA(__OpMode)
 #endif
+
+/* associated with device interface */
+typedef struct _DEV_PRIV_INFO {
+	VOID			*pPriv; /* pAd */
+	UINT32			priv_flags;
+} DEV_PRIV_INFO;
+
+
 
     
 /***********************************************************************************
@@ -319,15 +351,28 @@ typedef struct _LIST_RESOURCE_OBJ_ENTRY
 #define MAX_SEQ_NUMBER              0x0fff
 #define LENGTH_802_3_NO_TYPE		12
 #define LENGTH_802_1Q				4 /* VLAN related */
-    
-/* */
-/* Packet information for NdisQueryPacket */
-/* */
+
+
+#ifdef TX_PKT_SG
+#ifndef MAX_SKB_FRAGS 
+#define MAX_SKB_FRAGS (65536/(1UL << 12) + 2)
+#endif
+typedef struct _PTK_SG_T{
+	VOID *data;
+	INT len;
+}PKT_SG_T;
+#endif /* TX_PKT_SG */
+/*
+	Packet information for NdisQueryPacket
+*/
 typedef struct  _PACKET_INFO    {
-	UINT            PhysicalBufferCount;    /* Physical breaks of buffer descripor chained */
-	UINT            BufferCount ;           /* Number of Buffer descriptor chained */
-	UINT            TotalPacketLength ;     /* Self explained */
-	PNDIS_BUFFER    pFirstBuffer;           /* Pointer to first buffer descriptor */
+	UINT PhysicalBufferCount;    /* Physical breaks of buffer descripor chained */
+	UINT BufferCount;           /* Number of Buffer descriptor chained */
+	UINT TotalPacketLength ;     /* Self explained */
+	PNDIS_BUFFER pFirstBuffer;   /* Pointer to first buffer descriptor */
+#ifdef TX_PKT_SG
+	PKT_SG_T sg_list[MAX_SKB_FRAGS];
+#endif /* TX_PKT_SG */
 } PACKET_INFO, *PPACKET_INFO;
 
 
@@ -461,6 +506,6 @@ typedef struct _ETHEREAL_RADIO {
 #endif /* MONITOR_FLAG_11N_SNIFFER_SUPPORT */
     
 
+
 #endif /* __RT_COMM_H__ */
-    
-/* End of rt_comm.h */ 
+

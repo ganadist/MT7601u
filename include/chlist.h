@@ -31,9 +31,6 @@
 #include "rtmp_type.h"
 #include "rtmp_def.h"
 
-#define BAND_5G         0
-#define BAND_24G        1
-#define BAND_BOTH       2
 
 typedef struct _CH_DESC {
 	UCHAR FirstChannel;
@@ -62,11 +59,31 @@ typedef struct _CH_DESP {
 typedef struct _CH_REGION {
 	UCHAR CountReg[3];
 	UCHAR DfsType;			/* 0: CE, 1: FCC, 2: JAP, 3:JAP_W53, JAP_W56 */
-	CH_DESP ChDesp[10];
+	CH_DESP *pChDesp;
 } CH_REGION, *PCH_REGION;
 
 extern CH_REGION ChRegion[];
 #endif /* EXT_BUILD_CHANNEL_LIST */
+
+#ifdef SINGLE_SKU_V2
+#define SINGLE_SKU_TABLE_LENGTH			(SINGLE_SKU_TABLE_CCK_LENGTH+SINGLE_SKU_TABLE_OFDM_LENGTH+(SINGLE_SKU_TABLE_HT_LENGTH*2)+SINGLE_SKU_TABLE_VHT_LENGTH)
+
+#define SINGLE_SKU_TABLE_CCK_LENGTH		4
+#define SINGLE_SKU_TABLE_OFDM_LENGTH		8
+#define SINGLE_SKU_TABLE_HT_LENGTH		16
+#define SINGLE_SKU_TABLE_VHT_LENGTH		10 /* VHT MCS 0 ~ 9 */
+
+typedef struct _CH_POWER_{
+	DL_LIST		List;
+	UCHAR		channel;
+	UCHAR		num;
+	UCHAR		PwrCCK[SINGLE_SKU_TABLE_CCK_LENGTH];
+	UCHAR		PwrOFDM[SINGLE_SKU_TABLE_OFDM_LENGTH];
+	UCHAR		PwrHT20[SINGLE_SKU_TABLE_HT_LENGTH];
+	UCHAR		PwrHT40[SINGLE_SKU_TABLE_HT_LENGTH];
+	UCHAR		PwrVHT80[SINGLE_SKU_TABLE_VHT_LENGTH];
+}CH_POWER;
+#endif /* SINGLE_SKU_V2 */
 
 typedef struct _CH_FREQ_MAP_{
 	UINT16		channel;
@@ -77,12 +94,13 @@ extern CH_FREQ_MAP CH_HZ_ID_MAP[];
 extern int CH_HZ_ID_MAP_NUM;
 
 
-
-
 #define     MAP_CHANNEL_ID_TO_KHZ(_ch, _khz)                 \
 			RTMP_MapChannelID2KHZ(_ch, (UINT32 *)&(_khz))
 #define     MAP_KHZ_TO_CHANNEL_ID(_khz, _ch)                 \
 			RTMP_MapKHZ2ChannelID(_khz, (INT *)&(_ch))
+
+/* Check if it is Japan W53(ch52,56,60,64) channel. */
+#define JapanChannelCheck(_ch)  ((_ch == 52) || (_ch == 56) || (_ch == 60) || (_ch == 64))
 
 
 #ifdef EXT_BUILD_CHANNEL_LIST
@@ -96,11 +114,10 @@ VOID BuildBeaconChList(
 #endif /* EXT_BUILD_CHANNEL_LIST */
 
 #ifdef DOT11_N_SUPPORT
-VOID N_ChannelCheck(
-	IN PRTMP_ADAPTER pAd);
+VOID N_ChannelCheck(RTMP_ADAPTER *pAd);
+UCHAR N_SetCenCh(RTMP_ADAPTER *pAd, UCHAR channel);
+BOOLEAN N_ChannelGroupCheck(RTMP_ADAPTER *pAd, UCHAR channel);
 
-VOID N_SetCenCh(
-	IN PRTMP_ADAPTER pAd);
 #endif /* DOT11_N_SUPPORT */
 
 UINT8 GetCuntryMaxTxPwr(

@@ -8,9 +8,16 @@ ifeq ($(TARGET),)
 TARGET = LINUX
 endif
 
+# CHIPSET
+# rt2860, rt2870, rt2880, rt2070, rt3070, rt3090, rt3572, rt3062, rt3562, rt3593, rt3573
+# rt3562(for rt3592), rt3050, rt3350, rt3352, rt5350, rt5370, rt5390, rt5572, rt5592, 
+# rt8592(for rt85592), mt7650e, mt7630e, mt7610e, mt7650u, mt7630u, mt7610u
+
 ifeq ($(CHIPSET),)
-CHIPSET = 5370
+CHIPSET = mt7650u mt7630u mt7610u
 endif
+
+MODULE = $(word 1, $(CHIPSET))
 
 #OS ABL - YES or NO
 OSABL = NO
@@ -20,7 +27,9 @@ ifneq ($(TARGET),THREADX)
 RT28xx_DIR = $(shell pwd)
 endif
 
-RTMP_SRC_DIR = $(RT28xx_DIR)/RT$(CHIPSET)
+include $(RT28xx_DIR)/os/linux/config.mk
+
+RTMP_SRC_DIR = $(RT28xx_DIR)/RT$(MODULE)
 
 #PLATFORM: Target platform
 PLATFORM = PC
@@ -49,24 +58,28 @@ PLATFORM = PC
 #PLATFORM = DM6446
 #PLATFORM = FREESCALE8377
 #PLATFORM = BL2348
+#PLATFORM = BL23570
 #PLATFORM = BLUBB
 #PLATFORM = BLPMP
 #PLATFORM = MT85XX
+#PLATFORM = MT53XX
 #PLATFORM = NXP_TV550
 #PLATFORM = MVL5
 #PLATFORM = RALINK_3352
+#PLATFORM = UBICOM_IPX8
+#PLATFORM = INTELP6
 
 #APSOC
-ifeq ($(CHIPSET),3050)
+ifeq ($(MODULE),3050)
 PLATFORM = RALINK_3050
 endif
-ifeq ($(CHIPSET),3052)
+ifeq ($(MODULE),3052)
 PLATFORM = RALINK_3052
 endif
-ifeq ($(CHIPSET),3350)
+ifeq ($(MODULE),3350)
 PLATFORM = RALINK_3050
 endif
-ifeq ($(CHIPSET),3352)
+ifeq ($(MODULE),3352)
 PLATFORM = RALINK_3352
 endif
 
@@ -95,6 +108,11 @@ endif
 ifeq ($(PLATFORM),5VT)
 LINUX_SRC = /home/ralink-2860-sdk-5vt-distribution/linux-2.6.17
 CROSS_COMPILE = /opt/crosstool/uClibc_v5te_le_gcc_4_1_1/bin/arm-linux-
+endif
+
+ifeq ($(PLATFORM),UBICOM_IPX8)
+LINUX_SRC = /home/sample/Customers/UBICOM/ubicom-linux-dist-2.1.1/linux-2.6.x
+CROSS_COMPILE = ubicom32-elf-
 endif
 
 ifeq ($(PLATFORM),IKANOS_V160)
@@ -158,6 +176,14 @@ LINUX_SRC = /home/sample/Customers/BroadLight/bl234x-linux-2.6.21-small-v29
 CROSS_COMPILE = mips-wrs-linux-gnu-
 endif
 
+ifeq ($(PLATFORM),BL23570)
+LINUX_SRC = /home/FIBERHOME/linux-2.6.34.8
+CROSS_COMPILE = mips-wrs-linux-gnu-mips_74k_softfp-glibc_small-
+ARCH:=mips
+export $ARCH
+endif
+
+
 ifeq ($(PLATFORM),BLUBB)
 LINUX_SRC = /home/sample/Customers/BroadLight/UBB/gmp20/linux-2.6.21-small
 CROSS_COMPILE = mips-wrs-linux-gnu-
@@ -175,6 +201,11 @@ LINUX_SRC = /lib/modules/$(shell uname -r)/build
 #LINUX_SRC = /usr/src/linux-2.4
 LINUX_SRC_MODULE = /lib/modules/$(shell uname -r)/kernel/drivers/net/wireless/
 CROSS_COMPILE = 
+endif
+
+ifeq ($(PLATFORM),INTELP6)
+LINUX_SRC = /tftpboot/IntelCE-20.0.11052.243193/project_build_i686/IntelCE/kernel-20.0.11024.238456/linux-2.6.35
+CROSS_COMPILE = /tftpboot/IntelCE-20.0.11052.243193/build_i686/i686-linux-elf/bin/i686-cm-linux-
 endif
 
 ifeq ($(PLATFORM),IXP)
@@ -260,8 +291,14 @@ LINUX_SRC = /home/fonchi/work/soc/ti-davinci
 endif
 
 ifeq ($(PLATFORM),MT85XX)
-LINUX_SRC = /home/john/MTK/BDP_Linux/linux-2.6.27
-CROSS_COMPILE = armv6z-mediatek-linux-gnueabi-
+LINUX_SRC = $(RT28xx_DIR)/../../../../build_linux
+ifeq ($(CROSS_COMPILE),)
+CROSS_COMPILE=armv7a-mediatek451_001_vfp-linux-gnueabi-
+endif
+CC=$(CROSS_COMPILE)gcc
+$(warning =============================================)
+$(warning CC=$(CC) for wifi driver)
+$(warning =============================================)
 endif
 
 ifeq ($(PLATFORM),NXP_TV550) 
@@ -275,7 +312,7 @@ LINUX_SRC = /home2/charlestu/AP-VT3426/linux-2.6.18
 CROSS_COMPILE = /opt/montavista/pro/devkit/arm/v5t_le_mvl5/bin/arm_v5t_le-
 endif
 
-export OSABL RT28xx_DIR RT28xx_MODE LINUX_SRC CROSS_COMPILE CROSS_COMPILE_INCLUDE PLATFORM RELEASE CHIPSET RTMP_SRC_DIR LINUX_SRC_MODULE TARGET
+export OSABL RT28xx_DIR RT28xx_MODE LINUX_SRC CROSS_COMPILE CROSS_COMPILE_INCLUDE PLATFORM RELEASE CHIPSET MODULE RTMP_SRC_DIR LINUX_SRC_MODULE TARGET HAS_WOW_SUPPORT
 
 # The targets that may be used.
 PHONY += all build_tools test UCOS THREADX LINUX release prerelease clean uninstall install libwapi osabl
@@ -323,26 +360,26 @@ ifeq ($(OSABL),YES)
 endif
 
 ifeq ($(RT28xx_MODE),AP)
-	cp -f $(RT28xx_DIR)/os/linux/rt$(CHIPSET)ap.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_ap.o /tftpboot
 ifeq ($(OSABL),YES)
-	cp -f $(RT28xx_DIR)/os/linux/rtutil$(CHIPSET)ap.o /tftpboot
-	cp -f $(RT28xx_DIR)/os/linux/rtnet$(CHIPSET)ap.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/rtutil$(MODULE)_ap.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/rtnet$(MODULE)_ap.o /tftpboot
 endif
 ifeq ($(PLATFORM),INF_AMAZON_SE)
 	cp -f /tftpboot/rt2870ap.o /backup/ifx/build/root_filesystem/lib/modules/2.4.31-Amazon_SE-3.6.2.2-R0416_Ralink/kernel/drivers/net
 endif
 else	
 ifeq ($(RT28xx_MODE),APSTA)
-	cp -f $(RT28xx_DIR)/os/linux/rt$(CHIPSET)apsta.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_apsta.o /tftpboot
 ifeq ($(OSABL),YES)
-	cp -f $(RT28xx_DIR)/os/linux/rtutil$(CHIPSET)apsta.o /tftpboot
-	cp -f $(RT28xx_DIR)/os/linux/rtnet$(CHIPSET)apsta.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/rtutil$(MODULE)_apsta.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/rtnet$(MODULE)_apsta.o /tftpboot
 endif
 else
-	cp -f $(RT28xx_DIR)/os/linux/rt$(CHIPSET)sta.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_sta.o /tftpboot
 ifeq ($(OSABL),YES)
-	cp -f $(RT28xx_DIR)/os/linux/rtutil$(CHIPSET)sta.o /tftpboot
-	cp -f $(RT28xx_DIR)/os/linux/rtnet$(CHIPSET)sta.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/rtutil$(MODULE)_sta.o /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/rtnet$(MODULE)_sta.o /tftpboot
 endif
 endif	
 endif	
@@ -370,32 +407,35 @@ ifeq ($(OSABL),YES)
 endif
 
 ifeq ($(RT28xx_MODE),AP)
-	cp -f $(RT28xx_DIR)/os/linux/rt$(CHIPSET)ap.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_ap.ko /tftpboot
 ifeq ($(OSABL),YES)
-	cp -f $(RT28xx_DIR)/os/linux/rtutil$(CHIPSET)ap.ko /tftpboot
-	cp -f $(RT28xx_DIR)/os/linux/rtnet$(CHIPSET)ap.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_ap_util.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_ap_net.ko /tftpboot
 endif
-	rm -f os/linux/rt$(CHIPSET)ap.ko.lzma
-	/root/bin/lzma e os/linux/rt$(CHIPSET)ap.ko os/linux/rt$(CHIPSET)ap.ko.lzma
+	rm -f os/linux/$(MODULE)_ap.ko.lzma
+	/root/bin/lzma e os/linux/$(MODULE)_ap.ko os/linux/$(MODULE)_ap.ko.lzma
 else	
 ifeq ($(RT28xx_MODE),APSTA)
-	cp -f $(RT28xx_DIR)/os/linux/rt$(CHIPSET)apsta.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_apsta.ko /tftpboot
 ifeq ($(OSABL),YES)
-	cp -f $(RT28xx_DIR)/os/linux/rtutil$(CHIPSET)apsta.ko /tftpboot
-	cp -f $(RT28xx_DIR)/os/linux/rtnet$(CHIPSET)apsta.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_apsta_util.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_apsta_net.ko /tftpboot
 endif
 else
-	cp -f $(RT28xx_DIR)/os/linux/rt$(CHIPSET)sta.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_sta.ko /tftpboot 2>/dev/null || :
 ifeq ($(OSABL),YES)
-	cp -f $(RT28xx_DIR)/os/linux/rtutil$(CHIPSET)sta.ko /tftpboot
-	cp -f $(RT28xx_DIR)/os/linux/rtnet$(CHIPSET)sta.ko /tftpboot
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_sta_util.ko /tftpboot 2>/dev/null || :
+	cp -f $(RT28xx_DIR)/os/linux/$(MODULE)_sta_net.ko /tftpboot 2>/dev/null || :
+endif
+ifeq ($(PLATFORM),MT85XX)
+	cp -f $(RT28xx_DIR)/os/linux/rtsta.ko $(RT28xx_DIR)/../../../../../BDP_Generic/build_linux_ko/src/driver/wlan/
 endif
 endif
 endif
 endif
 
 
-release:
+release: build_tools
 	$(MAKE) -C $(RT28xx_DIR)/striptool -f Makefile.release clean
 	$(MAKE) -C $(RT28xx_DIR)/striptool -f Makefile.release
 	striptool/striptool.out
@@ -406,7 +446,7 @@ ifeq ($(RELEASE), DPO)
 endif
 
 prerelease:
-ifeq ($(CHIPSET), 2880)
+ifeq ($(MODULE), 2880)
 	$(MAKE) -C $(RT28xx_DIR)/os/linux -f Makefile.release.2880 prerelease
 else
 	$(MAKE) -C $(RT28xx_DIR)/os/linux -f Makefile.release prerelease

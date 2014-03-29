@@ -310,6 +310,7 @@ VOID WpaStaPairwiseKeySetting(
 		pSharedKey->CipherAlg = CIPHER_NONE;
 
 	/* Update these related information to MAC_TABLE_ENTRY */
+	pEntry->PairwiseKey.KeyLen = LEN_TK;
 	NdisMoveMemory(pEntry->PairwiseKey.Key, &pAd->StaCfg.PTK[32], LEN_TK);
 	NdisMoveMemory(pEntry->PairwiseKey.RxMic, &pAd->StaCfg.PTK[48], LEN_TKIP_MIC);
 	NdisMoveMemory(pEntry->PairwiseKey.TxMic, &pAd->StaCfg.PTK[48+LEN_TKIP_MIC], LEN_TKIP_MIC);            

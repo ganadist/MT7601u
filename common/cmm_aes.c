@@ -555,7 +555,6 @@ BOOLEAN RTMPSoftDecryptAES(
 
 	
 	/* Descrypt the MIC*/
-	/* */
 	construct_ctr_preload(ctr_preload,
 							a4_exists,
 							qc_exists,
@@ -608,7 +607,7 @@ BOOLEAN RTMPSoftDecryptAES(
 	bitwise_xor(aes_out, mic_header2, chain_buffer);
 	aes128k128d(pWpaKey->Key, chain_buffer, aes_out);
 
-	/* iterate through each 16 byte payload block*/
+	/* iterate through each 16 byte payload block */
 	for (i = 0; i < num_blocks; i++)     
 	{
 		bitwise_xor(aes_out, pData + payload_index, chain_buffer);
@@ -616,7 +615,7 @@ BOOLEAN RTMPSoftDecryptAES(
 		aes128k128d(pWpaKey->Key, chain_buffer, aes_out);
 	}
 
-	/* Add on the final payload block if it needs padding*/
+	/* Add on the final payload block if it needs padding */
 	if (payload_remainder > 0)
 	{
 		NdisZeroMemory(padded_buffer, 16);
@@ -632,7 +631,7 @@ BOOLEAN RTMPSoftDecryptAES(
 
 	if (!NdisEqualMemory(MIC, TrailMIC, 8))
 	{
-		DBGPRINT(RT_DEBUG_ERROR, ("RTMPSoftDecryptAES, MIC Error !\n"));	 /*MIC error.	*/
+		DBGPRINT(RT_DEBUG_ERROR, ("RTMPSoftDecryptAES, MIC Error !\n"));	 /* MIC error. */
 		return FALSE;
 	}
 
@@ -661,16 +660,16 @@ BOOLEAN RTMPSoftDecryptAES(
 	========================================================================
 */
 VOID RTMPConstructCCMPAAD(
-	IN 	PUCHAR 			pHdr,
-	IN	BOOLEAN			isDataFrame,
-	IN	UINT8 			a4_exists,
-	IN	UINT8			qc_exists,
-	OUT	UCHAR			*aad_hdr,
-	OUT	UINT			*aad_len)
+	IN PUCHAR pHdr,
+	IN BOOLEAN isDataFrame,
+	IN UINT8 a4_exists,
+	IN UINT8 qc_exists,
+	OUT UCHAR *aad_hdr,
+	OUT UINT *aad_len)
 {
 	UINT len = 0;
 
-	/* 	Frame control -
+	/* Frame control -
 		Subtype bits (bits 4 5 6) in a Data MPDU masked to 0
 		Retry bit (bit 11) masked to 0
 		PwrMgt bit (bit 12) masked to 0
@@ -711,13 +710,13 @@ VOID RTMPConstructCCMPAAD(
 		set to 0 for the AAD calculation (bits 4 to 15 are set to 0). */
 	if (qc_exists & a4_exists)
 	{
-		aad_hdr[len] = (*(pHdr + 30)) & 0x0f;   /* Qos_TC*/
+		aad_hdr[len] = (*(pHdr + 30)) & 0x0f;   /* Qos_TC */
 		aad_hdr[len + 1] = 0x00;
 		len += 2;
 	}
 	else if (qc_exists & !a4_exists)
 	{
-		aad_hdr[len] = (*(pHdr + 24)) & 0x0f;   /* Qos_TC*/
+		aad_hdr[len] = (*(pHdr + 24)) & 0x0f;   /* Qos_TC */
 		aad_hdr[len + 1] = 0x00;
 		len += 2;
 	}	
@@ -740,18 +739,18 @@ VOID RTMPConstructCCMPAAD(
 	========================================================================
 */
 VOID RTMPConstructCCMPNonce(
-	IN 	PUCHAR 			pHdr,
-	IN	UINT8 			a4_exists,
-	IN	UINT8			qc_exists,
-	IN	BOOLEAN			isMgmtFrame,
-	IN	UCHAR			*pn,		
-	OUT	UCHAR			*nonce_hdr,
-	OUT UINT			*nonce_hdr_len)
+	IN PUCHAR pHdr,
+	IN UINT8 a4_exists,
+	IN UINT8 qc_exists,
+	IN BOOLEAN isMgmtFrame,
+	IN UCHAR *pn,		
+	OUT UCHAR *nonce_hdr,
+	OUT UINT *nonce_hdr_len)
 {
-	UINT	n_offset = 0;
-	INT		i;
+	UINT n_offset = 0;
+	INT i;
 
-	/* 	Decide the Priority Octet 
+	/* Decide the Priority Octet 
 		The Priority sub-field of the Nonce Flags field shall 
 		be set to the fixed value 0 when there is no QC field 
 		present in the MPDU header. When the QC field is present, 
@@ -768,7 +767,7 @@ VOID RTMPConstructCCMPNonce(
 	NdisMoveMemory(&nonce_hdr[n_offset], pHdr + 10, MAC_ADDR_LEN);
 	n_offset += MAC_ADDR_LEN;
 
-	/* 	Fill in the PN. The PN field occupies octets 7¡V12. 
+	/* Fill in the PN. The PN field occupies octets 7¡V12. 
 		The octets of PN shall be ordered so that PN0 is at octet index 12
 		and PN5 is at octet index 7. */
  	for (i = 0; i < 6; i++)
@@ -795,9 +794,9 @@ VOID RTMPConstructCCMPNonce(
 	========================================================================
 */
 VOID RTMPConstructCCMPHdr(
-	IN	UINT8 			key_idx,
-	IN	UCHAR			*pn,		
-	OUT	UCHAR			*ccmp_hdr)
+        IN UINT8 key_idx,
+	IN UCHAR *pn,		
+	OUT UCHAR *ccmp_hdr)
 {
 	NdisZeroMemory(ccmp_hdr, LEN_CCMP_HDR);
 
@@ -824,21 +823,21 @@ VOID RTMPConstructCCMPHdr(
 	========================================================================
 */
 BOOLEAN RTMPSoftEncryptCCMP(
-	IN 	PRTMP_ADAPTER 	pAd,
-	IN 	PUCHAR			pHdr,
-	IN	PUCHAR			pIV,
-	IN 		PUCHAR			pKey,
-	INOUT 	PUCHAR			pData,
-	IN 	UINT32			DataLen)
+	IN PRTMP_ADAPTER pAd,
+	IN PUCHAR pHdr,
+	IN PUCHAR pIV,
+	IN PUCHAR pKey,
+	INOUT PUCHAR pData,
+	IN UINT32 DataLen)
 {
-	UINT8			frame_type, frame_subtype;
-	UINT8			from_ds, to_ds;
-	UINT8 			a4_exists, qc_exists;
-	UINT8			aad_hdr[30];
-	UINT			aad_len = 0;
-	UINT8			nonce_hdr[13];	
-	UINT32			nonce_hdr_len = 0;
-	UINT32			out_len = DataLen + 8;
+	UINT8 frame_type, frame_subtype;
+	UINT8 from_ds, to_ds;
+	UINT8 a4_exists, qc_exists;
+	UINT8 aad_hdr[30];
+	UINT aad_len = 0;
+	UINT8 nonce_hdr[13];	
+	UINT32 nonce_hdr_len = 0;
+	UINT32 out_len = DataLen + 8;
 		
 #ifdef RT_BIG_ENDIAN
 	RTMPFrameEndianChange(pAd, (PUCHAR)pHdr, DIR_READ, FALSE);
@@ -858,10 +857,14 @@ BOOLEAN RTMPSoftEncryptCCMP(
 			
 	/* decide if the Address 4 exist or QoS exist */
 	a4_exists = (from_ds & to_ds);
+	qc_exists = 0;
+	if (frame_type == BTYPE_DATA)
+	{                
 	qc_exists = ((frame_subtype == SUBTYPE_QDATA) || 
 				 (frame_subtype == SUBTYPE_QDATA_CFACK) ||
 				 (frame_subtype == SUBTYPE_QDATA_CFPOLL) ||
 				 (frame_subtype == SUBTYPE_QDATA_CFACK_CFPOLL));
+	}
 
 	/* Construct AAD header */
 	RTMPConstructCCMPAAD(pHdr, 
@@ -912,23 +915,23 @@ BOOLEAN RTMPSoftEncryptCCMP(
 	========================================================================
 */
 BOOLEAN RTMPSoftDecryptCCMP(
-	IN 		PRTMP_ADAPTER 	pAd,
-	IN 		PUCHAR			pHdr,
-	IN 		PCIPHER_KEY		pKey,
-	INOUT 	PUCHAR			pData,
-	INOUT 	UINT16			*DataLen)
+	IN PRTMP_ADAPTER pAd,
+	IN PUCHAR pHdr,
+	IN PCIPHER_KEY pKey,
+	INOUT PUCHAR pData,
+	INOUT UINT16 *DataLen)
 {
-	UINT8			frame_type, frame_subtype;
-	UINT8			from_ds, to_ds;
-	UINT8 			a4_exists, qc_exists;
-	UINT8			aad_hdr[30];
-	UINT			aad_len = 0;
-	UINT8			pn[LEN_PN];	
-	PUCHAR			cipherData_ptr;
-	UINT32			cipherData_len;
-	UINT8			nonce_hdr[13];	
-	UINT32			nonce_hdr_len = 0;	
-	UINT32			out_len = *DataLen;
+	UINT8 frame_type, frame_subtype;
+	UINT8 from_ds, to_ds;
+	UINT8 a4_exists, qc_exists;
+	UINT8 aad_hdr[30];
+	UINT aad_len = 0;
+	UINT8 pn[LEN_PN];	
+	PUCHAR cipherData_ptr;
+	UINT32 cipherData_len;
+	UINT8 nonce_hdr[13];	
+	UINT32 nonce_hdr_len = 0;	
+	UINT32 out_len = *DataLen;
 
 #ifdef RT_BIG_ENDIAN
 	RTMPFrameEndianChange(pAd, (PUCHAR)pHdr, DIR_READ, FALSE);
@@ -955,10 +958,14 @@ BOOLEAN RTMPSoftDecryptCCMP(
 
 	/* decide if the Address 4 exist or QoS exist */
 	a4_exists = (from_ds & to_ds);
+	qc_exists = 0;
+	if (frame_type == BTYPE_DATA)
+	{                        
 	qc_exists = ((frame_subtype == SUBTYPE_QDATA) || 
 				 (frame_subtype == SUBTYPE_QDATA_CFACK) ||
 				 (frame_subtype == SUBTYPE_QDATA_CFPOLL) ||
 				 (frame_subtype == SUBTYPE_QDATA_CFACK_CFPOLL));	
+        }
 			
 	/* Extract PN and from CCMP header */
 	pn[0] =	pData[0];
@@ -1023,8 +1030,8 @@ BOOLEAN RTMPSoftDecryptCCMP(
 	========================================================================
 */
 VOID CCMP_test_vector(
-	IN 	PRTMP_ADAPTER 	pAd,
-	IN	INT 			input)
+	IN PRTMP_ADAPTER pAd,
+	IN INT input)
 {
 	UINT8 Key_ID = 0;
 	/*UINT8 A1[6] =  {0x0f, 0xd2, 0xe1, 0x28, 0xa5, 0x7c};*/
@@ -1049,8 +1056,8 @@ VOID CCMP_test_vector(
 							 0x42, 0xa6, 0x43, 0xe4, 0x32, 0x46, 0xe8, 0x0c, 
 							 0x3c, 0x04, 0xd0, 0x19, 0x78, 0x45, 0xce, 0x0b,
 							 0x16, 0xf9, 0x76, 0x23};		
-	UINT8	res_buf[100];
-	UINT	res_len = 0;
+	UINT8 res_buf[100];
+	UINT res_len = 0;
 
 	printk("== CCMP test vector == \n");
 
@@ -1127,7 +1134,6 @@ VOID CCMP_test_vector(
 		}
 	}	
 	
-
 	printk("== CCMP test vector == \n");
 
 	}

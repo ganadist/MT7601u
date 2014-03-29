@@ -3,9 +3,9 @@ include $(RT28xx_DIR)/os/linux/config.mk
 
 #ifdef CONFIG_STA_SUPPORT
 ifeq ($(RT28xx_MODE), STA)
-MOD_NAME = rt$(CHIPSET)sta
-DAT_PATH = /etc/Wireless/RT$(CHIPSET_DAT)STA
-DAT_FILE_NAME = RT$(CHIPSET_DAT)STA.dat
+MOD_NAME = rt$(MODULE)sta
+DAT_PATH = /etc/Wireless/RT$(MODULE_DAT)STA
+DAT_FILE_NAME = RT$(MODULE_DAT)STA.dat
 endif
 #endif // CONFIG_STA_SUPPORT //
 
@@ -42,6 +42,9 @@ RT28XX_STA_OBJ := \
 	$(RT28xx_DIR)/common/cmm_profile.o\
 	$(RT28xx_DIR)/common/cmm_asic.o\
 	$(RT28xx_DIR)/common/cmm_cmd.o\
+	$(RT28xx_DIR)/rate_ctrl/ra_ctrl.o\
+	$(RT28xx_DIR)/rate_ctrl/alg_legacy.o\
+	$(RT28xx_DIR)/rate_ctrl/alg_ags.o\
 	$(RT28xx_DIR)/os/linux/rt_profile.o\
 	$(RT28xx_DIR)/chips/rtmp_chip.o\
 	$(RT28xx_DIR)/sta/assoc.o\
@@ -52,7 +55,6 @@ RT28XX_STA_OBJ := \
 	$(RT28xx_DIR)/sta/rtmp_data.o\
 	$(RT28xx_DIR)/sta/connect.o\
 	$(RT28xx_DIR)/sta/wpa.o\
-	$(RT28xx_DIR)/sta/ags.o\
 	$(RT28xx_DIR)/sta/sta_cfg.o
 
 ifeq ($(OSABL),NO)
@@ -66,10 +68,32 @@ RT28XX_STA_OBJ += \
 	$(RT28xx_DIR)/os/linux/rt_symb.o
 endif
 
+ifeq ($(HAS_NEW_RATE_ADAPT_SUPPORT),y)
+RT28XX_STA_OBJS += $(RT28xx_DIR)/rate_ctrl/alg_grp.o
+endif
+
+ifeq ($(HAS_ATE),y)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/ate/common/rt_ate.o
+endif
+
+ifeq ($(HAS_QA_SUPPORT),y)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/ate/common/rt_qa.o
+endif
+
 #ifdef DOT11_N_SUPPORT
 ifeq ($(HAS_DOT11_N_SUPPORT),y)
 RT28XX_STA_OBJ += \
 	$(RT28xx_DIR)/common/ba_action.o
+
+#ifdef TXBF_SUPPORT
+ifeq ($(HAS_TXBF_SUPPORT),y)
+rt$(MODULE)sta-objs += \
+	$(RT28xx_DIR)/common/cmm_txbf.o\
+	$(RT28xx_DIR)/common/cmm_txbf_cal.o
+endif
+#endif // TXBF_SUPPORT //
 endif
 #endif // DOT11_N_SUPPORT //
 
@@ -105,115 +129,71 @@ endif
 
 
 
-#ifdef RT3070
-ifeq ($(CHIPSET),2070)
+
+
+
+ifneq ($(findstring 3593,$(CHIPSET)),)
 RT28XX_STA_OBJ += \
-	$(RT28xx_DIR)/common/cmm_mac_usb.o\
-	$(RT28xx_DIR)/common/rtusb_io.o\
-	$(RT28xx_DIR)/common/rtusb_data.o\
-	$(RT28xx_DIR)/common/cmm_data_usb.o\
+	$(RT28xx_DIR)/common/cmm_mac_pci.o\
+	$(RT28xx_DIR)/common/cmm_data_pci.o\
+	$(RT28xx_DIR)/os/linux/rt_rbus_pci_drv.o\
+	$(RT28xx_DIR)/common/rtmp_mcu.o\
 	$(RT28xx_DIR)/common/ee_prom.o\
 	$(RT28xx_DIR)/common/ee_efuse.o\
-	$(RT28xx_DIR)/common/rtmp_mcu.o\
-	$(RT28xx_DIR)/chips/rt30xx.o\
 	$(RT28xx_DIR)/common/rt_rf.o\
-	$(RT28xx_DIR)/common/rtusb_bulk.o\
-	$(RT28xx_DIR)/os/linux/rt_usb.o\
-	$(RT28xx_DIR)/chips/rt3070.o
-
-ifeq ($(OSABL),NO)
-RT28XX_STA_OBJ += \
-	$(RT28xx_DIR)/common/rtusb_dev_id.o\
-	$(RT28xx_DIR)/os/linux/rt_usb_util.o\
-	$(RT28xx_DIR)/os/linux/usb_main_dev.o
-endif
-endif
-
-ifeq ($(CHIPSET),3070)
-RT28XX_STA_OBJ += \
-	$(RT28xx_DIR)/common/cmm_mac_usb.o\
-	$(RT28xx_DIR)/common/rtusb_io.o\
-	$(RT28xx_DIR)/common/rtusb_data.o\
-	$(RT28xx_DIR)/common/cmm_data_usb.o\
-	$(RT28xx_DIR)/common/ee_prom.o\
-	$(RT28xx_DIR)/common/ee_efuse.o\
-	$(RT28xx_DIR)/common/rtmp_mcu.o\
+	$(RT28xx_DIR)/common/frq_cal.o\
 	$(RT28xx_DIR)/chips/rt30xx.o\
-	$(RT28xx_DIR)/common/rt_rf.o\
-	$(RT28xx_DIR)/common/rtusb_bulk.o\
-	$(RT28xx_DIR)/os/linux/rt_usb.o\
-	$(RT28xx_DIR)/chips/rt3070.o
-
-ifeq ($(OSABL),NO)
-RT28XX_STA_OBJ += \
-	$(RT28xx_DIR)/common/rtusb_dev_id.o\
-	$(RT28xx_DIR)/os/linux/rt_usb_util.o\
-	$(RT28xx_DIR)/os/linux/usb_main_dev.o
-endif
-endif
-#endif // RT3070 //
-
-
-
-#ifdef RT3370
-ifeq ($(CHIPSET),3370)
-RT28XX_STA_OBJ += \
-	$(RT28xx_DIR)/common/cmm_mac_usb.o\
-	$(RT28xx_DIR)/common/rtusb_io.o\
-	$(RT28xx_DIR)/common/rtusb_data.o\
-	$(RT28xx_DIR)/common/cmm_data_usb.o\
-	$(RT28xx_DIR)/common/rtusb_bulk.o\
-	$(RT28xx_DIR)/common/ee_prom.o\
-	$(RT28xx_DIR)/common/ee_efuse.o\
-	$(RT28xx_DIR)/common/rtmp_mcu.o\
-	$(RT28xx_DIR)/common/rt_rf.o\
-	$(RT28xx_DIR)/os/linux/rt_usb.o\
-	$(RT28xx_DIR)/chips/rt3070.o\
-	$(RT28xx_DIR)/chips/rt30xx.o\
-	$(RT28xx_DIR)/chips/rt33xx.o\
-	$(RT28xx_DIR)/chips/rt3370.o
-
-ifeq ($(OSABL),NO)
-RT28XX_STA_OBJ += \
-	$(RT28xx_DIR)/common/rtusb_dev_id.o\
-	$(RT28xx_DIR)/os/linux/rt_usb_util.o\
-	$(RT28xx_DIR)/os/linux/usb_main_dev.o
-endif
-endif
-#endif // RT3370 //
-
-
-#ifdef RT5370
-ifeq ($(CHIPSET),5370)
-RT28XX_STA_OBJ += \
-        $(RT28xx_DIR)/common/cmm_mac_usb.o\
-        $(RT28xx_DIR)/common/rtusb_io.o\
-        $(RT28xx_DIR)/common/rtusb_data.o\
-        $(RT28xx_DIR)/common/cmm_data_usb.o\
-        $(RT28xx_DIR)/common/rtusb_bulk.o\
-        $(RT28xx_DIR)/common/ee_prom.o\
-        $(RT28xx_DIR)/common/ee_efuse.o\
-        $(RT28xx_DIR)/common/rtmp_mcu.o\
-        $(RT28xx_DIR)/common/rt_rf.o\
-	$(RT28xx_DIR)/os/linux/rt_usb.o\
-        $(RT28xx_DIR)/chips/rt3070.o\
-        $(RT28xx_DIR)/chips/rt30xx.o\
-        $(RT28xx_DIR)/chips/rt33xx.o\
-        $(RT28xx_DIR)/chips/rt3370.o\
-	$(RT28xx_DIR)/chips/rt5390.o
-
-ifeq ($(OSABL),NO)
-RT28XX_STA_OBJ += \
-        $(RT28xx_DIR)/common/rtusb_dev_id.o\
-        $(RT28xx_DIR)/os/linux/rt_usb_util.o\
-        $(RT28xx_DIR)/os/linux/usb_main_dev.o
-endif
-endif
-#endif // RT5370 //
+	$(RT28xx_DIR)/chips/rt35xx.o\
+	$(RT28xx_DIR)/chips/rt28xx.o\
+	$(RT28xx_DIR)/chips/rt3593.o
 
 ifeq ($(HAS_ATE),y)
-RT28XX_STA_OBJ += $(RT28xx_DIR)/common/rt_ate.o
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/ate/chips/rt3593_ate.o\
+	$(RT28xx_DIR)/ate/common/ate_pci.o
 endif
+
+ifeq ($(OSABL),NO)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/os/linux/rt_pci_rbus.o\
+	$(RT28xx_DIR)/os/linux/rt_rbus_pci_util.o\
+	$(RT28xx_DIR)/os/linux/pci_main_dev.o
+endif
+endif
+
+ifneq ($(findstring 3390,$(CHIPSET)),)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/common/cmm_mac_pci.o\
+	$(RT28xx_DIR)/common/cmm_data_pci.o\
+	$(RT28xx_DIR)/os/linux/rt_rbus_pci_drv.o\
+	$(RT28xx_DIR)/common/ee_prom.o\
+	$(RT28xx_DIR)/common/ee_efuse.o\
+	$(RT28xx_DIR)/common/rtmp_mcu.o\
+	$(RT28xx_DIR)/common/rt_rf.o\
+	$(RT28xx_DIR)/chips/rt30xx.o\
+	$(RT28xx_DIR)/chips/rt3090.o\
+	$(RT28xx_DIR)/chips/rt33xx.o\
+	$(RT28xx_DIR)/chips/rt3390.o
+
+ifeq ($(HAS_ATE),y)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/ate/chips/rt33xx_ate.o\
+	$(RT28xx_DIR)/ate/chips/rt30xx_ate.o\
+	$(RT28xx_DIR)/ate/common/ate_pci.o
+endif
+
+ifeq ($(OSABL),NO)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/os/linux/rt_pci_rbus.o\
+	$(RT28xx_DIR)/os/linux/rt_rbus_pci_util.o\
+	$(RT28xx_DIR)/os/linux/pci_main_dev.o
+endif
+endif
+
+
+
+
+
 
 
 
@@ -228,13 +208,13 @@ PHONY := all release clean install uninstall
 
 all:$(OBJ)
 
-rt$(CHIPSET)sta.o: $(RT28XX_STA_OBJ)
+rt$(MODULE)sta.o: $(RT28XX_STA_OBJ)
 	$(LD) -r $^ -o $@
 
-rt$(CHIPSET)ap.o: $(RT28XX_AP_OBJ)
+rt$(MODULE)ap.o: $(RT28XX_AP_OBJ)
 	$(LD) -r $^ -o $@
 
-rt$(CHIPSET)apsta.o: $(RT28XX_APSTA_OBJ)
+rt$(MODULE)apsta.o: $(RT28XX_APSTA_OBJ)
 	$(LD) -r $^ -o $@
 
 release:

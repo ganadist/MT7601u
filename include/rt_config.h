@@ -45,11 +45,13 @@
 #endif /* RT_CFG80211_SUPPORT */
 #endif /* LINUX */
 
-#ifdef CONFIG_STA_SUPPORT
 #ifdef AGS_SUPPORT
 #include "ags.h"
 #endif /* AGS_SUPPORT */
-#endif /* CONFIG_STA_SUPPORT */
+
+#ifdef CONFIG_FPGA_MODE
+#include "fpga/fpga_ctl.h"
+#endif /* CONFIG_FPGA_MODE */
 
 #include "mlme.h"
 #include "crypt_md5.h"
@@ -61,14 +63,13 @@
 #include "rtmp.h"
 #include "ap.h"
 #include "wpa.h"
-#include "dfs.h"
 #include "chlist.h"
 #include "spectrum.h"
 #include "rt_os_util.h"
 
 #include "eeprom.h"
 #if defined(RTMP_PCI_SUPPORT) || defined(RTMP_USB_SUPPORT)
-#include "rtmp_mcu.h"
+#include "mcu/mcu.h"
 #endif
 
 #undef AP_WSC_INCLUDED
@@ -76,6 +77,10 @@
 #undef WSC_INCLUDED
 
 #include "rt_os_net.h"
+
+#ifdef UAPSD_SUPPORT
+#include "uapsd.h"
+#endif /* UAPSD_SUPPORT */
 
 
 
@@ -96,6 +101,10 @@
 #endif /* RALINK_ATE */
 
 #ifdef RALINK_QA
+#include "rt_qa.h"
+#endif /* RALINK_QA */
+
+#ifdef RALINK_QA
 #ifndef RALINK_ATE
 #error "For supporting QA GUI, please set HAS_ATE=y and HAS_QA_SUPPORT=y."
 #endif /* RALINK_ATE */
@@ -110,6 +119,13 @@
 #define WSC_INCLUDED
 #endif
 
+
+
+#ifdef APCLI_WPA_SUPPLICANT_SUPPORT
+#ifndef APCLI_SUPPORT
+#error "Build Apcli for being controlled by NetworkManager or wext, please set HAS_APCLI_SUPPORT=y and HAS_APCLI_WPA_SUPPLICANT=y"
+#endif /* APCLI_SUPPORT */
+#endif /* APCLI_WPA_SUPPLICANT_SUPPORT */
 
 
 #ifdef CONFIG_STA_SUPPORT
@@ -133,6 +149,13 @@
 
 
 
+#ifdef WFD_SUPPORT
+#include "wfd.h"
+#endif /* WFD_SUPPORT */
+
+#ifdef DOT11_VHT_AC
+#include "vht.h"
+#endif /* DOT11_VHT_AC */
 #ifdef CONFIG_STA_SUPPORT
 #include "sta_cfg.h"
 #endif /* CONFIG_STA_SUPPORT */
@@ -140,8 +163,16 @@
 
 
 
-#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
-#include "frq_cal.h"
-#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
-#endif	/* __RT_CONFIG_H__ */
+#ifdef WORKQUEUE_BH
+#include <linux/workqueue.h>
+#endif /* WORKQUEUE_BH / */
 
+
+#ifdef TXBF_SUPPORT
+#include "rt_txbf.h"
+#endif /* TXBF_SUPPORT */
+
+
+#include "mac_ral/fce.h"
+
+#endif	/* __RT_CONFIG_H__ */

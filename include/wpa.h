@@ -299,6 +299,15 @@ BOOLEAN RTMPCheckWPAframe(
 	IN ULONG DataByteCount,
 	IN UCHAR FromWhichBSSID);
 
+#ifdef HDR_TRANS_SUPPORT
+BOOLEAN RTMPCheckWPAframe_Hdr_Trns(
+	IN PRTMP_ADAPTER pAd,
+	IN PMAC_TABLE_ENTRY pEntry,
+	IN PUCHAR pData,
+	IN ULONG DataByteCount,
+	IN UCHAR FromWhichBSSID);
+#endif /* HDR_TRANS_SUPPORT */
+
 BOOLEAN RTMPParseEapolKeyData(
 	IN PRTMP_ADAPTER pAd,
 	IN PUCHAR pKeyData,

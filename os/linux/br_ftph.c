@@ -87,7 +87,7 @@ Note:
 VOID BG_FTPH_Init(VOID)
 {
 	RALINK_FP_Handle = BG_FTPH_PacketFromApHandle;
-} /* End of BG_FTPH_Init */
+}
 
 
 /*

@@ -1,87 +1,28 @@
 include $(RT28xx_DIR)/os/linux/config.mk
 
-#ifdef CONFIG_AP_SUPPORT
-ifeq ($(RT28xx_MODE),AP)
-MOD_NAME = rtutil$(CHIPSET)ap
-endif
-#endif // CONFIG_AP_SUPPORT //
 
 #ifdef CONFIG_STA_SUPPORT
 ifeq ($(RT28xx_MODE), STA)
-MOD_NAME = rtutil$(CHIPSET)sta
+MOD_NAME = $(MODULE)_sta_util
 endif
 #endif // CONFIG_STA_SUPPORT //
-
-#ifdef CONFIG_APSTA_SUPPORT
-ifeq ($(RT28xx_MODE), APSTA)
-MOD_NAME = rtutil$(CHIPSET)apsta
-endif
-#endif // CONFIG_APSTA_SUPPORT //
 
 obj-m := $(MOD_NAME).o
 
-#ifdef CONFIG_AP_SUPPORT
-
-rtutil$(CHIPSET)ap-objs := \
-	../../common/rt_os_util.o\
-	../../os/linux/rt_linux_symb.o\
-	../../os/linux/rt_rbus_pci_util.o\
-	../../os/linux/rt_usb_util.o\
-	../../os/linux/rt_linux.o
-
-ifeq ($(PLATFORM),BL2348)
-rtutil$(CHIPSET)ap-objs += \
-	../../os/linux/vr_bdlt.o
-endif
-
-ifeq ($(PLATFORM),BLUBB)
-rtutil$(CHIPSET)ap-objs += \
-	../../os/linux/vr_bdlt.o
-endif
-
-ifeq ($(HAS_BGFP_SUPPORT),y)
-rtutil$(CHIPSET)ap-objs += \
-	../../os/linux/br_ftph.o
-endif
-
-#endif // CONFIG_AP_SUPPORT //
 
 
 #ifdef CONFIG_STA_SUPPORT
-
-rtutil$(CHIPSET)sta-objs := \
+ifeq ($(RT28xx_MODE), STA)
+$(MOD_NAME)-objs := \
 	../../common/rt_os_util.o\
 	../../os/linux/rt_linux_symb.o\
 	../../os/linux/rt_rbus_pci_util.o\
 	../../os/linux/rt_usb_util.o\
 	../../os/linux/rt_linux.o
+endif
 #endif // CONFIG_STA_SUPPORT //
 
 
-#ifdef CONFIG_APSTA_SUPPORT
-rtutil$(CHIPSET)apsta-objs := \
-	../../common/rt_os_util.o\
-	../../os/linux/rt_linux_symb.o\
-	../../os/linux/rt_rbus_pci_util.o\
-	../../os/linux/rt_usb_util.o\
-	../../os/linux/rt_linux.o
-
-ifeq ($(PLATFORM),BL2348)
-rtutil$(CHIPSET)ap-objs += \
-	../../os/linux/vr_bdlt.o
-endif
-
-ifeq ($(PLATFORM),BLUBB)
-rtutil$(CHIPSET)ap-objs += \
-	../../os/linux/vr_bdlt.o
-endif
-
-ifeq ($(HAS_BGFP_SUPPORT),y)
-rtutil$(CHIPSET)ap-objs += \
-	../../os/linux/br_ftph.o
-endif
-
-#endif // CONFIG_APSTA_SUPPORT //
 
 clean:
 	rm -f ../../common/*.o

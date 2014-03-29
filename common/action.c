@@ -30,6 +30,7 @@
 
 extern UCHAR  ZeroSsid[32];
 
+
 static VOID ReservedAction(
 	IN PRTMP_ADAPTER pAd, 
 	IN MLME_QUEUE_ELEM *Elem);
@@ -109,13 +110,13 @@ VOID MlmeADDBAAction(
 	if(MlmeAddBAReqSanity(pAd, Elem->Msg, Elem->MsgLen, Addr) &&
 		VALID_WCID(pInfo->Wcid)) 
 	{
-		NStatus = MlmeAllocateMemory(pAd, &pOutBuffer);  /*Get an unused nonpaged memory*/
+		NStatus = MlmeAllocateMemory(pAd, &pOutBuffer);  /* Get an unused nonpaged memory*/
 		if(NStatus != NDIS_STATUS_SUCCESS) 
 		{
 			DBGPRINT(RT_DEBUG_TRACE,("BA - MlmeADDBAAction() allocate memory failed \n"));
 			return;
 		}
-		/* 1. find entry*/
+		/* 1. find entry */
 		Idx = pAd->MacTab.Content[pInfo->Wcid].BAOriWcidArray[pInfo->TID];
 		if (Idx == 0)
 		{
@@ -153,7 +154,18 @@ VOID MlmeADDBAAction(
 		Frame.BaStartSeq.field.FragNum = 0;
 		Frame.BaStartSeq.field.StartSeq = pAd->MacTab.Content[pInfo->Wcid].TxSeq[pInfo->TID];
 
+#ifdef UNALIGNMENT_SUPPORT
+		{
+			BA_PARM		tmpBaParm;
+
+			NdisMoveMemory((PUCHAR)(&tmpBaParm), (PUCHAR)(&Frame.BaParm), sizeof(BA_PARM));
+			*(USHORT *)(&tmpBaParm) = cpu2le16(*(USHORT *)(&tmpBaParm));
+			NdisMoveMemory((PUCHAR)(&Frame.BaParm), (PUCHAR)(&tmpBaParm), sizeof(BA_PARM));
+		}
+#else
 		*(USHORT *)(&(Frame.BaParm)) = cpu2le16((*(USHORT *)(&(Frame.BaParm))));
+#endif /* UNALIGNMENT_SUPPORT */
+
 		Frame.TimeOutValue = cpu2le16(Frame.TimeOutValue);
 		Frame.BaStartSeq.word = cpu2le16(Frame.BaStartSeq.word);
 
@@ -199,24 +211,24 @@ VOID MlmeDELBAAction(
 	DBGPRINT(RT_DEBUG_TRACE, ("==> MlmeDELBAAction(), Initiator(%d) \n", pInfo->Initiator));
 	
 	if(MlmeDelBAReqSanity(pAd, Elem->Msg, Elem->MsgLen) &&
-		VALID_WCID(pInfo->Wcid)) 
+		VALID_WCID(pInfo->Wcid))
 	{
 		NStatus = MlmeAllocateMemory(pAd, &pOutBuffer);  /*Get an unused nonpaged memory*/
-		if(NStatus != NDIS_STATUS_SUCCESS) 
+		if(NStatus != NDIS_STATUS_SUCCESS)
 		{
 			DBGPRINT(RT_DEBUG_ERROR,("BA - MlmeDELBAAction() allocate memory failed 1. \n"));
 			return;
 		}
 
 		NStatus = MlmeAllocateMemory(pAd, &pOutBuffer2);  /*Get an unused nonpaged memory*/
-		if(NStatus != NDIS_STATUS_SUCCESS) 
+		if(NStatus != NDIS_STATUS_SUCCESS)
 		{
 			MlmeFreeMemory(pAd, pOutBuffer);
 			DBGPRINT(RT_DEBUG_ERROR, ("BA - MlmeDELBAAction() allocate memory failed 2. \n"));
 			return;
 		}
 
-		/* SEND BAR (Send BAR to refresh peer reordering buffer.)*/
+		/* SEND BAR (Send BAR to refresh peer reordering buffer.) */
 		Idx = pAd->MacTab.Content[pInfo->Wcid].BAOriWcidArray[pInfo->TID];
 
 #ifdef CONFIG_STA_SUPPORT
@@ -637,87 +649,53 @@ BOOLEAN ChannelSwitchSanityCheck(
 
 
 VOID ChannelSwitchAction(
-	IN	PRTMP_ADAPTER	pAd,
-	IN    UCHAR  Wcid,
-	IN    UCHAR  NewChannel,
-	IN    UCHAR  Secondary) 
+	IN PRTMP_ADAPTER pAd,
+	IN UCHAR Wcid,
+	IN UCHAR NewChannel,
+	IN UCHAR Secondary)
 {
-	UCHAR		BBPValue = 0;
-	INT32		MACValue;
-	
-	DBGPRINT(RT_DEBUG_TRACE,("SPECTRUM - ChannelSwitchAction(NewChannel = %d , Secondary = %d)  \n", NewChannel, Secondary));
+	UCHAR rf_channel = 0, rf_bw;
+
+
+	DBGPRINT(RT_DEBUG_TRACE,("%s(): NewChannel=%d, Secondary=%d\n", 
+				__FUNCTION__, NewChannel, Secondary));
 
 	if (ChannelSwitchSanityCheck(pAd, Wcid, NewChannel, Secondary) == FALSE)
 		return;
-	
-	/* 1.  Switches to BW = 20.*/
-	if (Secondary == 0)
+
+	pAd->CommonCfg.Channel = NewChannel;
+	if (Secondary == EXTCHA_NONE)
 	{
-		RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R4, &BBPValue);
-		BBPValue&= (~0x18);
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BBPValue);
-		if (pAd->MACVersion == 0x28600100)
-		{
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R69, 0x16);
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R70, 0x08);
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R73, 0x11);
-			DBGPRINT(RT_DEBUG_TRACE, ("!!!rt2860C !!! \n" ));
-		}
-		pAd->CommonCfg.BBPCurrentBW = BW_20;
-		pAd->CommonCfg.Channel = NewChannel;
 		pAd->CommonCfg.CentralChannel = pAd->CommonCfg.Channel;
-		AsicSwitchChannel(pAd, pAd->CommonCfg.Channel,FALSE);
-		AsicLockChannel(pAd, pAd->CommonCfg.Channel);
 		pAd->MacTab.Content[Wcid].HTPhyMode.field.BW = 0;
 		pAd->CommonCfg.AddHTInfo.AddHtInfo.RecomWidth = 0;
-                pAd->CommonCfg.AddHTInfo.AddHtInfo.ExtChanOffset = 0;		
-		DBGPRINT(RT_DEBUG_TRACE, ("!!!20MHz   !!! \n" ));
+		pAd->CommonCfg.AddHTInfo.AddHtInfo.ExtChanOffset = 0;		
+
+		rf_bw = BW_20;
+		rf_channel = pAd->CommonCfg.Channel;
 	}
 	/* 1.  Switches to BW = 40 And Station supports BW = 40.*/
-	else if (((Secondary == 1) || (Secondary == 3)) && (pAd->CommonCfg.HtCapability.HtCapInfo.ChannelWidth == 1))
+	else if (((Secondary == EXTCHA_ABOVE) || (Secondary == EXTCHA_BELOW)) &&
+			(pAd->CommonCfg.HtCapability.HtCapInfo.ChannelWidth == 1)
+	)
 	{
-		pAd->CommonCfg.Channel = NewChannel;
-
-		if (Secondary == 1)
-		{
-			/* Secondary above.*/
+		rf_bw = BW_40;
+		if (Secondary == EXTCHA_ABOVE)
 			pAd->CommonCfg.CentralChannel = pAd->CommonCfg.Channel + 2;
-			RTMP_IO_READ32(pAd, TX_BAND_CFG, &MACValue);
-			MACValue &= 0xfe;
-			RTMP_IO_WRITE32(pAd, TX_BAND_CFG, MACValue);
-			RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R4, &BBPValue);
-			BBPValue&= (~0x18);
-
-			BBPValue|= (0x10);
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BBPValue);
-			RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R3, &BBPValue);
-			BBPValue&= (~0x20);
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R3, BBPValue);
-			DBGPRINT(RT_DEBUG_TRACE, ("!!!40MHz Lower LINK UP !!! Control Channel at Below. Central = %d \n", pAd->CommonCfg.CentralChannel ));
-		}
 		else
-		{
-
-			/* Secondary below.*/
 			pAd->CommonCfg.CentralChannel = pAd->CommonCfg.Channel - 2;
-			RTMP_IO_READ32(pAd, TX_BAND_CFG, &MACValue);
-			MACValue &= 0xfe;
-			MACValue |= 0x1;
-			RTMP_IO_WRITE32(pAd, TX_BAND_CFG, MACValue);
-			RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R4, &BBPValue);
-			BBPValue&= (~0x18);
-			BBPValue|= (0x10);
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BBPValue);
-			RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R3, &BBPValue);
-			BBPValue&= (~0x20);
-			BBPValue|= (0x20);
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R3, BBPValue);
-			DBGPRINT(RT_DEBUG_TRACE, ("!!!40MHz Upper LINK UP !!! Control Channel at UpperCentral = %d \n", pAd->CommonCfg.CentralChannel ));
-		}
-		pAd->CommonCfg.BBPCurrentBW = BW_40;
-		AsicSwitchChannel(pAd, pAd->CommonCfg.CentralChannel, FALSE);
-		AsicLockChannel(pAd, pAd->CommonCfg.CentralChannel);
+
+		rf_channel = pAd->CommonCfg.CentralChannel;
 		pAd->MacTab.Content[Wcid].HTPhyMode.field.BW = 1;
+	}
+
+	if (rf_channel != 0) {
+		AsicSetChannel(pAd, rf_channel, rf_bw, Secondary, FALSE);
+		
+		DBGPRINT(RT_DEBUG_TRACE, ("%s(): %dMHz LINK UP, CtrlChannel=%d,  CentralChannel= %d \n",
+					__FUNCTION__, (rf_bw == BW_40 ? 40 : 20),
+					pAd->CommonCfg.Channel, 
+					pAd->CommonCfg.CentralChannel));
 	}
 }
 #endif /* DOT11N_DRAFT3 */
@@ -728,7 +706,8 @@ VOID PeerPublicAction(
 	IN MLME_QUEUE_ELEM *Elem) 
 {
 	UCHAR	Action = Elem->Msg[LENGTH_802_11+1];
-	if (Elem->Wcid >= MAX_LEN_OF_MAC_TABLE)
+	if ((Elem->Wcid >= MAX_LEN_OF_MAC_TABLE)
+		)
 		return;
 
 
@@ -779,14 +758,19 @@ VOID PeerPublicAction(
 					}
 				}
 #endif /* CONFIG_STA_SUPPORT */
-
 			}
 			break;
 #endif /* DOT11N_DRAFT3 */
 #endif /* DOT11_N_SUPPORT */
 
-	}
+		case ACTION_WIFI_DIRECT:
 
+			break;
+
+
+		default:
+			break;
+	}
 
 }	
 
@@ -836,7 +820,7 @@ static VOID respond_ht_information_exchange_action(
 		return;
 	}
 
-	/* get RA*/
+	/* get RA */
 	pFrame = (FRAME_HT_INFO *) &Elem->Msg[0];
 	pAddr = pFrame->Hdr.Addr2;
 
@@ -873,11 +857,14 @@ VOID PeerHTAction(
 	IN PRTMP_ADAPTER pAd, 
 	IN MLME_QUEUE_ELEM *Elem) 
 {
-	UCHAR	Action = Elem->Msg[LENGTH_802_11+1];
+	UCHAR Action = Elem->Msg[LENGTH_802_11+1];
+	MAC_TABLE_ENTRY *pEntry;
 	
 	if (Elem->Wcid >= MAX_LEN_OF_MAC_TABLE)
 		return;
-	
+
+	pEntry = &pAd->MacTab.Content[Elem->Wcid];
+
 	switch(Action)
 	{
 		case NOTIFY_BW_ACTION:
@@ -895,11 +882,11 @@ VOID PeerHTAction(
 #endif /* CONFIG_STA_SUPPORT */
 
 			if (Elem->Msg[LENGTH_802_11+2] == 0)	/* 7.4.8.2. if value is 1, keep the same as supported channel bandwidth. */
-				pAd->MacTab.Content[Elem->Wcid].HTPhyMode.field.BW = 0;
+				pEntry->HTPhyMode.field.BW = 0;
 			else 
 			{
-				pAd->MacTab.Content[Elem->Wcid].HTPhyMode.field.BW = 
-					pAd->MacTab.Content[Elem->Wcid].MaxHTPhyMode.field.BW & pAd->CommonCfg.HtCapability.HtCapInfo.ChannelWidth;
+				pEntry->HTPhyMode.field.BW = pEntry->MaxHTPhyMode.field.BW &
+											pAd->CommonCfg.HtCapability.HtCapInfo.ChannelWidth;
 			}
 			
 			break;
@@ -907,20 +894,14 @@ VOID PeerHTAction(
 		case SMPS_ACTION:
 			/* 7.3.1.25*/
  			DBGPRINT(RT_DEBUG_TRACE,("ACTION - SMPS action----> \n"));
-			if (((Elem->Msg[LENGTH_802_11+2]&0x1) == 0))
-			{
-				pAd->MacTab.Content[Elem->Wcid].MmpsMode = MMPS_ENABLE;
-			}
-			else if (((Elem->Msg[LENGTH_802_11+2]&0x2) == 0))
-			{
-				pAd->MacTab.Content[Elem->Wcid].MmpsMode = MMPS_STATIC;
-			}
+			if (((Elem->Msg[LENGTH_802_11+2] & 0x1) == 0))
+				pEntry->MmpsMode = MMPS_ENABLE;
+			else if (((Elem->Msg[LENGTH_802_11+2] & 0x2) == 0))
+				pEntry->MmpsMode = MMPS_STATIC;
 			else
-			{			
-				pAd->MacTab.Content[Elem->Wcid].MmpsMode = MMPS_DYNAMIC;
-			}
+				pEntry->MmpsMode = MMPS_DYNAMIC;
 
-			DBGPRINT(RT_DEBUG_TRACE,("Aid(%d) MIMO PS = %d\n", Elem->Wcid, pAd->MacTab.Content[Elem->Wcid].MmpsMode));
+			DBGPRINT(RT_DEBUG_TRACE,("Aid(%d) MIMO PS = %d\n", Elem->Wcid, pEntry->MmpsMode));
 			/* rt2860c : add something for smps change.*/
 			break;
  
@@ -932,7 +913,7 @@ VOID PeerHTAction(
 			
 		case HT_INFO_EXCHANGE:
 			{			
-				HT_INFORMATION_OCTET	*pHT_info;
+				HT_INFORMATION_OCTET *pHT_info;
 
 				pHT_info = (HT_INFORMATION_OCTET *) &Elem->Msg[LENGTH_802_11+2];
     				/* 7.4.8.10*/

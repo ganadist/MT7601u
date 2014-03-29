@@ -29,6 +29,25 @@
 
 #ifdef LED_CONTROL_SUPPORT
 
+INT LED_Array[16][12]={
+	{	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1,	-1},
+	{ 	0, 	2,  	1,	0,	-1,	-1,	0, 	-1, 	5, 	-1, 	-1, 	17},
+	{	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1, 	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{  	3,  	2,   	-1,	-1,	-1, 	-1, 	16,	1, 	5,	-1, 	-1, 	17},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1, 	-1},
+	{	-1, 	-1,	-1,	-1,	-1, 	-1, 	-1,	-1, 	-1, 	-1, 	-1, 	-1},
+	{ 	1,   	2,	1,	-1,	-1, 	-1,	3, 	-1,	6, 	-1, 	-1,	0},
+	{ 	1,   	2,	1,   	-1, 	-1, 	-1, 	-1,  	1,   	4, 	-1, 	-1, 	18}
+};
+
 
 
 /*
@@ -60,6 +79,7 @@ VOID RTMPSetLEDStatus(
 	UCHAR			LedMode;
 	UCHAR			MCUCmd = 0;
 	BOOLEAN 		bIgnored = FALSE;
+	INT LED_CMD = -1;
 
 #ifdef RALINK_ATE
 	/*
@@ -82,6 +102,14 @@ VOID RTMPSetLEDStatus(
 
 
 	LedMode = LED_MODE(pAd);
+
+	if (IS_MT76x0(pAd)) {
+		if (LedMode < 0 || Status < 0 || LedMode > 15 || Status > 11)
+			return;
+
+		LED_CMD = LED_Array[LedMode][Status];
+	}
+	
 	switch (Status)
 	{
 		case LED_LINK_DOWN:
@@ -126,11 +154,14 @@ VOID RTMPSetLEDStatus(
 			break;
 	}
 
-	if (MCUCmd)
-	{
-		AsicSendCommandToMcu(pAd, MCUCmd, 0xff, LedMode, LinkStatus);
-		DBGPRINT(RT_DEBUG_TRACE, ("%s: MCUCmd:0x%x, LED Mode:0x%x, LinkStatus:0x%x\n", __FUNCTION__, MCUCmd, LedMode, LinkStatus)); 
+	if (IS_MT76x0(pAd)) {
+		if (LED_CMD != -1)
+			andes_led_op(pAd, 0, LED_CMD);
+	} else {
+		if (MCUCmd)
+			AsicSendCommandToMcu(pAd, MCUCmd, 0xff, LedMode, LinkStatus, FALSE);
 	}
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: MCUCmd:0x%x, LED Mode:0x%x, LinkStatus:0x%x\n", __FUNCTION__, MCUCmd, LedMode, LinkStatus));
 	
     /* */
 	/* Keep LED status for LED SiteSurvey mode. */
@@ -204,7 +235,7 @@ VOID RTMPSetSignalLED(
 		/* */
 		if (pAd->LedCntl.LedIndicatorStrength != nLed)
 		{
-			AsicSendCommandToMcu(pAd, MCU_SET_LED_GPIO_SIGNAL_CFG, 0xff, nLed, pAd->LedCntl.MCULedCntl.field.Polarity);
+			AsicSendCommandToMcu(pAd, MCU_SET_LED_GPIO_SIGNAL_CFG, 0xff, nLed, pAd->LedCntl.MCULedCntl.field.Polarity, FALSE);
 			pAd->LedCntl.LedIndicatorStrength = nLed;
 		}
 	}
@@ -217,6 +248,21 @@ void RTMPGetLEDSetting(IN RTMP_ADAPTER *pAd)
 {
 	USHORT Value;
 	PLED_CONTROL pLedCntl = &pAd->LedCntl;
+#ifdef RT65xx
+	if (IS_MT76x0(pAd))
+	{
+		// TODO: wait TC6008 EEPROM format
+		RT28xx_EEPROM_READ16(pAd, EEPROM_FREQ_OFFSET, Value);
+		pLedCntl->MCULedCntl.word = (Value >> 8);
+		RT28xx_EEPROM_READ16(pAd, EEPROM_LEDAG_CONF_OFFSET, Value);
+		pLedCntl->LedAGCfg= Value;
+		RT28xx_EEPROM_READ16(pAd, EEPROM_LEDACT_CONF_OFFSET, Value);
+		pLedCntl->LedACTCfg = Value;
+		RT28xx_EEPROM_READ16(pAd, EEPROM_LED_POLARITY_OFFSET, Value);
+		pLedCntl->LedPolarity = Value;
+	}
+	else
+#endif /* RT65xx */
 	{
 		RT28xx_EEPROM_READ16(pAd, EEPROM_FREQ_OFFSET, Value);
 		pLedCntl->MCULedCntl.word = (Value >> 8);
@@ -250,10 +296,10 @@ void RTMPInitLEDMode(IN RTMP_ADAPTER *pAd)
 #endif /* RTMP_MAC_USB */
 	}
 	
-	AsicSendCommandToMcu(pAd, MCU_SET_LED_AG_CFG, 0xff, (UCHAR)pLedCntl->LedAGCfg, (UCHAR)(pLedCntl->LedAGCfg >> 8));
-	AsicSendCommandToMcu(pAd, MCU_SET_LED_ACT_CFG, 0xff, (UCHAR)pLedCntl->LedACTCfg, (UCHAR)(pLedCntl->LedACTCfg >> 8));
-	AsicSendCommandToMcu(pAd, MCU_SET_LED_POLARITY, 0xff, (UCHAR)pLedCntl->LedPolarity, (UCHAR)(pLedCntl->LedPolarity >> 8));
-	AsicSendCommandToMcu(pAd, MCU_SET_LED_GPIO_SIGNAL_CFG, 0xff, 0, pLedCntl->MCULedCntl.field.Polarity);
+	AsicSendCommandToMcu(pAd, MCU_SET_LED_AG_CFG, 0xff, (UCHAR)pLedCntl->LedAGCfg, (UCHAR)(pLedCntl->LedAGCfg >> 8), FALSE);
+	AsicSendCommandToMcu(pAd, MCU_SET_LED_ACT_CFG, 0xff, (UCHAR)pLedCntl->LedACTCfg, (UCHAR)(pLedCntl->LedACTCfg >> 8), FALSE);
+	AsicSendCommandToMcu(pAd, MCU_SET_LED_POLARITY, 0xff, (UCHAR)pLedCntl->LedPolarity, (UCHAR)(pLedCntl->LedPolarity >> 8), FALSE);
+	AsicSendCommandToMcu(pAd, MCU_SET_LED_GPIO_SIGNAL_CFG, 0xff, 0, pLedCntl->MCULedCntl.field.Polarity, FALSE);
 
 	pAd->LedCntl.LedIndicatorStrength = 0xFF;
 	RTMPSetSignalLED(pAd, -100);	/* Force signal strength Led to be turned off, before link up */
@@ -265,7 +311,7 @@ void RTMPInitLEDMode(IN RTMP_ADAPTER *pAd)
 inline void RTMPExitLEDMode(IN RTMP_ADAPTER *pAd)
 {
 
-	RTMPSetLED(pAd, LED_LINK_DOWN);
+	RTMPSetLED(pAd, LED_RADIO_OFF);
 
 	return;
 }

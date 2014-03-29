@@ -41,8 +41,11 @@
 /* BW */
 #define BAND_WIDTH_20		0
 #define BAND_WIDTH_40		1
-#define BAND_WIDTH_BOTH		2
-#define BAND_WIDTH_10		3	/* 802.11j has 10MHz. This definition is for internal usage. doesn't fill in the IE or other field. */
+#define BAND_WIDTH_80		2
+#define BAND_WIDTH_BOTH	3
+#define BAND_WIDTH_10		4	/* 802.11j has 10MHz. This definition is for internal usage. doesn't fill in the IE or other field. */
+
+
 /* SHORTGI */
 #define GAP_INTERVAL_400	1	/* only support in HT mode */
 #define GAP_INTERVAL_800	0
@@ -63,8 +66,8 @@
 #define NDIS_802_11_LENGTH_RATES        8
 #define NDIS_802_11_LENGTH_RATES_EX     16
 #define MAC_ADDR_LENGTH                 6
-/*#define MAX_NUM_OF_CHS					49 // 14 channels @2.4G +  12@UNII + 4 @MMAC + 11 @HiperLAN2 + 7 @Japan + 1 as NULL terminationc */
-#define MAX_NUM_OF_CHS             		54	/* 14 channels @2.4G +  12@UNII(lower/middle) + 16@HiperLAN2 + 11@UNII(upper) + 0 @Japan + 1 as NULL termination */
+/*#define MAX_NUM_OF_CHS					49 */ /* 14 channels @2.4G +  12@UNII + 4 @MMAC + 11 @HiperLAN2 + 7 @Japan + 1 as NULL terminationc */
+/*#define MAX_NUM_OF_CHS             		54 */ /* 14 channels @2.4G +  12@UNII(lower/middle) + 16@HiperLAN2 + 11@UNII(upper) + 0 @Japan + 1 as NULL termination */
 #define MAX_NUMBER_OF_EVENT				10	/* entry # in EVENT table */
 #define MAX_NUMBER_OF_MAC				32	/* if MAX_MBSSID_NUM is 8, this value can't be larger than 211 */
 #define MAX_NUMBER_OF_ACL				64
@@ -86,9 +89,9 @@
 #define	OID_802_11_NETWORK_TYPES_SUPPORTED			0x0103
 #define	OID_802_11_NETWORK_TYPE_IN_USE				0x0104
 #define	OID_802_11_RSSI_TRIGGER						0x0107
-#define	RT_OID_802_11_RSSI							0x0108	/*rt2860 only , kathy */
-#define	RT_OID_802_11_RSSI_1						0x0109	/*rt2860 only , kathy */
-#define	RT_OID_802_11_RSSI_2						0x010A	/*rt2860 only , kathy */
+#define	RT_OID_802_11_RSSI							0x0108	/* rt2860 only */
+#define	RT_OID_802_11_RSSI_1						0x0109	/* rt2860 only */
+#define	RT_OID_802_11_RSSI_2						0x010A	/* rt2860 only */
 #define	OID_802_11_NUMBER_OF_ANTENNAS				0x010B
 #define	OID_802_11_RX_ANTENNA_SELECTED				0x010C
 #define	OID_802_11_TX_ANTENNA_SELECTED				0x010D
@@ -120,6 +123,8 @@
 #define	OID_802_11_TX_POWER_LEVEL					0x0517
 #define	RT_OID_802_11_ADD_WPA						0x0518
 #define	OID_802_11_REMOVE_KEY						0x0519
+#define	RT_OID_802_11_QUERY_PID						0x051A
+#define	RT_OID_802_11_QUERY_VID						0x051B
 #define	OID_802_11_ADD_KEY							0x0520
 #define	OID_802_11_CONFIGURATION					0x0521
 #define	OID_802_11_TX_PACKET_BURST					0x0522
@@ -131,6 +136,7 @@
 #define OID_802_11_DROP_UNENCRYPTED                 0x0527
 #define OID_802_11_MIC_FAILURE_REPORT_FRAME         0x0528
 #define OID_802_11_EAP_METHOD						0x0529
+#define OID_802_11_ACL_LIST							0x052A
 
 /* For 802.1x daemin using */
 #ifdef DOT1X_SUPPORT
@@ -199,6 +205,11 @@
 #define RT_OID_802_11_QUERY_MAP_REAL_TX_RATE                          0x0678
 #define RT_OID_802_11_QUERY_MAP_REAL_RX_RATE                          0x0679
 #define	RT_OID_802_11_SNR_2							0x067A
+#define RT_OID_802_11_PER_BSS_STATISTICS			0x067D
+
+#ifdef TXBF_SUPPORT
+#define RT_OID_802_11_QUERY_TXBF_TABLE				0x067C
+#endif
 
 
 #ifdef HOSTAPD_SUPPORT
@@ -446,6 +457,8 @@ typedef struct _NDIS_802_11_STATISTICS {
 	LARGE_INTEGER ReceivedFragmentCount;
 	LARGE_INTEGER MulticastReceivedFrameCount;
 	LARGE_INTEGER FCSErrorCount;
+	LARGE_INTEGER TransmittedFrameCount;
+	LARGE_INTEGER WEPUndecryptableCount;
 	LARGE_INTEGER TKIPLocalMICFailures;
 	LARGE_INTEGER TKIPRemoteMICErrors;
 	LARGE_INTEGER TKIPICVErrors;
@@ -456,6 +469,23 @@ typedef struct _NDIS_802_11_STATISTICS {
 	LARGE_INTEGER CCMPDecryptErrors;
 	LARGE_INTEGER FourWayHandshakeFailures;
 } NDIS_802_11_STATISTICS, *PNDIS_802_11_STATISTICS;
+
+typedef struct _MBSS_STATISTICS {
+	LONG TxCount;
+	ULONG RxCount;
+	ULONG ReceivedByteCount;
+	ULONG TransmittedByteCount;
+	ULONG RxErrorCount;
+	ULONG RxDropCount;
+	ULONG TxErrorCount;
+	ULONG TxDropCount;
+	ULONG ucPktsTx;
+	ULONG ucPktsRx;
+	ULONG mcPktsTx;
+	ULONG mcPktsRx;
+	ULONG bcPktsTx;
+	ULONG bcPktsRx;
+} MBSS_STATISTICS, *PMBSS_STATISTICS;
 
 typedef ULONG NDIS_802_11_KEY_INDEX;
 typedef ULONGLONG NDIS_802_11_KEY_RSC;
@@ -503,6 +533,20 @@ typedef struct GNU_PACKED _DOT1X_IDLE_TIMEOUT {
 } DOT1X_IDLE_TIMEOUT, *PDOT1X_IDLE_TIMEOUT;
 #endif /* DOT1X_SUPPORT */
 
+
+#ifdef APCLI_SUPPORT
+#ifdef APCLI_WPA_SUPPLICANT_SUPPORT
+typedef struct _NDIS_APCLI_802_11_KEY
+{
+    UINT           Length;             
+    UINT           KeyIndex;           
+    UINT           KeyLength;         
+    NDIS_802_11_MAC_ADDRESS BSSID;
+    NDIS_802_11_KEY_RSC KeyRSC;
+    UCHAR           KeyMaterial[1];     
+} NDIS_APCLI_802_11_KEY, *PNDIS_APCLI_802_11_KEY;
+#endif/* APCLI_WPA_SUPPLICANT_SUPPORT */
+#endif /* APCLI_SUPPORT */
 
 #ifdef CONFIG_STA_SUPPORT
 /* Key mapping keys require a BSSID */
@@ -717,7 +761,7 @@ typedef enum _NDIS_802_11_MEDIA_STREAM_MODE {
 /* PMKID Structures */
 typedef UCHAR NDIS_802_11_PMKID_VALUE[16];
 
-#ifdef CONFIG_STA_SUPPORT
+#if defined(CONFIG_STA_SUPPORT) || defined(APCLI_WPA_SUPPLICANT_SUPPORT)
 typedef struct _BSSID_INFO {
 	NDIS_802_11_MAC_ADDRESS BSSID;
 	NDIS_802_11_PMKID_VALUE PMKID;
@@ -728,7 +772,7 @@ typedef struct _NDIS_802_11_PMKID {
 	UINT BSSIDInfoCount;
 	BSSID_INFO BSSIDInfo[1];
 } NDIS_802_11_PMKID, *PNDIS_802_11_PMKID;
-#endif /* CONFIG_STA_SUPPORT */
+#endif /* defined(CONFIG_STA_SUPPORT) || defined(APCLI_WPA_SUPPLICANT_SUPPORT) */
 
 
 typedef struct _NDIS_802_11_AUTHENTICATION_ENCRYPTION {
@@ -758,7 +802,7 @@ typedef struct _NDIS_802_11_CAPABILITY {
 
 
 #ifdef SNMP_SUPPORT
-/*SNMP ieee 802dot11, kathy , 2008_0220 */
+/*SNMP ieee 802dot11 , 2008_0220 */
 /* dot11res(3) */
 #define RT_OID_802_11_MANUFACTUREROUI			0x0700
 #define RT_OID_802_11_MANUFACTURERNAME			0x0701
@@ -788,6 +832,7 @@ typedef struct _NDIS_802_11_CAPABILITY {
 #define OID_802_11_GET_CHANNEL_GEOGRAPHY		0x0717
 
 /*#define RT_OID_802_11_STATISTICS              (OID_GET_SET_TOGGLE | OID_802_11_STATISTICS) */
+
 
 
 #ifdef CONFIG_STA_SUPPORT
@@ -842,25 +887,23 @@ typedef struct _NDIS_802_11_CAPABILITY {
 typedef union _HTTRANSMIT_SETTING {
 #ifdef RT_BIG_ENDIAN
 	struct {
-		USHORT MODE:2;	/* Use definition MODE_xxx. */
+		USHORT MODE:3;	/* Use definition MODE_xxx. */
 		USHORT iTxBF:1;
-		USHORT rsv:1;
 		USHORT eTxBF:1;
-		USHORT STBC:2;	/*SPACE */
+		USHORT STBC:1;	/* only support in HT/VHT mode with MCS0~7 */
 		USHORT ShortGI:1;
-		USHORT BW:1;	/*channel bandwidth 20MHz or 40 MHz */
+		USHORT BW:2;	/* channel bandwidth 20MHz/40/80 MHz */
 		USHORT MCS:7;	/* MCS */
 	} field;
 #else
 	struct {
-		USHORT MCS:7;	/* MCS */
-		USHORT BW:1;	/*channel bandwidth 20MHz or 40 MHz */
+		USHORT MCS:7;
+		USHORT BW:2;
 		USHORT ShortGI:1;
-		USHORT STBC:2;	/*SPACE */
+		USHORT STBC:1;
 		USHORT eTxBF:1;
-		USHORT rsv:1;
 		USHORT iTxBF:1;
-		USHORT MODE:2;	/* Use definition MODE_xxx. */
+		USHORT MODE:3;
 	} field;
 #endif
 	USHORT word;
@@ -874,22 +917,39 @@ typedef enum _RT_802_11_PREAMBLE {
 
 typedef enum _RT_802_11_PHY_MODE {
 	PHY_11BG_MIXED = 0,
-	PHY_11B,
-	PHY_11A,
-	PHY_11ABG_MIXED,
-	PHY_11G,
+	PHY_11B = 1,
+	PHY_11A = 2,
+	PHY_11ABG_MIXED = 3,
+	PHY_11G = 4,
 #ifdef DOT11_N_SUPPORT
-	PHY_11ABGN_MIXED,	/* both band   5 */
-	PHY_11N_2_4G,		/* 11n-only with 2.4G band      6 */
-	PHY_11GN_MIXED,		/* 2.4G band      7 */
-	PHY_11AN_MIXED,		/* 5G  band       8 */
-	PHY_11BGN_MIXED,	/* if check 802.11b.      9 */
-	PHY_11AGN_MIXED,	/* if check 802.11b.      10 */
-	PHY_11N_5G,		/* 11n-only with 5G band                11 */
+	PHY_11ABGN_MIXED = 5,	/* both band   5 */
+	PHY_11N_2_4G = 6,		/* 11n-only with 2.4G band      6 */
+	PHY_11GN_MIXED = 7,		/* 2.4G band      7 */
+	PHY_11AN_MIXED = 8,		/* 5G  band       8 */
+	PHY_11BGN_MIXED = 9,	/* if check 802.11b.      9 */
+	PHY_11AGN_MIXED = 10,	/* if check 802.11b.      10 */
+	PHY_11N_5G = 11,		/* 11n-only with 5G band                11 */
 #endif /* DOT11_N_SUPPORT */
+#ifdef DOT11_VHT_AC
+	PHY_11VHT_N_ABG_MIXED = 12, /* 12 -> AC/A/AN/B/G/GN mixed */
+	PHY_11VHT_N_AG_MIXED = 13, /* 13 -> AC/A/AN/G/GN mixed  */
+	PHY_11VHT_N_A_MIXED = 14, /* 14 -> AC/AN/A mixed in 5G band */
+	PHY_11VHT_N_MIXED = 15, /* 15 -> AC/AN mixed in 5G band */
+#endif /* DOT11_VHT_AC */
+	PHY_MODE_MAX,
 } RT_802_11_PHY_MODE;
 
-#ifdef DOT11_N_SUPPORT
+#ifdef DOT11_VHT_AC
+#define PHY_MODE_IS_5G_BAND(__Mode)	\
+	((__Mode == PHY_11A) ||			\
+	(__Mode == PHY_11ABG_MIXED) ||	\
+	(__Mode == PHY_11ABGN_MIXED) ||	\
+	(__Mode == PHY_11AN_MIXED) ||	\
+	(__Mode == PHY_11AGN_MIXED) ||	\
+	(__Mode == PHY_11N_5G) ||\
+	(__Mode == PHY_11VHT_N_MIXED) ||\
+	(__Mode == PHY_11VHT_N_A_MIXED))
+#elif defined(DOT11_N_SUPPORT)
 #define PHY_MODE_IS_5G_BAND(__Mode)	\
 	((__Mode == PHY_11A) ||			\
 	(__Mode == PHY_11ABG_MIXED) ||	\
@@ -1099,8 +1159,7 @@ typedef struct _NINTENDO_SSID {
 	UCHAR ID;
 	UCHAR zero2;
 	UCHAR NICKname[NINTENDO_SSID_NICKNAME_LN];
-} RT_NINTENDO_SSID,
-*PRT_NINTENDO_SSID;
+} RT_NINTENDO_SSID, *PRT_NINTENDO_SSID;
 
 typedef struct _NINTENDO_ENTRY {
 	UCHAR NICKname[NINTENDO_SSID_NICKNAME_LN];
@@ -1138,7 +1197,7 @@ typedef struct _RT_LLTD_ASSOICATION_TABLE {
 
 #ifdef CONFIG_STA_SUPPORT
 #ifdef QOS_DLS_SUPPORT
-/*rt2860, kathy 2007-0118 */
+/*rt2860, 2007-0118 */
 /* structure for DLS */
 typedef struct _RT_802_11_DLS_UI {
 	USHORT TimeOut;		/* unit: second , set by UI */
@@ -1181,6 +1240,7 @@ typedef struct _RT_CHANNEL_LIST_INFO {
 	UCHAR ChannelListNum;	/* number of channel in ChannelList[] */
 } RT_CHANNEL_LIST_INFO, *PRT_CHANNEL_LIST_INFO;
 
+
 /* WSC configured credential */
 typedef struct _WSC_CREDENTIAL {
 	NDIS_802_11_SSID SSID;	/* mandatory */
@@ -1204,12 +1264,92 @@ typedef struct _WSC_PROFILE {
 
 
 
-#define RT_P2P_DEVICE_FIND                                0x0109
-#define RT_P2P_CONNECTED                                  0x010A
-#define RT_P2P_DISCONNECTED                               0x010B
-#define RT_P2P_CONNECTED_TIMEOUT	                  0x010C
+#ifdef APCLI_SUPPORT
+#ifdef APCLI_WPA_SUPPLICANT_SUPPORT
+#define	RT_ASSOC_EVENT_FLAG                         0x0101
+#define	RT_DISASSOC_EVENT_FLAG                      0x0102
+#define	RT_REQIE_EVENT_FLAG                         0x0103
+#define	RT_RESPIE_EVENT_FLAG                        0x0104
+#define	RT_ASSOCINFO_EVENT_FLAG                     0x0105
+#define RT_PMKIDCAND_FLAG                           0x0106
+#define RT_INTERFACE_DOWN                           0x0107
+#define RT_INTERFACE_UP                             0x0108
+#endif /* APCLI_WPA_SUPPLICANT_SUPPORT */
+#endif /* APCLI_SUPPORT */
 
 
 
+
+
+
+enum {
+	OID_WIFI_TEST_BBP = 0x1000,
+	OID_WIFI_TEST_RF = 0x1001,
+	OID_WIFI_TEST_RF_BANK = 0x1002,
+	OID_WIFI_TEST_MEM_MAP_INFO = 0x1003,
+	OID_WIFI_TEST_BBP_NUM = 0x1004,
+	OID_WIFI_TEST_RF_NUM = 0x1005,
+	OID_WIFI_TEST_RF_BANK_OFFSET = 0x1006,
+	OID_WIFI_TEST_MEM_MAP_NUM = 0x1007,
+	OID_WIFI_TEST_BBP32 = 0x1008,
+	OID_WIFI_TEST_MAC = 0x1009,
+	OID_WIFI_TEST_MAC_NUM = 0x1010,
+	OID_WIFI_TEST_E2P = 0x1011,
+	OID_WIFI_TEST_E2P_NUM = 0x1012,
+	OID_WIFI_TEST_PHY_MODE = 0x1013,
+};
+
+struct bbp_info {
+	UINT32 bbp_start;
+	UINT32 bbp_end;
+	UINT8 bbp_value[0];
+};
+
+struct bbp32_info {
+	UINT32 bbp_start;
+	UINT32 bbp_end;
+	UINT32 bbp_value[0];
+};
+
+struct rf_info {
+	UINT16 rf_start;
+	UINT16 rf_end;
+	UINT8 rf_value[0];
+};
+
+struct rf_bank_info {
+	UINT8 rf_bank;
+	UINT16 rf_start;
+	UINT16 rf_end;
+	UINT8 rf_value[0];
+};
+
+struct mac_info {
+	UINT32 mac_start;
+	UINT32 mac_end;
+	UINT32 mac_value[0];
+};
+
+struct mem_map_info {
+	u32 base;
+	UINT16 mem_map_start;
+	UINT16 mem_map_end;
+	UINT32 mem_map_value[0];
+};
+
+struct e2p_info {
+	UINT16 e2p_start;
+	UINT16 e2p_end;
+	UINT16 e2p_value[0];
+};
+
+struct phy_mode_info {
+	int data_phy;
+	u8 data_bw;
+	u8 data_ldpc;
+	u8 data_mcs;
+	u8 data_gi;
+	u8 data_stbc;
+};
 
 #endif /* _OID_H_ */

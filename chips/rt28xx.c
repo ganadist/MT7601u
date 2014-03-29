@@ -29,6 +29,31 @@
 
 #include "rt_config.h"
 
+
+VOID RT28xx_ch_tunning(RTMP_ADAPTER *pAd, INT bw)
+{	
+	if (pAd->MACVersion != 0x28600100)
+		return;
+
+	
+	if (bw == BW_20)
+	{
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R69, 0x16);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R70, 0x08);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R73, 0x11);
+	}
+	else if (bw == BW_40)
+	{
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R69, 0x1A);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R70, 0x0A);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R73, 0x16);
+	}
+
+	DBGPRINT(RT_DEBUG_TRACE, ("!!!rt2860C !!! \n"));
+
+}
+
+
 VOID RT28xx_ChipSwitchChannel(
 	IN PRTMP_ADAPTER 			pAd,
 	IN UCHAR					Channel,
@@ -37,13 +62,12 @@ VOID RT28xx_ChipSwitchChannel(
 	CHAR    TxPwer = 0, TxPwer2 = DEFAULT_RF_TX_POWER; /*Bbp94 = BBPR94_DEFAULT, TxPwer2 = DEFAULT_RF_TX_POWER;*/
 	UCHAR	index;
 	UINT32 	Value = 0; /*BbpReg, Value;*/
-	UCHAR 	RFValue;
+	UCHAR 	RFValue = 0;
 	UINT32 i = 0;
 	ULONG	R2 = 0, R3 = DEFAULT_RF_TX_POWER, R4 = 0;
 	RTMP_RF_REGS *RFRegTable;
+	CHAR lan_gain;
 
-	i = i; /* avoid compile warning */
-	RFValue = 0;
 
 	/* Search Tx power value*/
 	/*
@@ -63,7 +87,7 @@ VOID RT28xx_ChipSwitchChannel(
 
 	if (index == MAX_NUM_OF_CHANNELS)
 	{
-		DBGPRINT(RT_DEBUG_ERROR, ("AsicSwitchChannel: Can't find the Channel#%d \n", Channel));
+		DBGPRINT(RT_DEBUG_ERROR, ("%s(): Can't find the Channel#%d \n", __FUNCTION__, Channel));
 	}
 
 	RFRegTable = RF2850RegTable;
@@ -110,7 +134,7 @@ VOID RT28xx_ChipSwitchChannel(
 							/* TxPwer is not possible larger than 15 */
 
 							R3 |= (TxPwer << 10);
-							DBGPRINT(RT_DEBUG_TRACE, ("AsicSwitchChannel: TxPwer=%d \n", TxPwer));
+							DBGPRINT(RT_DEBUG_TRACE, ("%s(): TxPwer=%d \n", __FUNCTION__, TxPwer));
 						}
 						else
 						{
@@ -124,7 +148,7 @@ VOID RT28xx_ChipSwitchChannel(
 							TxPwer2 = (7+TxPwer2);
 							
 							R4 |= (TxPwer2 << 7);
-							DBGPRINT(RT_DEBUG_TRACE, ("AsicSwitchChannel: TxPwer2=%d \n", TxPwer2));
+							DBGPRINT(RT_DEBUG_TRACE, ("%s(): TxPwer2=%d \n", __FUNCTION__, TxPwer2));
 						}
 						else
 						{
@@ -196,14 +220,16 @@ VOID RT28xx_ChipSwitchChannel(
 	}	
 
 	/* Change BBP setting during siwtch from a->g, g->a*/
+	lan_gain = GET_LNA_GAIN(pAd);
 	if (Channel <= 14)
 	{
-		ULONG	TxPinCfg = 0x00050F0A;/*Gary 2007/08/09 0x050A0A*/
-
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R62, (0x37 - GET_LNA_GAIN(pAd)));
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R63, (0x37 - GET_LNA_GAIN(pAd)));
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R64, (0x37 - GET_LNA_GAIN(pAd)));
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R86, 0);/*(0x44 - GET_LNA_GAIN(pAd)));	According the Rory's suggestion to solve the middle range issue.*/
+		ULONG	TxPinCfg = 0x00050F0A; /*Gary 2007/08/09 0x050A0A*/
+		CHAR lan_gain = GET_LNA_GAIN(pAd);
+			
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R62, (0x37 - lan_gain));
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R63, (0x37 - lan_gain));
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R64, (0x37 - lan_gain));
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R86, 0);/*(0x44 - lan_gain));	According the Rory's suggestion to solve the middle range issue.*/
 
 		/* Rx High power VGA offset for LNA select*/
 		{
@@ -220,79 +246,47 @@ VOID RT28xx_ChipSwitchChannel(
 		}
 
 		/* 5G band selection PIN, bit1 and bit2 are complement*/
-		RTMP_IO_READ32(pAd, TX_BAND_CFG, &Value);
-		Value &= (~0x6);
-		Value |= (0x04);
-		RTMP_IO_WRITE32(pAd, TX_BAND_CFG, Value);
+		rtmp_mac_set_band(pAd, BAND_24G);
 
 		/* Turn off unused PA or LNA when only 1T or 1R*/
 		if (pAd->Antenna.field.TxPath == 1)
-		{
 			TxPinCfg &= 0xFFFFFFF3;
-		}
 		if (pAd->Antenna.field.RxPath == 1)
-		{
 			TxPinCfg &= 0xFFFFF3FF;
-		}
-
 		RTMP_IO_WRITE32(pAd, TX_PIN_CFG, TxPinCfg);
+
+		rtmp_bbp_set_filter_coefficient_ctrl(pAd, Channel);
 	}
 	else
 	{
 		ULONG	TxPinCfg = 0x00050F05;/*Gary 2007/8/9 0x050505*/
 		UINT8	bbpValue;
 
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R62, (0x37 - GET_LNA_GAIN(pAd)));
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R63, (0x37 - GET_LNA_GAIN(pAd)));
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R64, (0x37 - GET_LNA_GAIN(pAd)));
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R86, 0);/*(0x44 - GET_LNA_GAIN(pAd)));   According the Rory's suggestion to solve the middle range issue.  */   
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R62, (0x37 - lan_gain));
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R63, (0x37 - lan_gain));
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R64, (0x37 - lan_gain));
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R86, 0); /*(0x44 - lan_gain));   According the Rory's suggestion to solve the middle range issue.  */   
 
 		/* Set the BBP_R82 value here */
-		bbpValue = 0xF2;
-		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R82, bbpValue);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R82, 0xF2);
 
 
 		/* Rx High power VGA offset for LNA select*/
-		if (pAd->NicConfig2.field.ExternalLNAForA)
-		{
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R75, 0x46);
-		}
-		else
-		{
-			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R75, 0x50);
-		}
+		bbpValue = (pAd->NicConfig2.field.ExternalLNAForA) ? 0x46 : 0x50;
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R75, bbpValue);
 
 		/* 5G band selection PIN, bit1 and bit2 are complement*/
-		RTMP_IO_READ32(pAd, TX_BAND_CFG, &Value);
-		Value &= (~0x6);
-		Value |= (0x02);
-		RTMP_IO_WRITE32(pAd, TX_BAND_CFG, Value);
+		rtmp_mac_set_band(pAd, BAND_5G);
 
 		/* Turn off unused PA or LNA when only 1T or 1R*/
-		{
-			/* Turn off unused PA or LNA when only 1T or 1R*/
-			if (pAd->Antenna.field.TxPath == 1)
-			{
-				TxPinCfg &= 0xFFFFFFF3;
-			}
-			if (pAd->Antenna.field.RxPath == 1)
-			{
-				TxPinCfg &= 0xFFFFF3FF;
-			}
-		}
-
+		if (pAd->Antenna.field.TxPath == 1)
+			TxPinCfg &= 0xFFFFFFF3;
+		if (pAd->Antenna.field.RxPath == 1)
+			TxPinCfg &= 0xFFFFF3FF;
 		RTMP_IO_WRITE32(pAd, TX_PIN_CFG, TxPinCfg);
 	}
 
-	/* R66 should be set according to Channel and use 20MHz when scanning*/
-
-	if (bScan)
-		RTMPSetAGCInitValue(pAd, BW_20);
-	else
-		RTMPSetAGCInitValue(pAd, pAd->CommonCfg.BBPCurrentBW);
-
 	/*
-
 		On 11A, We should delay and wait RF/BBP to be stable
 		and the appropriate time should be 1000 micro seconds 
 		005/06/05 - On 11G, We also need this delay time. Otherwise it's difficult to pass the WHQL.

@@ -57,7 +57,7 @@ typedef VOID	pregs;
 
 #ifdef RTMP_MAC_USB
 #define STA_PROFILE_PATH			"/etc/Wireless/RT2870STA/RT2870STA.dat"
-#define STA_DRIVER_VERSION			"2.5.0.3"
+#define STA_DRIVER_VERSION			"3.0.0.2"
 #ifdef MULTIPLE_CARD_SUPPORT
 #define CARD_INFO_PATH			"/etc/Wireless/RT2870STA/RT2870STACard.dat"
 #endif /* MULTIPLE_CARD_SUPPORT */
@@ -128,7 +128,6 @@ typedef char 				* PNDIS_BUFFER;
 /***********************************************************************************
  *	Ralink Specific network related constant definitions
  ***********************************************************************************/
-#define MIN_NET_DEVICE_FOR_AID			0x00		/*0x00~0x3f */
 #define MIN_NET_DEVICE_FOR_MBSSID		0x00		/*0x00,0x10,0x20,0x30 */
 #define MIN_NET_DEVICE_FOR_WDS			0x10		/*0x40,0x50,0x60,0x70 */
 #define MIN_NET_DEVICE_FOR_APCLI		0x20
@@ -277,19 +276,10 @@ struct os_cookie {
 
 #ifdef WORKQUEUE_BH
 	UINT32		     		pAd_va;
+#endif /* WORKQUEUE_BH */
 
-	RTMP_NET_TASK_STRUCT	rx_done_work;
-	RTMP_NET_TASK_STRUCT	mgmt_dma_done_work;
-	RTMP_NET_TASK_STRUCT	ac0_dma_done_work;
-	RTMP_NET_TASK_STRUCT	ac1_dma_done_work;
-	RTMP_NET_TASK_STRUCT	ac2_dma_done_work;
-	RTMP_NET_TASK_STRUCT	ac3_dma_done_work;
-	RTMP_NET_TASK_STRUCT	hcca_dma_done_work;
-	
-	RTMP_NET_TASK_STRUCT	tbtt_work;
-
-#else
 	RTMP_NET_TASK_STRUCT	rx_done_task;
+	RTMP_NET_TASK_STRUCT	cmd_rsp_event_task;
 	RTMP_NET_TASK_STRUCT	mgmt_dma_done_task;
 	RTMP_NET_TASK_STRUCT	ac0_dma_done_task;
 #ifdef RALINK_ATE
@@ -300,13 +290,15 @@ struct os_cookie {
 	RTMP_NET_TASK_STRUCT	ac3_dma_done_task;
 	RTMP_NET_TASK_STRUCT	hcca_dma_done_task;
 	RTMP_NET_TASK_STRUCT	tbtt_task;
-#endif /* WORKQUEUE_BH */
 
+
+#ifdef UAPSD_SUPPORT
+	RTMP_NET_TASK_STRUCT	uapsd_eosp_sent_task;
+#endif /* UAPSD_SUPPORT */
 
 
 #ifdef RTMP_MAC_USB
 	RTMP_NET_TASK_STRUCT	null_frame_complete_task;
-	RTMP_NET_TASK_STRUCT	rts_frame_complete_task;
 	RTMP_NET_TASK_STRUCT	pspoll_frame_complete_task;
 #endif /* RTMP_MAC_USB */
 
@@ -314,10 +306,11 @@ struct os_cookie {
 	unsigned long			apd_pid_nr;
 	INT						ioctl_if_type;
 	INT 					ioctl_if;
+
+	RTMP_OS_COMPLETION SentToMCUDone;
 };
 
 typedef struct os_cookie	* POS_COOKIE;
-
 
 
 /***********************************************************************************
@@ -328,11 +321,16 @@ typedef struct os_cookie	* POS_COOKIE;
 
 #ifdef DBG
 extern ULONG		RTDebugLevel;
+extern ULONG		RTDebugFunc;
 
 #define DBGPRINT_RAW(Level, Fmt)    \
 do{                                   \
-    if (Level <= RTDebugLevel)      \
+	ULONG __gLevel = (Level) & 0xff;\
+	ULONG __fLevel = ((Level)>>8) & 0xffffff;\
+    if (__gLevel <= RTDebugLevel)      \
     {                               \
+    	if ((RTDebugFunc == 0) || \
+		((RTDebugFunc != 0) && (((__fLevel & RTDebugFunc)!= 0) || (__gLevel <= RT_DEBUG_ERROR))))\
         printk Fmt;               \
     }                               \
 }while(0)
@@ -417,14 +415,14 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
  * RTMP_GetPhysicalAddressLow(
  *   IN NDIS_PHYSICAL_ADDRESS  PhysicalAddress);
  */
-#define RTMP_GetPhysicalAddressLow(PhysicalAddress)		(PhysicalAddress)
+#define RTMP_GetPhysicalAddressLow(phy_addr)		(phy_addr)
 
 /*
  * ULONG
  * RTMP_GetPhysicalAddressHigh(
  *   IN NDIS_PHYSICAL_ADDRESS  PhysicalAddress);
  */
-#define RTMP_GetPhysicalAddressHigh(PhysicalAddress)		(0)
+#define RTMP_GetPhysicalAddressHigh(phy_addr)		(0)
 
 /*
  * VOID
@@ -432,8 +430,8 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
  *   IN NDIS_PHYSICAL_ADDRESS  PhysicalAddress,
  *   IN ULONG  Value);
  */
-#define RTMP_SetPhysicalAddressLow(PhysicalAddress, Value)	\
-			PhysicalAddress = Value;
+#define RTMP_SetPhysicalAddressLow(phy_addr, Value)	\
+			phy_addr = Value;
 
 /*
  * VOID
@@ -441,7 +439,7 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
  *   IN NDIS_PHYSICAL_ADDRESS  PhysicalAddress,
  *   IN ULONG  Value);
  */
-#define RTMP_SetPhysicalAddressHigh(PhysicalAddress, Value)
+#define RTMP_SetPhysicalAddressHigh(phy_addr, Value)
 
 #define NdisMIndicateStatus(_w, _x, _y, _z)
 
@@ -464,30 +462,58 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 #define RTMP_IO_FORCE_READ32(_A, _R, _pV)								\
 	RTUSBReadMACRegister((_A), (_R), (PUINT32) (_pV))
 
+#define RTMP_IO_FORCE_WRITE32(_A, _R, _V)	\
+	do{\
+		/* if ((_R) != 0x404)*/ /* TODO:shiang-6590, depends on sw porting guide, don't acccess it now */\
+			RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE);		\
+	}while(0)
+
+
+#ifdef CONFIG_ANDES_SUPPORT
+#define RTMP_IO_READ32(_A, _R, _pV)								\
+do {															\
+	if (RTMP_TEST_FLAG(_A, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD))	\
+		BURST_READ(_A, _R, 1, _pV);								\
+	else														\
+		RTUSBReadMACRegister((_A), (_R), (PUINT32) (_pV));		\
+} while (0)
+
+#define RTMP_IO_WRITE32(_A, _R, _V)								\
+do {															\
+	if (RTMP_TEST_FLAG(_A, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD))	\
+	{															\
+		UINT32 Val = _V;										\
+		BURST_WRITE(_A, _R, &Val, 1);							\
+	}															\
+	else														\
+	{															\
+		RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE);\
+	}															\
+} while (0)
+#else
 #define RTMP_IO_READ32(_A, _R, _pV)								\
 	RTUSBReadMACRegister((_A), (_R), (PUINT32) (_pV))
 
+#define RTMP_IO_WRITE32(_A, _R, _V)								\
+	RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V), FALSE)
+
+#endif
 #define RTMP_IO_READ8(_A, _R, _pV)								\
 {																\
 }
 
-#define RTMP_IO_WRITE32(_A, _R, _V)								\
-	RTUSBWriteMACRegister((_A), (_R), (UINT32) (_V))
-
-
 #define RTMP_IO_WRITE8(_A, _R, _V)								\
 {																\
 	USHORT	_Val = _V;											\
-	RTUSBSingleWrite((_A), (_R), (USHORT) (_Val));								\
+	RTUSBSingleWrite((_A), (_R), (USHORT) (_Val), FALSE);		\
 }
 
 
 #define RTMP_IO_WRITE16(_A, _R, _V)								\
 {																\
-	RTUSBSingleWrite((_A), (_R), (USHORT) (_V));								\
+	RTUSBSingleWrite((_A), (_R), (USHORT) (_V), FALSE);			\
 }
 
-#define RTMP_IO_FORCE_WRITE32
 #define RTMP_SYS_IO_READ32
 #define RTMP_SYS_IO_WRITE32
 #endif /* RTMP_MAC_USB */
@@ -513,8 +539,6 @@ void linux_pci_unmap_single(void *handle, ra_dma_addr_t dma_addr, size_t size, i
 #define RTMP_OS_NETDEV_GET_PHYADDR	RtmpOsNetDevGetPhyAddr
 #define SET_OS_PKT_NETDEV			RtmpOsSetPktNetDev
 #define RTMP_OS_NETDEV_GET_DEVNAME	RtmpOsGetNetDevName
-#define RTMP_OS_NETDEV_SET_PRIV		RtmpOsSetNetDevPriv
-#define RTMP_OS_NETDEV_GET_PRIV		RtmpOsGetNetDevPriv
 #define RTMP_OS_NETDEV_SET_TYPE		RtmpOsSetNetDevType
 #define RTMP_OS_NETDEV_SET_TYPE_MONITOR		RtmpOsSetNetDevTypeMonitor
 
@@ -665,6 +689,21 @@ extern ULONG RtmpOsGetUnalignedlong(
 
 
 
+#ifdef UAPSD_SUPPORT
+/* if we queue a U-APSD packet to any software queue, we will set the U-APSD
+   flag and its physical queue ID for it */
+#define RTMP_SET_PACKET_UAPSD(_p, _flg_uapsd, _que_id) \
+                    (PACKET_CB(_p, 9) = ((_flg_uapsd<<7) | _que_id))
+
+#define RTMP_SET_PACKET_QOS_NULL(_p)     (PACKET_CB(_p, 9) = 0xff)
+#define RTMP_GET_PACKET_QOS_NULL(_p)	 (PACKET_CB(_p, 9))
+#define RTMP_SET_PACKET_NON_QOS_NULL(_p) (PACKET_CB(_p, 9) = 0x00)
+#define RTMP_GET_PACKET_UAPSD_Flag(_p)   ((PACKET_CB(_p, 9) & 0x80) >> 7)
+#define RTMP_GET_PACKET_UAPSD_QUE_ID(_p) (PACKET_CB(_p, 9) & 0x7f)
+
+#define RTMP_SET_PACKET_EOSP(_p, _flg)   (PACKET_CB(_p, 10) = _flg)
+#define RTMP_GET_PACKET_EOSP(_p)         (PACKET_CB(_p, 10))
+#endif /* UAPSD_SUPPORT */
 
 
 /* */
@@ -678,6 +717,7 @@ extern ULONG RtmpOsGetUnalignedlong(
 #define RTMP_PACKET_SPECIFIC_WAI		0x08
 #define RTMP_PACKET_SPECIFIC_VLAN		0x10
 #define RTMP_PACKET_SPECIFIC_LLCSNAP	0x20
+#define RTMP_PACKET_SPECIFIC_TDLS		0x40
 
 /*Specific */
 #define RTMP_SET_PACKET_SPECIFIC(_p, _flg)	   	(PACKET_CB(_p, 11) = _flg)
@@ -746,16 +786,40 @@ extern ULONG RtmpOsGetUnalignedlong(
 			
 #define RTMP_GET_PACKET_IPV4(_p)		(PACKET_CB(_p, 11) & RTMP_PACKET_SPECIFIC_IPV4)
 
+/* TDLS */
+#define RTMP_SET_PACKET_TDLS(_p, _flg)									\
+			do{															\
+				if (_flg)												\
+					(RTPKT_TO_OSPKT(_p)->cb[CB_OFF+11]) |= (RTMP_PACKET_SPECIFIC_TDLS);	\
+				else																		\
+					(RTPKT_TO_OSPKT(_p)->cb[CB_OFF+11]) &= (~RTMP_PACKET_SPECIFIC_TDLS);	\
+			}while(0)
+			
+#define RTMP_GET_PACKET_TDLS(_p)		(RTPKT_TO_OSPKT(_p)->cb[CB_OFF+11] & RTMP_PACKET_SPECIFIC_TDLS)
 
 /* If this flag is set, it indicates that this EAPoL frame MUST be clear. */
 #define RTMP_SET_PACKET_CLEAR_EAP_FRAME(_p, _flg)   (PACKET_CB(_p, 12) = _flg)
 #define RTMP_GET_PACKET_CLEAR_EAP_FRAME(_p)         (PACKET_CB(_p, 12))
 
 
+#ifdef DOT11_VHT_AC
+#define MAX_PACKETS_IN_QUEUE				1024 /*(512)*/
+#else
 #define MAX_PACKETS_IN_QUEUE				(512)
+#endif /* DOT11_VHT_AC */
 
 
 /* use bit3 of cb[CB_OFF+16] */
+#define RTMP_SET_PACKET_MGMT_PKT(_p, _flg)	        \
+        PACKET_CB(_p, 16) = (PACKET_CB(_p, 16) & 0xF7) | ((_flg & 0x01) << 3);
+#define RTMP_GET_PACKET_MGMT_PKT(_p)				\
+		((PACKET_CB(_p, 16) & 0x08) >> 3)
+
+/* use bit0 of cb[CB_OFF+20] */
+#define RTMP_SET_PACKET_MGMT_PKT_DATA_QUE(_p, _flg)	\
+        PACKET_CB(_p, 20) = (PACKET_CB(_p, 20) & 0xFE) | (_flg & 0x01);
+#define RTMP_GET_PACKET_MGMT_PKT_DATA_QUE(_p)		\
+		(PACKET_CB(_p, 20) & 0x01)
 
 #define RTMP_SET_PACKET_5VT(_p, _flg)   (PACKET_CB(_p, 22) = _flg)
 #define RTMP_GET_PACKET_5VT(_p)         (PACKET_CB(_p, 22))
@@ -812,11 +876,14 @@ void RTMP_GetCurrentSystemTime(LARGE_INTEGER *time);
 #define RTUSB_SUBMIT_URB			rausb_submit_urb
 #define RTUSB_URB_ALLOC_BUFFER		rausb_buffer_alloc
 #define RTUSB_URB_FREE_BUFFER		rausb_buffer_free
+#define RTUSB_FILL_BULK_URB			rausb_fill_bulk_urb
 #define RTUSB_FREE_URB				rausb_free_urb
 #define RTUSB_UNLINK_URB			rausb_kill_urb
 #define USB_CONTROL_MSG				rausb_control_msg
 #define usb_sndctrlpipe				rausb_sndctrlpipe
 #define usb_rcvctrlpipe				rausb_rcvctrlpipe
+#define usb_sndbulkpipe				rausb_sndbulkpipe
+#define usb_rcvbulkpipe				rausb_rcvbulkpipe
 #define RTUSB_AUTOPM_PUT_INTERFACE	rausb_autopm_put_interface
 #define RTUSB_AUTOPM_GET_INTERFACE	rausb_autopm_get_interface
 
@@ -849,6 +916,7 @@ typedef VOID (*usb_complete_t)(VOID *);
 #define RtmpUsbBulkOutRTSFrameComplete			pRtmpDrvNetOps->RtmpNetUsbBulkOutRTSFrameComplete
 #define RtmpUsbBulkOutPsPollComplete			pRtmpDrvNetOps->RtmpNetUsbBulkOutPsPollComplete
 #define RtmpUsbBulkRxComplete					pRtmpDrvNetOps->RtmpNetUsbBulkRxComplete
+#define RtmpUsbBulkCmdRspEventComplete			pRtmpDrvNetOps->RtmpNetUsbBulkCmdRspEventComplete
 
 #define RTUSBBulkOutDataPacketComplete(Status, pURB, pt_regs)    RTUSBBulkOutDataPacketComplete(pURB)
 #define RTUSBBulkOutMLMEPacketComplete(Status, pURB, pt_regs)    RTUSBBulkOutMLMEPacketComplete(pURB)
@@ -856,6 +924,7 @@ typedef VOID (*usb_complete_t)(VOID *);
 #define RTUSBBulkOutRTSFrameComplete(Status, pURB, pt_regs)      RTUSBBulkOutRTSFrameComplete(pURB)
 #define RTUSBBulkOutPsPollComplete(Status, pURB, pt_regs)        RTUSBBulkOutPsPollComplete(pURB)
 #define RTUSBBulkRxComplete(Status, pURB, pt_regs)               RTUSBBulkRxComplete(pURB)
+#define RTUSBBulkCmdRspEventComplete(Status, pURB, pt_regs)	 	 RTUSBBulkCmdRspEventComplete(pURB)
 
 USBHST_STATUS RTUSBBulkOutDataPacketComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 USBHST_STATUS RTUSBBulkOutMLMEPacketComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
@@ -863,6 +932,7 @@ USBHST_STATUS RTUSBBulkOutNullFrameComplete(URBCompleteStatus Status, purbb_t pU
 USBHST_STATUS RTUSBBulkOutRTSFrameComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 USBHST_STATUS RTUSBBulkOutPsPollComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 USBHST_STATUS RTUSBBulkRxComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
+USBHST_STATUS RTUSBBulkCmdRspEventComplete(URBCompleteStatus Status, purbb_t pURB, pregs *pt_regs);
 
 #define rtusb_urb_context  context
 #define rtusb_urb_status   status

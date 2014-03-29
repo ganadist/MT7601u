@@ -34,4 +34,3 @@ EXPORT_SYMBOL(RTMP_DRV_OPS_FUNCTION);
 
 #endif /* OS_ABL_SUPPORT */
 
-/* End of rt_symb.c */

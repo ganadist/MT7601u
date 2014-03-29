@@ -37,6 +37,7 @@
 #ifdef OS_ABL_FUNC_SUPPORT
 
 EXPORT_SYMBOL(RTDebugLevel);
+EXPORT_SYMBOL(RTDebugFunc);
 
 /* utility */
 EXPORT_SYMBOL(RtmpUtilInit);
@@ -88,13 +89,13 @@ EXPORT_SYMBOL(RtmpOsPktIappMakeUp);
 EXPORT_SYMBOL(RtmpOsPktInit);
 EXPORT_SYMBOL(wlan_802_11_to_802_3_packet);
 EXPORT_SYMBOL(RtmpOsPktOffsetInit);
-
 EXPORT_SYMBOL(RtmpOSNetDevCreate);
 EXPORT_SYMBOL(RtmpOSNetDevClose);
 EXPORT_SYMBOL(RtmpOSNetDevAttach);
 EXPORT_SYMBOL(RtmpOSNetDevDetach);
 EXPORT_SYMBOL(RtmpOSNetDevFree);
 EXPORT_SYMBOL(RtmpOSNetDevIsUp);
+EXPORT_SYMBOL(RtmpOSNetDevProtect);
 EXPORT_SYMBOL(RtmpOsNetDevGetPhyAddr);
 EXPORT_SYMBOL(RtmpOsNetQueueStart);
 EXPORT_SYMBOL(RtmpOsNetQueueStop);
@@ -104,6 +105,7 @@ EXPORT_SYMBOL(RtmpOsPktNetDevGet);
 EXPORT_SYMBOL(RtmpOsGetNetDevName);
 EXPORT_SYMBOL(RtmpOsSetNetDevPriv);
 EXPORT_SYMBOL(RtmpOsGetNetDevPriv);
+EXPORT_SYMBOL(RtmpDevPrivFlagsGet);
 EXPORT_SYMBOL(RtmpOsSetNetDevType);
 EXPORT_SYMBOL(RtmpOsSetNetDevTypeMonitor);
 EXPORT_SYMBOL(RtmpOSNetDevAddrSet);
@@ -128,6 +130,10 @@ EXPORT_SYMBOL(RtmpOsCheckTaskLegality);
 EXPORT_SYMBOL(RtmpOsTaskDataGet);
 EXPORT_SYMBOL(RtmpOsTaskIsKilled);
 EXPORT_SYMBOL(RtmpOsTaskWakeUp);
+EXPORT_SYMBOL(RtmpOsInitCompletion);
+EXPORT_SYMBOL(RtmpOsExitCompletion);
+EXPORT_SYMBOL(RtmpOsComplete);
+EXPORT_SYMBOL(RtmpOsWaitForCompletionTimeout);
 
 EXPORT_SYMBOL(RtmpOsTaskletSche);
 EXPORT_SYMBOL(RtmpOsTaskletInit);
@@ -144,7 +150,7 @@ EXPORT_SYMBOL(RtmpOsIntUnLock);
 
 EXPORT_SYMBOL(RtmpOsSemaInitLocked);
 EXPORT_SYMBOL(RtmpOsSemaInit);
-EXPORT_SYMBOL(RtmpOsSemaDestory);
+EXPORT_SYMBOL(RtmpOsSemaDestroy);
 EXPORT_SYMBOL(RtmpOsSemaWaitInterruptible);
 EXPORT_SYMBOL(RtmpOsSemaWakeUp);
 EXPORT_SYMBOL(RtmpOsMlmeUp);
@@ -155,6 +161,8 @@ EXPORT_SYMBOL(RtmpOsWait);
 EXPORT_SYMBOL(RtmpOsTimerAfter);
 EXPORT_SYMBOL(RtmpOsTimerBefore);
 EXPORT_SYMBOL(RtmpOsGetSystemUpTime);
+
+EXPORT_SYMBOL(RtmpOsDCacheFlush);
 
 
 EXPORT_SYMBOL(RtmpOsNtohs);
@@ -174,8 +182,10 @@ EXPORT_SYMBOL(hex_dump);
 EXPORT_SYMBOL(RtmpOsSendWirelessEvent);
 EXPORT_SYMBOL(RTMP_GetCurrentSystemTime);
 EXPORT_SYMBOL(RTMP_GetCurrentSystemTick);
+EXPORT_SYMBOL(RTMPMsecsToJiffies);
 EXPORT_SYMBOL(RTMPusecDelay);
 EXPORT_SYMBOL(RtmpOsMsDelay);
+EXPORT_SYMBOL(RtmpOsUsDelay);
 EXPORT_SYMBOL(RtmpOSWrielessEventSend);
 EXPORT_SYMBOL(RtmpOSWrielessEventSendExt);
 EXPORT_SYMBOL(RtmpOsTickUnitGet);
@@ -192,6 +202,7 @@ EXPORT_SYMBOL(RtmpOsSimpleStrtol);
 EXPORT_SYMBOL(RtmpOsStatsAlloc);
 
 EXPORT_SYMBOL(RtmpOsAtomicInit);
+EXPORT_SYMBOL(RtmpOsAtomicDestroy);
 EXPORT_SYMBOL(RtmpOsAtomicRead);
 EXPORT_SYMBOL(RtmpOsAtomicDec);
 EXPORT_SYMBOL(RtmpOsAtomicInterlockedExchange);
@@ -214,6 +225,7 @@ EXPORT_SYMBOL(CFG80211OS_RegHint11D);
 EXPORT_SYMBOL(CFG80211OS_BandInfoGet);
 EXPORT_SYMBOL(CFG80211OS_ChanNumGet);
 EXPORT_SYMBOL(CFG80211OS_ChanInfoGet);
+EXPORT_SYMBOL(CFG80211OS_ChanInfoInit);
 EXPORT_SYMBOL(CFG80211OS_Scaning);
 EXPORT_SYMBOL(CFG80211OS_ScanEnd);
 EXPORT_SYMBOL(CFG80211OS_ConnectResultInform);
@@ -276,9 +288,21 @@ EXPORT_SYMBOL(RtmpOsGetUsbDevVendorID);
 EXPORT_SYMBOL(RtmpOsGetUsbDevProductID);
 #endif /* RTMP_MAC_USB */
 
-/* only for RBUS */
+/* only for RBUS or flash-capable concurrent devices */
+#if defined(RTMP_RBUS_SUPPORT) || defined (RTMP_FLASH_SUPPORT) 
+EXPORT_SYMBOL(RtmpFlashRead);
+EXPORT_SYMBOL(RtmpFlashWrite);
+#endif /* defined(RTMP_RBUS_SUPPORT) || defined (RTMP_FLASH_SUPPORT)  */
 
 
+EXPORT_SYMBOL(RtPrivIoctlSetVal);
+
+EXPORT_SYMBOL(RtmpOsSpinLockIrqSave);
+EXPORT_SYMBOL(RtmpOsSpinUnlockIrqRestore);
+EXPORT_SYMBOL(RtmpOsSpinLockIrq);
+EXPORT_SYMBOL(RtmpOsSpinUnlockIrq);
+EXPORT_SYMBOL(OS_TEST_BIT);
+EXPORT_SYMBOL(OS_SET_BIT);
+EXPORT_SYMBOL(OS_CLEAR_BIT);
 #endif /* OS_ABL_SUPPORT */
 
-/* End of rt_linux_symb.c */

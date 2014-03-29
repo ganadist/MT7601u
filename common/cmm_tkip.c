@@ -107,7 +107,7 @@ UINT Tkip_Sbox_Upper[256] =
 
 /* Expanded IV for TKIP function.*/
 
-typedef	struct	GNU_PACKED _IV_CONTROL_
+typedef	struct GNU_PACKED _IV_CONTROL_
 {
 	union GNU_PACKED
 	{
@@ -535,7 +535,7 @@ VOID	RTMPCalculateMICValue(
 		
 		break;	/* No need handle next packet	*/
 
-	}	while (TRUE);		/* End of copying payload*/
+	} while (TRUE);
 
 	/* Compute the final MIC Value*/
 	RTMPTkipGetMIC(&pAd->PrivateInfo.Tx);
@@ -680,10 +680,10 @@ VOID RTMPTkipMixKey(
 }
 
 
-
-/* TRUE: Success!*/
-/* FALSE: Decrypt Error!*/
-
+/*
+	TRUE: Success!
+	FALSE: Decrypt Error!
+*/
 BOOLEAN RTMPSoftDecryptTKIP(
 	IN 		PRTMP_ADAPTER 	pAd,
 	IN 		PUCHAR			pHdr,
@@ -817,7 +817,18 @@ BOOLEAN RTMPSoftDecryptTKIP(
 	if (!NdisEqualMemory(MIC, TrailMIC, LEN_TKIP_MIC))
 	{
 		DBGPRINT(RT_DEBUG_ERROR, ("! TKIP MIC Error !\n"));	 /*MIC error.*/
+#ifdef CONFIG_STA_SUPPORT
 		/*RTMPReportMicError(pAd, &pWpaKey[KeyID]);	 marked by AlbertY @ 20060630 */
+#ifdef WPA_SUPPLICANT_SUPPORT
+        if (pAd->StaCfg.WpaSupplicantUP) {
+                WpaSendMicFailureToWpaSupplicant(pAd->net_dev,
+                                                (pKey->Type ==
+                                                  PAIRWISEKEY) ? TRUE :
+                                                FALSE);
+        } else
+#endif /* WPA_SUPPLICANT_SUPPORT */
+        RTMPReportMicError(pAd, pKey);
+#endif /* CONFIG_STA_SUPPORT */
 		return FALSE;		
 	}
 

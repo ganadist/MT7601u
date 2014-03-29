@@ -34,10 +34,6 @@
 #define PROC_DIR	"AntDiv"
 
 /*
- *		TAB width:8
- */
-
-/*
  *  For shorter udelay().
  *  (ripped from rtmp.h)
  */
@@ -60,7 +56,7 @@
 			BbpCsr.field.Busy = 1;                          \
 			BbpCsr.field.RegNum = _I;                       \
 			RTMP_IO_WRITE32(_A, H2M_BBP_AGENT, BbpCsr.word);\
-			AsicSendCommandToMcu(_A, 0x80, 0xff, 0x0, 0x0);	\
+			AsicSendCommandToMcu(_A, 0x80, 0xff, 0x0, 0x0, FALSE);	\
 			RTMPusecDelay(10);				\
 			for (k=0; k<MAX_BUSY_COUNT; k++)		\
 			{                                               \
@@ -132,18 +128,15 @@ static INT x##Write(struct file *file, const char *buffer, \
  * function prototype
  */
 VOID RT3XXX_AntDiversity_Init(
-    IN PRTMP_ADAPTER pAd
-);
+    IN RTMP_ADAPTER *pAd);
 
 VOID RT3XXX_AntDiversity_Fini(
-    IN PRTMP_ADAPTER pAd
-);
+    IN RTMP_ADAPTER *pAd);
 
 VOID AntDiversity_Update_Rssi_Sample(
-	IN PRTMP_ADAPTER        pAd,
-	IN RSSI_SAMPLE          *pRssi,
-	IN PRXWI_STRUC          pRxWI
-);
+	IN RTMP_ADAPTER *pAd,
+	IN RSSI_SAMPLE *pRssi,
+	IN RXWI_STRUC *pRxWI);
                         
 
 #endif

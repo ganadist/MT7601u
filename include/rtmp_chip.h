@@ -31,37 +31,50 @@
 #include "rtmp_type.h"
 
 struct _RTMP_ADAPTER;
+struct _RSSI_SAMPLE;
+
+#include "mac_ral/pbf.h"
+
+#include "eeprom.h"
+
+
+#ifdef RTMP_MAC_USB
+#include "mac_ral/rtmp_mac.h"
+#include "mac_ral/mac_usb.h"
+#endif /* RTMP_MAC_USB */
 
 
 
 
-#ifdef RT3070
-#include "chip/rt3070.h"
-#endif /* RT3070 */
 
 
 
 
 
 
-#ifdef RT3370
-#include "chip/rt3370.h"
-#endif /* RT3370 */
 
 
 
 
-#ifdef RT5350
-#include "chip/rt5350.h"
-#endif /* RT5350 */
 
-#ifdef RT3572
-#include "chip/rt28xx.h"
-#endif /* RT3572 */
 
-#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
-#include "chip/rt5390.h"
-#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
+
+
+#ifdef RT3290
+#include "chip/rt3290.h"
+#endif /* RT3290 */
+
+#ifdef RT65xx
+#include "chip/rt65xx.h"
+#endif
+
+#ifdef MT76x0
+#include "chip/mt76x0.h"
+#endif
+
+
+
+#include "mcu/mcu.h"
 
 #define IS_RT3090A(_pAd)    ((((_pAd)->MACVersion & 0xffff0000) == 0x30900000))
 
@@ -74,28 +87,22 @@ struct _RTMP_ADAPTER;
 
 #define IS_RT2860(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x28600000)
 #define IS_RT2872(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x28720000)
+#define IS_RT2880(_pAd)		(IS_RT2860(_pAd) && IS_RBUS_INF(_pAd))
 
 #define IS_RT30xx(_pAd)		(((_pAd)->MACVersion & 0xfff00000) == 0x30700000||IS_RT3090A(_pAd)||IS_RT3390(_pAd))
-/*#define IS_RT305X(_pAd)		((_pAd)->MACVersion == 0x28720200) */
+
+#define IS_RT3052B(_pAd)	(((_pAd)->CommonCfg.CID == 0x102) && (((_pAd)->CommonCfg.CN >> 16) == 0x3033)) 
 #define IS_RT3052(_pAd)		(((_pAd)->MACVersion == 0x28720200) && (_pAd->Antenna.field.TxPath == 2))
 #define IS_RT3050(_pAd)		(((_pAd)->MACVersion == 0x28720200) && ((_pAd)->RfIcType == RFIC_3020))
 #define IS_RT3350(_pAd)		(((_pAd)->MACVersion == 0x28720200) && ((_pAd)->RfIcType == RFIC_3320))
 #define IS_RT3352(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x33520000)
 #define IS_RT5350(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x53500000)
+#define IS_RT305x(_pAd)		(IS_RT3050(_pAd) || IS_RT3052(_pAd) || IS_RT3350(_pAd) || IS_RT3352(_pAd) || IS_RT5350(_pAd))
+#define IS_RT3050_3052_3350(_pAd) (\
+	((_pAd)->MACVersion == 0x28720200) && \
+	((((_pAd)->CommonCfg.CN >> 16) == 0x3333) || (((_pAd)->CommonCfg.CN >> 16) == 0x3033)) \
+)
 
-/*
-	RT3050: MAC_CSR0  [ Ver:Rev=0x28720200]
-			RF IC Type: 5
-			pAd->Antenna.field.TxPath = 1
-			pAd->CommonCfg.CN: 33335452
-			pAd->CommonCfg.CID = 102
-
-	RT3350: MAC_CSR0  [ Ver:Rev=0x28720200]
-			RF IC Type: 11
-			pAd->Antenna.field.TxPath = 1
-			pAd->CommonCfg.CN: 33335452
-			pAd->CommonCfg.CID = 102
-*/
 
 /* RT3572, 3592, 3562, 3062 share the same MAC version */
 #define IS_RT3572(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x35720000)
@@ -109,58 +116,107 @@ struct _RTMP_ADAPTER;
 	((_pAd->DeviceID == NIC3593_PCI_OR_PCIe_DEVICE_ID) && (RT3593OverPCIe(_pAd))) \
 )
 
-#define IS_RT2883(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x28830000)
-#define IS_RT3883(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x38830000)
+#define RT3593_DEVICE_ID_CHECK(__DevId)			\
+	(0)
+
+#define RT3592_DEVICE_ID_CHECK(__DevId)			\
+	(__DevId == NIC3592_PCIe_DEVICE_ID)
+
+#define IS_RT2883(_pAd)		(0)
+
+#define IS_RT3883(_pAd)		(0)
+
 #define IS_VERSION_BEFORE_F(_pAd)			(((_pAd)->MACVersion&0xffff) <= 0x0211)
 /* F version is 0x0212, E version is 0x0211. 309x can save more power after F version. */
 #define IS_VERSION_AFTER_F(_pAd)			((((_pAd)->MACVersion&0xffff) >= 0x0212) || (((_pAd)->b3090ESpecialChip == TRUE)))
 
+#define IS_RT3290(_pAd)	(((_pAd)->MACVersion & 0xffff0000) == 0x32900000)
+#define IS_RT3290LE(_pAd)   ((((_pAd)->MACVersion & 0xffffffff) >= 0x32900011))
+
 /* 3593 */
 #define IS_RT3593(_pAd) (((_pAd)->MACVersion & 0xFFFF0000) == 0x35930000)
-
 
 /* RT5392 */
 #define IS_RT5392(_pAd)   ((_pAd->MACVersion & 0xFFFF0000) == 0x53920000) /* Include RT5392, RT5372 and RT5362 */
 
 /* RT5390 */
-#define IS_RT5390(_pAd)   ((((_pAd)->MACVersion & 0xFFFF0000) == 0x53900000) ||IS_RT5392(_pAd))	/* Include RT5390,  RT5370, RT5392, RT5372, RT5360 and RT5362 */
+#define IS_RT5390(_pAd)   ((((_pAd)->MACVersion & 0xFFFF0000) == 0x53900000) || IS_RT5390H(_pAd)) /* Include RT5390, RT5370 and RT5360 */
 
 /* RT5390F */
-
 #define IS_RT5390F(_pAd)	((IS_RT5390(_pAd)) && (((_pAd)->MACVersion & 0x0000FFFF) >= 0x0502))
-
-/* RT5390R */
 
 /* RT5370G */
 #define IS_RT5370G(_pAd)	((IS_RT5390(_pAd)) && (((_pAd)->MACVersion & 0x0000FFFF) >= 0x0503)) /* support HW PPAD ( the hardware rx antenna diversity ) */
 
 /* RT5390R */
-
-
 #define IS_RT5390R(_pAd)   ((IS_RT5390(_pAd)) && (((_pAd)->MACVersion & 0x0000FFFF) == 0x1502)) /* support HW PPAD ( the hardware rx antenna diversity ) */
-/* PCIe interface NIC */
 
+/* PCIe interface NIC */
 #define IS_MINI_CARD(_pAd) ((_pAd)->Antenna.field.BoardType == BOARD_TYPE_MINI_CARD)
 
 /* 5390U (5370 using PCIe interface) */
-
 #define IS_RT5390U(_pAd)   (IS_MINI_CARD(_pAd) && ((_pAd)->MACVersion & 0xFFFF0000) == 0x53900000)
+
+/* RT5390H */
+#define IS_RT5390H(_pAd)   (((_pAd->MACVersion & 0xFFFF0000) == 0x53910000) && (((_pAd)->MACVersion & 0x0000FFFF) >= 0x1500))
 
 /* RT5390BC8 (WiFi + BT) */
 
 
-
 /* RT5390D */
-
 #define IS_RT5390D(_pAd)	((IS_RT5390(_pAd)) && (((_pAd)->MACVersion & 0x0000FFFF) >= 0x0502))
 
-
 /* RT5392C */
-
 #define IS_RT5392C(_pAd)	((IS_RT5392(_pAd)) && (((_pAd)->MACVersion & 0x0000FFFF) >= 0x0222)) /* Include RT5392, RT5372 and RT5362 */
+
+#define IS_RT5592(_pAd)		(((_pAd)->MACVersion & 0xFFFF0000) == 0x55920000)
+#define REV_RT5592C			0x0221
+
+#define IS_RT65XX(_pAd)		((((_pAd)->MACVersion & 0xFFFF0000) == 0x65900000) ||\
+							 (((_pAd)->MACVersion & 0xfffff000) == 0x85592000) ||\
+							 (((_pAd)->MACVersion & 0xffff0000) == 0x76500000) ||\
+							 (((_pAd)->MACVersion & 0xffff0000) == 0x76620000))
+
+#define IS_MT76x0(_pAd)		((((_pAd)->MACVersion & 0xffff0000) == 0x65900000) ||\
+							 (((_pAd)->MACVersion & 0xffff0000) == 0x76500000))
+#define IS_MT7650(_pAd)		(((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76500000)
+#define IS_MT7650E(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76500000) && (IS_PCIE_INF(_pAd)))
+#define IS_MT7650U(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76500000) && (IS_USB_INF(_pAd)))
+#define IS_MT7630(_pAd)		(((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76300000)
+#define IS_MT7630E(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76300000) && (IS_PCIE_INF(_pAd)))
+#define IS_MT7630U(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76300000) && (IS_USB_INF(_pAd)))
+#define IS_MT7610(_pAd)		(((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76100000)
+#define IS_MT7610E(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76100000) && (IS_PCIE_INF(_pAd)))
+#define IS_MT7610U(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76100000) && (IS_USB_INF(_pAd)))
+#define IS_MT76x2(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x76620000)
+#define IS_MT7662(_pAd)		(((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76620000)
+#define IS_MT7662E(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76620000) && (IS_PCIE_INF(_pAd)))
+#define IS_MT7662U(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76620000) && (IS_USB_INF(_pAd)))
+#define IS_MT7632(_pAd)		(((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76320000)
+#define IS_MT7632E(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76320000) && (IS_PCIE_INF(_pAd)))
+#define IS_MT7632U(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76320000) && (IS_USB_INF(_pAd)))
+#define IS_MT7612(_pAd)		(((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76120000)
+#define IS_MT7612E(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76120000) && (IS_PCIE_INF(_pAd)))
+#define IS_MT7612U(_pAd)	((((_pAd)->chipCap.ChipID & 0xffff0000) == 0x76120000) && (IS_USB_INF(_pAd)))
+#define IS_MT76x0E(_pAd)	(IS_MT7650E(_pAd) || IS_MT7630E(_pAd) || IS_MT7610E(_pAd))
+#define IS_MT76x0U(_pAd)	(IS_MT7650U(_pAd) || IS_MT7630U(_pAd) || IS_MT7610U(_pAd))
+#define IS_MT76xx(_pAd)		(IS_MT76x0(_pAd) || IS_MT76x2(_pAd))
+#define IS_RT8592(_pAd)		(((_pAd)->MACVersion & 0xffff0000) == 0x85590000)
+
 
 /* RT3592BC8 (WiFi + BT) */
 
+#define IS_USB_INF(_pAd)		((_pAd)->infType == RTMP_DEV_INF_USB)
+#define IS_PCIE_INF(_pAd)		((_pAd)->infType == RTMP_DEV_INF_PCIE)
+#define IS_PCI_INF(_pAd)		(((_pAd)->infType == RTMP_DEV_INF_PCI) || IS_PCIE_INF(_pAd))
+#define IS_PCI_ONLY_INF(_pAd)	((_pAd)->infType == RTMP_DEV_INF_PCI)
+#define IS_RBUS_INF(_pAd) ((_pAd)->infType == RTMP_DEV_INF_RBUS)
+
+#define RT_REV_LT(_pAd, _chip, _rev)\
+	IS_##_chip(_pAd) && (((_pAd)->MACVersion & 0x0000FFFF) < (_rev))
+
+#define RT_REV_GTE(_pAd, _chip, _rev)\
+	IS_##_chip(_pAd) && (((_pAd)->MACVersion & 0x0000FFFF) >= (_rev))
 
 /* Dual-band NIC (RF/BBP/MAC are in the same chip.) */
 
@@ -182,6 +238,8 @@ struct _RTMP_ADAPTER;
 
 /*RT3390,RT3370 */
 #define IS_RT3390(_pAd)				(((_pAd)->MACVersion & 0xFFFF0000) == 0x33900000)
+
+#define CCA_AVG_MAX_COUNT	5
 
 /* ------------------------------------------------------ */
 /* PCI registers - base address 0x0000 */
@@ -231,6 +289,9 @@ struct _RTMP_ADAPTER;
 #define EEPROM_LEDAG_CONF_OFFSET	0x3c
 #define EEPROM_LEDACT_CONF_OFFSET	0x3e
 #define EEPROM_LED_POLARITY_OFFSET	0x40
+#if defined(BT_COEXISTENCE_SUPPORT) || defined(RT3290) || defined(RT8592)
+#define	EEPROM_NIC3_OFFSET			0x42
+#endif /* defined(BT_COEXISTENCE_SUPPORT) || defined(RT3290) || defined(RT8592) */
 
 #define EEPROM_LNA_OFFSET			0x44
 
@@ -253,19 +314,57 @@ struct _RTMP_ADAPTER;
 #define EEPROM_A_TX_PWR_OFFSET      		0x78
 #define EEPROM_A_TX2_PWR_OFFSET			0xa6
 
+#define MBSSID_MODE0 0
+#define MBSSID_MODE1 1
+#ifdef ENHANCE_NEW_MBSSID_MODE
+#define MBSSID_MODE2	2	/* Enhance NEW MBSSID MODE mapping to mode 1 */
+#define MBSSID_MODE3	3	/* Enhance NEW MBSSID MODE mapping to mode 2 */
+#define MBSSID_MODE4	4	/* Enhance NEW MBSSID MODE mapping to mode 3 */
+#define MBSSID_MODE5	5	/* Enhance NEW MBSSID MODE mapping to mode 4 */
+#define MBSSID_MODE6	6	/* Enhance NEW MBSSID MODE mapping to mode 5 */
+#endif /* ENHANCE_NEW_MBSSID_MODE */
+
+enum FREQ_CAL_INIT_MODE {
+	FREQ_CAL_INIT_MODE0,
+	FREQ_CAL_INIT_MODE1,
+	FREQ_CAL_INIT_MODE2,
+	FREQ_CAL_INIT_UNKNOW,
+};
+
+enum FREQ_CAL_MODE {
+	FREQ_CAL_MODE0,
+	FREQ_CAL_MODE1,
+	FREQ_CAL_MODE2,
+};
+
+enum RXWI_FRQ_OFFSET_FIELD {
+	RXWI_FRQ_OFFSET_FIELD0, /* SNR1 */
+	RXWI_FRQ_OFFSET_FIELD1, /* Frequency Offset */
+};
+
+
+#ifdef MT76x0
+#define EEPROM_MT76x0_TEMPERATURE_OFFSET	0xd1 /* signed value */
+#define EEPROM_MT76x0_A_BAND_MB				0xdc
+#define EEPROM_MT76x0_A_BAND_HB				0xdd
+
+#define EEPROM_MT76x0_2G_TARGET_POWER		0xd0
+#define EEPROM_MT76x0_5G_TARGET_POWER		0xd2
+#define EEPROM_MT76x0_2G_SLOPE_OFFSET		0x6E
+#define EEPROM_MT76x0_5G_SLOPE_OFFSET		0xf0
+#define EEPROM_MT76x0_5G_CHANNEL_BOUNDARY 	0xd4
+#endif /* MT76x0 */
+
 #define EEPROM_A_TSSI_BOUND1		0xd4
 #define EEPROM_A_TSSI_BOUND2		0xd6
 #define EEPROM_A_TSSI_BOUND3		0xd8
 #define EEPROM_A_TSSI_BOUND4		0xda
 #define EEPROM_A_TSSI_BOUND5		0xdc
 
-#define EEPROM_ITXBF_CAL_RX0			0x1a0
-#define EEPROM_ITXBF_CAL_TX0			0x1a2
-#define EEPROM_ITXBF_CAL_RX1			0x1a4
-#define EEPROM_ITXBF_CAL_TX1			0x1a6
-#define EEPROM_ITXBF_CAL_RX2			0x1a8
-#define EEPROM_ITXBF_CAL_TX2			0x1aa
+/* ITxBF calibration values EEPROM locations 0x1a0 to 0x1ab */
+#define EEPROM_ITXBF_CAL				0x1a0
 
+#else
 #define EEPROM_TXPOWER_BYRATE 			0xde	/* 20MHZ power. */
 #define EEPROM_TXPOWER_BYRATE_20MHZ_2_4G	0xde	/* 20MHZ 2.4G tx power. */
 #define EEPROM_TXPOWER_BYRATE_40MHZ_2_4G	0xee	/* 40MHZ 2.4G tx power. */
@@ -299,7 +398,7 @@ struct _RTMP_ADAPTER;
 #define EEPROM_COUNTRY_REG_OFFSET	3
 #define EEPROM_BBP_ARRAY_OFFSET		4
 
-#ifdef RTMP_INTERNAL_TX_ALC
+#if defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION) 
 /* */
 /* The TSSI over OFDM 54Mbps */
 /* */
@@ -309,6 +408,8 @@ struct _RTMP_ADAPTER;
 /* The TSSI value/step (0.5 dB/unit) */
 /* */
 #define EEPROM_TSSI_STEP_OVER_2DOT4G	0x77
+#define EEPROM_TSSI_STEP_OVER_5DOT5G	0xDD
+#define TSSI_READ_SAMPLE_NUM			3
 
 /* */
 /* Per-channel Tx power offset (for the extended TSSI mode) */
@@ -326,18 +427,18 @@ struct _RTMP_ADAPTER;
 /* */
 #define EEPROM_CCK_MCS0_MCS1				0xDE
 #define EEPROM_CCK_MCS2_MCS3				0xDF
-#define EEPROM_OFDM_MCS0_MCS1				0xE0
-#define EEPROM_OFDM_MCS2_MCS3				0xE1
-#define EEPROM_OFDM_MCS4_MCS5				0xE2
-#define EEPROM_OFDM_MCS6_MCS7				0xE3
+#define EEPROM_OFDM_MCS0_MCS1			0xE0
+#define EEPROM_OFDM_MCS2_MCS3			0xE1
+#define EEPROM_OFDM_MCS4_MCS5			0xE2
+#define EEPROM_OFDM_MCS6_MCS7			0xE3
 #define EEPROM_HT_MCS0_MCS1				0xE4
 #define EEPROM_HT_MCS2_MCS3				0xE5
 #define EEPROM_HT_MCS4_MCS5				0xE6
 #define EEPROM_HT_MCS6_MCS7				0xE7
-#define EEPROM_HT_MCS8_MCS9                     0xE8
-#define EEPROM_HT_MCS10_MCS11                   0xE9
-#define EEPROM_HT_MCS12_MCS13                   0xEA
-#define EEPROM_HT_MCS14_MCS15                   0xEB
+#define EEPROM_HT_MCS8_MCS9                     	0xE8
+#define EEPROM_HT_MCS10_MCS11                   	0xE9
+#define EEPROM_HT_MCS12_MCS13                   	0xEA
+#define EEPROM_HT_MCS14_MCS15                   	0xEB
 #define EEPROM_HT_USING_STBC_MCS0_MCS1	0xEC
 #define EEPROM_HT_USING_STBC_MCS2_MCS3	0xED
 #define EEPROM_HT_USING_STBC_MCS4_MCS5	0xEE
@@ -347,19 +448,37 @@ struct _RTMP_ADAPTER;
 /* Bit mask for the Tx ALC and the Tx fine power control */
 /* */
 
-#define DEFAULT_BBP_TX_FINE_POWER_CTRL 0
+#define DEFAULT_BBP_TX_FINE_POWER_CTRL 	0
 
-CHAR GetDesiredTSSI(
-	IN struct _RTMP_ADAPTER		*pAd);
-#endif /* RTMP_INTERNAL_TX_ALC */
+#endif /* RTMP_INTERNAL_TX_ALC || RTMP_TEMPERATURE_COMPENSATION */
 
 
-#ifdef RT33xx
-#define EEPROM_EVM_RF09  0x120
-#define EEPROM_EVM_RF19  0x122
-#define EEPROM_EVM_RF21  0x124
-#define EEPROM_EVM_RF29  0x128
-#endif /* RT33xx */
+#ifdef RT_BIG_ENDIAN
+typedef union _EEPROM_ANTENNA_STRUC {
+	struct {
+		USHORT RssiIndicationMode:1; 	/* RSSI indication mode */
+		USHORT Rsv:1;
+		USHORT BoardType:2; 		/* 0: mini card; 1: USB pen */
+		USHORT RfIcType:4;			/* see E2PROM document */
+		USHORT TxPath:4;			/* 1: 1T, 2: 2T, 3: 3T */
+		USHORT RxPath:4;			/* 1: 1R, 2: 2R, 3: 3R */
+	} field;
+	USHORT word;
+} EEPROM_ANTENNA_STRUC, *PEEPROM_ANTENNA_STRUC;
+#else
+typedef union _EEPROM_ANTENNA_STRUC {
+	struct {
+		USHORT RxPath:4;			/* 1: 1R, 2: 2R, 3: 3R */
+		USHORT TxPath:4;			/* 1: 1T, 2: 2T, 3: 3T */
+		USHORT RfIcType:4;			/* see E2PROM document */
+		USHORT BoardType:2; 		/* 0: mini card; 1: USB pen */
+		USHORT Rsv:1;
+		USHORT RssiIndicationMode:1; 	/* RSSI indication mode */	
+	} field;
+	USHORT word;
+} EEPROM_ANTENNA_STRUC, *PEEPROM_ANTENNA_STRUC;
+#endif
+
 
 /*
   *   EEPROM operation related marcos
@@ -370,209 +489,21 @@ CHAR GetDesiredTSSI(
 #define RT28xx_EEPROM_WRITE16(_pAd, _offset, _value)		\
 	(_pAd)->chipOps.eewrite((RTMP_ADAPTER *)(_pAd), (USHORT)(_offset), (USHORT)(_value))
 
-/* ------------------------------------------------------------------- */
-/*  E2PROM data layout */
-/* ------------------------------------------------------------------- */
 
-/* Board type */
+#if defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION) 
+/* The Tx power tuning entry */
+typedef struct _TX_POWER_TUNING_ENTRY_STRUCT {
+	CHAR	RF_TX_ALC; 		/* 3390: RF R12[4:0]: Tx0 ALC, 5390: RF R49[5:0]: Tx0 ALC */
+	CHAR 	MAC_PowerDelta;	/* Tx power control over MAC 0x1314~0x1324 */
+} TX_POWER_TUNING_ENTRY_STRUCT, *PTX_POWER_TUNING_ENTRY_STRUCT;
+#endif /* defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION) */
 
-#define BOARD_TYPE_MINI_CARD	0/* Mini card */
-#define BOARD_TYPE_USB_PEN		1/* USB pen */
+struct RF_BANK_OFFSET {
+	UINT8 RFBankIndex;
+	UINT16 RFStart;
+	UINT16 RFEnd;
+};
 
-
-/* */
-/* EEPROM antenna select format */
-/* */
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_ANTENNA_STRUC {
-	struct {
-		USHORT 		RssiIndicationMode:1; // RSSI indication mode
-		USHORT Rsv:1;
-		USHORT BoardType:2; // 0: mini card; 1: USB pen		
-		USHORT RfIcType:4;	/* see E2PROM document */
-		USHORT TxPath:4;	/* 1: 1T, 2: 2T */
-		USHORT RxPath:4;	/* 1: 1R, 2: 2R, 3: 3R */
-	} field;
-	USHORT word;
-} EEPROM_ANTENNA_STRUC, *PEEPROM_ANTENNA_STRUC;
-#else
-typedef union _EEPROM_ANTENNA_STRUC {
-	struct {
-		USHORT RxPath:4;	/* 1: 1R, 2: 2R, 3: 3R */
-		USHORT TxPath:4;	/* 1: 1T, 2: 2T */
-		USHORT RfIcType:4;	/* see E2PROM document */
-		USHORT BoardType:2; // 0: mini card; 1: USB pen
-		USHORT Rsv:1;
-		USHORT 		RssiIndicationMode:1; // RSSI indication mode		
-	} field;
-	USHORT word;
-} EEPROM_ANTENNA_STRUC, *PEEPROM_ANTENNA_STRUC;
-#endif
-
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_NIC_CINFIG2_STRUC {
-	struct {
-		USHORT DACTestBit:1;	/* control if driver should patch the DAC issue */
-		USHORT CoexBit:1;
-		USHORT bInternalTxALC:1;	/* Internal Tx ALC */
-		USHORT AntOpt:1;	/* Fix Antenna Option: 0:Main; 1: Aux */
-		USHORT AntDiversity:1;	/* Antenna diversity */
-		USHORT Rsv1:1;	/* must be 0 */
-		USHORT BW40MAvailForA:1;	/* 0:enable, 1:disable */
-		USHORT BW40MAvailForG:1;	/* 0:enable, 1:disable */
-		USHORT EnableWPSPBC:1;	/* WPS PBC Control bit */
-		USHORT BW40MSidebandForA:1;
-		USHORT BW40MSidebandForG:1;
-		USHORT CardbusAcceleration:1;	/* !!! NOTE: 0 - enable, 1 - disable */
-		USHORT ExternalLNAForA:1;	/* external LNA enable for 5G */
-		USHORT ExternalLNAForG:1;	/* external LNA enable for 2.4G */
-		USHORT DynamicTxAgcControl:1;	/* */
-		USHORT HardwareRadioControl:1;	/* Whether RF is controlled by driver or HW. 1:enable hw control, 0:disable */
-	} field;
-	USHORT word;
-} EEPROM_NIC_CONFIG2_STRUC, *PEEPROM_NIC_CONFIG2_STRUC;
-#else
-typedef union _EEPROM_NIC_CINFIG2_STRUC {
-	struct {
-		USHORT HardwareRadioControl:1;	/* 1:enable, 0:disable */
-		USHORT DynamicTxAgcControl:1;	/* */
-		USHORT ExternalLNAForG:1;	/* */
-		USHORT ExternalLNAForA:1;	/* external LNA enable for 2.4G */
-		USHORT CardbusAcceleration:1;	/* !!! NOTE: 0 - enable, 1 - disable */
-		USHORT BW40MSidebandForG:1;
-		USHORT BW40MSidebandForA:1;
-		USHORT EnableWPSPBC:1;	/* WPS PBC Control bit */
-		USHORT BW40MAvailForG:1;	/* 0:enable, 1:disable */
-		USHORT BW40MAvailForA:1;	/* 0:enable, 1:disable */
-		USHORT Rsv1:1;	/* must be 0 */
-		USHORT AntDiversity:1;	/* Antenna diversity */
-		USHORT AntOpt:1;	/* Fix Antenna Option: 0:Main; 1: Aux */
-		USHORT bInternalTxALC:1;	/* Internal Tx ALC */
-		USHORT CoexBit:1;
-		USHORT DACTestBit:1;	/* control if driver should patch the DAC issue */
-	} field;
-	USHORT word;
-} EEPROM_NIC_CONFIG2_STRUC, *PEEPROM_NIC_CONFIG2_STRUC;
-#endif
-
-
-/* */
-/* TX_PWR Value valid range 0xFA(-6) ~ 0x24(36) */
-/* */
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_TX_PWR_STRUC {
-	struct {
-		signed char Byte1;	/* High Byte */
-		signed char Byte0;	/* Low Byte */
-	} field;
-	USHORT word;
-} EEPROM_TX_PWR_STRUC, *PEEPROM_TX_PWR_STRUC;
-#else
-typedef union _EEPROM_TX_PWR_STRUC {
-	struct {
-		signed char Byte0;	/* Low Byte */
-		signed char Byte1;	/* High Byte */
-	} field;
-	USHORT word;
-} EEPROM_TX_PWR_STRUC, *PEEPROM_TX_PWR_STRUC;
-#endif
-
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_VERSION_STRUC {
-	struct {
-		UCHAR Version;	/* High Byte */
-		UCHAR FaeReleaseNumber;	/* Low Byte */
-	} field;
-	USHORT word;
-} EEPROM_VERSION_STRUC, *PEEPROM_VERSION_STRUC;
-#else
-typedef union _EEPROM_VERSION_STRUC {
-	struct {
-		UCHAR FaeReleaseNumber;	/* Low Byte */
-		UCHAR Version;	/* High Byte */
-	} field;
-	USHORT word;
-} EEPROM_VERSION_STRUC, *PEEPROM_VERSION_STRUC;
-#endif
-
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_LED_STRUC {
-	struct {
-		USHORT Rsvd:3;	/* Reserved */
-		USHORT LedMode:5;	/* Led mode. */
-		USHORT PolarityGPIO_4:1;	/* Polarity GPIO#4 setting. */
-		USHORT PolarityGPIO_3:1;	/* Polarity GPIO#3 setting. */
-		USHORT PolarityGPIO_2:1;	/* Polarity GPIO#2 setting. */
-		USHORT PolarityGPIO_1:1;	/* Polarity GPIO#1 setting. */
-		USHORT PolarityGPIO_0:1;	/* Polarity GPIO#0 setting. */
-		USHORT PolarityACT:1;	/* Polarity ACT setting. */
-		USHORT PolarityRDY_A:1;	/* Polarity RDY_A setting. */
-		USHORT PolarityRDY_G:1;	/* Polarity RDY_G setting. */
-	} field;
-	USHORT word;
-} EEPROM_LED_STRUC, *PEEPROM_LED_STRUC;
-#else
-typedef union _EEPROM_LED_STRUC {
-	struct {
-		USHORT PolarityRDY_G:1;	/* Polarity RDY_G setting. */
-		USHORT PolarityRDY_A:1;	/* Polarity RDY_A setting. */
-		USHORT PolarityACT:1;	/* Polarity ACT setting. */
-		USHORT PolarityGPIO_0:1;	/* Polarity GPIO#0 setting. */
-		USHORT PolarityGPIO_1:1;	/* Polarity GPIO#1 setting. */
-		USHORT PolarityGPIO_2:1;	/* Polarity GPIO#2 setting. */
-		USHORT PolarityGPIO_3:1;	/* Polarity GPIO#3 setting. */
-		USHORT PolarityGPIO_4:1;	/* Polarity GPIO#4 setting. */
-		USHORT LedMode:5;	/* Led mode. */
-		USHORT Rsvd:3;	/* Reserved */
-	} field;
-	USHORT word;
-} EEPROM_LED_STRUC, *PEEPROM_LED_STRUC;
-#endif
-
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_TXPOWER_DELTA_STRUC {
-	struct {
-		UCHAR TxPowerEnable:1;	/* Enable */
-		UCHAR Type:1;	/* 1: plus the delta value, 0: minus the delta value */
-		UCHAR DeltaValue:6;	/* Tx Power dalta value (MAX=4) */
-	} field;
-	UCHAR value;
-} EEPROM_TXPOWER_DELTA_STRUC, *PEEPROM_TXPOWER_DELTA_STRUC;
-#else
-typedef union _EEPROM_TXPOWER_DELTA_STRUC {
-	struct {
-		UCHAR DeltaValue:6;	/* Tx Power dalta value (MAX=4) */
-		UCHAR Type:1;	/* 1: plus the delta value, 0: minus the delta value */
-		UCHAR TxPowerEnable:1;	/* Enable */
-	} field;
-	UCHAR value;
-} EEPROM_TXPOWER_DELTA_STRUC, *PEEPROM_TXPOWER_DELTA_STRUC;
-#endif
-
-
-#ifdef RT_BIG_ENDIAN
-typedef union _EEPROM_TX_PWR_OFFSET_STRUC
-{
-	struct
-	{
-		UCHAR	Byte1;	/* High Byte */
-		UCHAR	Byte0;	/* Low Byte */
-	} field;
-	
-	USHORT		word;
-} EEPROM_TX_PWR_OFFSET_STRUC, *PEEPROM_TX_PWR_OFFSET_STRUC;
-#else
-typedef union _EEPROM_TX_PWR_OFFSET_STRUC
-{
-	struct
-	{
-		UCHAR	Byte0;	/* Low Byte */
-		UCHAR	Byte1;	/* High Byte */
-	} field;
-
-	USHORT		word;
-} EEPROM_TX_PWR_OFFSET_STRUC, *PEEPROM_TX_PWR_OFFSET_STRUC;
-#endif // RT_BIG_ENDIAN //
 /*
 	2860: 28xx
 	2870: 28xx
@@ -607,6 +538,7 @@ typedef union _EEPROM_TX_PWR_OFFSET_STRUC
 */
 
 struct _RTMP_CHIP_CAP_ {
+	UINT32 ChipID;
 	/* register */
 	REG_PAIR *pRFRegTable;
 	REG_PAIR *pBBPRegTable;
@@ -626,34 +558,224 @@ struct _RTMP_CHIP_CAP_ {
 	UINT8 WcidHwRsvNum;	/* hardware available WCID number */
 	UINT16 BcnMaxHwSize;	/* hardware maximum beacon size */
 	UINT16 BcnBase[HW_BEACON_MAX_NUM];	/* hardware beacon base address */
-
+	
 	/* function */
 	/* use UINT8, not bit-or to speed up driver */
 	BOOLEAN FlgIsHwWapiSup;
 
-	/* signal */
+	/* VCO calibration mode */
+	UINT8	VcoPeriod; /* default 10s */
+#define VCO_CAL_DISABLE		0	/* not support */
+#define VCO_CAL_MODE_1		1	/* toggle RF7[0] */
+#define VCO_CAL_MODE_2		2	/* toggle RF3[7] */
+#define VCO_CAL_MODE_3		3	/* toggle RF4[7] */	
+	UINT8	FlgIsVcoReCalMode;
+
+	BOOLEAN FlgIsHwAntennaDiversitySup;
+#ifdef STREAM_MODE_SUPPORT
+	BOOLEAN FlgHwStreamMode;
+#endif /* STREAM_MODE_SUPPORT */
+#ifdef TXBF_SUPPORT
+	BOOLEAN FlgHwTxBfCap;
+#endif /* TXBF_SUPPORT */
+#ifdef FIFO_EXT_SUPPORT
+	BOOLEAN FlgHwFifoExtCap;
+#endif /* FIFO_EXT_SUPPORT */
+
+
+	enum ASIC_CAP asic_caps;
+	enum PHY_CAP phy_caps;
+	
+#ifdef TXRX_SW_ANTDIV_SUPPORT
+	BOOLEAN bTxRxSwAntDiv;
+#endif /* TXRX_SW_ANTDIV_SUPPORT */
+
+	/* ---------------------------- signal ---------------------------------- */
 #define SNR_FORMULA1		0	/* ((0xeb     - pAd->StaCfg.LastSNR0) * 3) / 16; */
 #define SNR_FORMULA2		1	/* (pAd->StaCfg.LastSNR0 * 3 + 8) >> 4; */
 #define SNR_FORMULA3		2	/* (pAd->StaCfg.LastSNR0) * 3) / 16; */
 	UINT8 SnrFormula;
 
-#ifdef RTMP_INTERNAL_TX_ALC
-	UINT8 TxAlcTxPowerUpperBound;
-	UINT8 TxAlcMaxMCS;
-#endif /* RTMP_INTERNAL_TX_ALC */
+	UINT8 MaxNss;			/* maximum Nss, 3 for 3883 or 3593 */
 
+	BOOLEAN bTempCompTxALC;
+	BOOLEAN rx_temp_comp;
+
+	BOOLEAN bLimitPowerRange; /* TSSI compensation range limit */
+
+#if defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION)
+	UINT8 TxAlcTxPowerUpperBound_2G;
+	const TX_POWER_TUNING_ENTRY_STRUCT *TxPowerTuningTable_2G;
+#ifdef A_BAND_SUPPORT
+	UINT8 TxAlcTxPowerUpperBound_5G;
+	const TX_POWER_TUNING_ENTRY_STRUCT *TxPowerTuningTable_5G;
+#endif /* A_BAND_SUPPORT */
+#endif /* defined(RTMP_INTERNAL_TX_ALC) || defined(RTMP_TEMPERATURE_COMPENSATION) */
+
+#ifdef SINGLE_SKU_V2
+	INT16	PAModeCCK[4];
+	INT16	PAModeOFDM[8];
+	INT16	PAModeHT[16];
+#ifdef DOT11_VHT_AC
+	INT16	PAModeVHT[10];
+#endif /* DOT11_VHT_AC */
+#endif /* SINGLE_SKU_V2 */
+
+	/* ---------------------------- packet ---------------------------------- */
+	UINT8 TXWISize;
+	UINT8 RXWISize;
+
+	/* ---------------------------- others ---------------------------------- */
 #ifdef RTMP_EFUSE_SUPPORT
 	UINT16 EFUSE_USAGE_MAP_START;
 	UINT16 EFUSE_USAGE_MAP_END;
 	UINT8 EFUSE_USAGE_MAP_SIZE;
-#endif				/* RTMP_EFUSE_SUPPORT */
+#endif /* RTMP_EFUSE_SUPPORT */
 
-	BOOLEAN	FlgIsVcoReCalSup;
-	BOOLEAN FlgIsHwAntennaDiversitySup;
-#ifdef TXRX_SW_ANTDIV_SUPPORT
-	BOOLEAN bTxRxSwAntDiv;
-#endif /* TXRX_SW_ANTDIV_SUPPORT */
+#ifdef RTMP_FLASH_SUPPORT
+	UCHAR *eebuf;
+#endif /* RTMP_FLASH_SUPPORT */
+#ifdef CARRIER_DETECTION_SUPPORT
+	UCHAR carrier_func;
+#endif /* CARRIER_DETECTION_SUPPORT */
+#ifdef DFS_SUPPORT
+	UINT8 DfsEngineNum;
+#endif /* DFS_SUPPORT */
+
+	/*
+		Define the burst size of WPDMA of PCI
+		0 : 4 DWORD (16bytes)
+		1 : 8 DWORD (32 bytes)
+		2 : 16 DWORD (64 bytes)
+		3 : 32 DWORD (128 bytes)
+	*/
+	UINT8 WPDMABurstSIZE;
+
+	/* 
+ 	 * 0: MBSSID_MODE0 
+ 	 * (The multiple MAC_ADDR/BSSID are distinguished by [bit2:bit0] of byte5) 
+ 	 * 1: MBSSID_MODE1
+ 	 * (The multiple MAC_ADDR/BSSID are distinguished by [bit4:bit2] of byte0) 
+ 	 */
+	UINT8 MBSSIDMode;
+
+	/* 2nd CCA Detection ++ */
+	BOOLEAN b2ndCCACheck;
+	UINT8 CCARatioA;
+	UINT8 CCARatioB;
+	UINT8 CCACheckPeriod; /* unit: second */
+	CHAR RssiThreshold;
+	CHAR RssiAvg;
+	UINT32 CCAThresholdA;
+	UINT32 CCAThresholdB;
+	ULONG CCARecordCnt; /* unit: second */
+	ULONG CCAAvg[CCA_AVG_MAX_COUNT];
+	UCHAR CCAAvgIdx;
+	VOID *pWeakestEntry;
+	/* 2nd CCA Detection -- */
+
+
+#ifdef CONFIG_STA_SUPPORT
+	UINT8 init_vga_gain_5G;
+	UINT8 init_vga_gain_2G;
+#endif /* CONFIG_STA_SUPPORT */
+
+#ifdef RT5592EP_SUPPORT
+	UINT32 Priv; /* Flag for RT5592 EP */
+#endif /* RT5592EP_SUPPORT */
+
+#ifdef RT65xx
+	UINT8 PAType; /* b'00: 2.4G+5G external PA, b'01: 5G external PA, b'10: 2.4G external PA, b'11: Internal PA */
+#endif /* RT65xx */
+
+#ifdef CONFIG_ANDES_SUPPORT
+	UINT32 WlanMemmapOffset;
+	UINT32 InbandPacketMaxLen; /* must be 48 multible */
+	UINT8 CmdRspRxRing;
+	BOOLEAN IsComboChip;
+	u8 load_iv;
+	u32 ilm_offset;
+	u32 dlm_offset;
+#endif
+
+	UINT8 cmd_header_len;
+	UINT8 cmd_padding_len;
+
+#ifdef RTMP_USB_SUPPORT
+	UINT8 DataBulkInAddr;
+	UINT8 CommandRspBulkInAddr;
+	UINT8 WMM0ACBulkOutAddr[4];
+	UINT8 WMM1ACBulkOutAddr;
+	UINT8 CommandBulkOutAddr;
+#endif
+	
+	enum MCU_TYPE MCUType;
+	UCHAR *FWImageName;
+	UCHAR *MACRegisterVer;
+	UCHAR *BBPRegisterVer;
+	UCHAR *RFRegisterVer;
+
+#ifdef MT76x0
+	BOOLEAN bDoTemperatureSensor;
+	SHORT TemperatureOffset;
+	SHORT LastTemperatureforVCO;
+	SHORT LastTemperatureforCal;
+	SHORT NowTemperature;
+	UCHAR a_band_mid_ch;
+	UCHAR a_band_high_ch;
+	UCHAR ext_pa_current_setting;
+	MT76x0_RATE_PWR_Table rate_pwr_table;
+	UCHAR delta_tw_pwr_bw40_5G;
+	UCHAR delta_tw_pwr_bw40_2G;
+	UCHAR delta_tw_pwr_bw80;
+#ifdef MT76x0_TSSI_CAL_COMPENSATION
+	BOOLEAN bInternalTxALC; /* Internal Tx ALC */
+	UCHAR tssi_info_1;
+	UCHAR tssi_info_2;
+	UCHAR tssi_info_3;
+	UCHAR tssi_2G_target_power;
+	UCHAR tssi_5G_target_power;
+	UCHAR efuse_2G_54M_tx_power;
+	UCHAR efuse_5G_54M_tx_power;
+	MT76x0_TSSI_Table tssi_table;
+	CHAR tssi_slope_2G;
+	CHAR tssi_offset_2G;
+	UCHAR tssi_slope_5G[8];
+	CHAR tssi_offset_5G[8];
+	UCHAR tssi_5G_channel_boundary[7];
+	CHAR tssi_current_DC;
+	INT tssi_pre_delta_pwr;
+#endif /* MT76x0_TSSI_CAL_COMPENSATION */
+#endif /* MT76x0 */
+
+#ifdef CONFIG_WIFI_TEST
+	UINT32 MemMapStart;
+	UINT32 MemMapEnd;
+	UINT32 BBPMemMapOffset;
+	UINT16 BBPStart;
+	UINT16 BBPEnd;
+	UINT16 RFStart;
+	UINT16 RFEnd;
+	UINT8 RFBankNum;
+	struct RF_BANK_OFFSET *RFBankOffset;
+	UINT32 MacMemMapOffset;
+	UINT32 MacStart;
+	UINT32 MacEnd;
+	UINT16 E2PStart;
+	UINT16 E2PEnd;
+#endif
 };
+
+typedef VOID (*CHIP_SPEC_FUNC)(VOID *pAd, VOID *pData, ULONG Data);
+
+/* The chip specific function ID */
+typedef enum _CHIP_SPEC_ID
+{
+	CHIP_SPEC_RESV_FUNC
+} CHIP_SPEC_ID;
+
+#define CHIP_SPEC_ID_NUM 	CHIP_SPEC_RESV_FUNC
+
 
 struct _RTMP_CHIP_OP_ {
 	/*  Calibration access related callback functions */
@@ -665,6 +787,9 @@ struct _RTMP_CHIP_OP_ {
 	int (*loadFirmware)(struct _RTMP_ADAPTER *pAd);
 	int (*eraseFirmware)(struct _RTMP_ADAPTER *pAd);
 	int (*sendCommandToMcu)(struct _RTMP_ADAPTER *pAd, UCHAR cmd, UCHAR token, UCHAR arg0, UCHAR arg1, BOOLEAN FlgIsNeedLocked);	/* int (*sendCommandToMcu)(RTMP_ADAPTER *pAd, UCHAR cmd, UCHAR token, UCHAR arg0, UCHAR arg1); */
+#ifdef CONFIG_ANDES_SUPPORT
+	int (*sendCommandToAndesMcu)(struct _RTMP_ADAPTER *pAd, UCHAR QueIdx, UCHAR cmd, UCHAR *pData, USHORT DataLen, BOOLEAN FlgIsNeedLocked);
+#endif
 
 	void (*AsicRfInit)(struct _RTMP_ADAPTER *pAd);
 	void (*AsicBbpInit)(struct _RTMP_ADAPTER *pAd);
@@ -674,237 +799,417 @@ struct _RTMP_CHIP_OP_ {
 	void (*AsicRfTurnOff)(struct _RTMP_ADAPTER *pAd);
 	void (*AsicReverseRfFromSleepMode)(struct _RTMP_ADAPTER *pAd, BOOLEAN FlgIsInitState);
 	void (*AsicHaltAction)(struct _RTMP_ADAPTER *pAd);
-	void (*AsicEeBufferInit)(struct _RTMP_ADAPTER *pAd);
 
 	/* Power save */
-	VOID (*EnableAPMIMOPS)(IN struct _RTMP_ADAPTER *pAd, IN BOOLEAN ReduceCorePower);
-	VOID (*DisableAPMIMOPS)(IN struct _RTMP_ADAPTER *pAd);
+	VOID (*EnableAPMIMOPS)(struct _RTMP_ADAPTER *pAd, IN BOOLEAN ReduceCorePower);
+	VOID (*DisableAPMIMOPS)(struct _RTMP_ADAPTER *pAd);
+	INT (*PwrSavingOP)(struct _RTMP_ADAPTER *pAd, UINT32 PwrOP, UINT32 PwrLevel, 
+							UINT32 ListenInterval, UINT32 PreTBTTLeadTime,
+							UINT8 TIMByteOffset, UINT8 TIMBytePattern);
 
 	/* Chip tuning */
 	VOID (*RxSensitivityTuning)(IN struct _RTMP_ADAPTER *pAd);
 
 	/* MAC */
-	VOID (*ChipResumeMsduTransmission)(IN struct _RTMP_ADAPTER *pAd);
+	VOID (*BeaconUpdate)(struct _RTMP_ADAPTER *pAd, USHORT Offset, UINT32 Value, UINT8 Unit);
 
 	/* BBP adjust */
 	VOID (*ChipBBPAdjust)(IN struct _RTMP_ADAPTER *pAd);
-	UCHAR (*ChipStaBBPAdjust)(
-				IN struct _RTMP_ADAPTER *pAd,
-				IN CHAR					Rssi,
-				IN UCHAR				R66);
 
+	/* AGC */
+	VOID (*ChipAGCInit)(struct _RTMP_ADAPTER *pAd, UCHAR bw);
+	UCHAR (*ChipAGCAdjust)(struct _RTMP_ADAPTER *pAd, CHAR Rssi, UCHAR OrigR66Value);
+	
 	/* Channel */
-	VOID (*RTMPSetAGCInitValue)(
-				IN struct _RTMP_ADAPTER *pAd,
-				IN UCHAR				BandWidth);
-	VOID (*ChipSwitchChannel)(
-				IN struct _RTMP_ADAPTER *pAd,
-				IN UCHAR				Channel,
-				IN BOOLEAN				bScan);
+	VOID (*ChipSwitchChannel)(struct _RTMP_ADAPTER *pAd, UCHAR ch, enum SWITCH_CHANNEL_STAGE Stage);
 
+	/* IQ Calibration */
+	VOID (*ChipIQCalibration)(struct _RTMP_ADAPTER *pAd, UCHAR Channel);
 
 	/* TX ALC */
+	UINT32 (*TSSIRatio)(INT32 delta_power);
 	VOID (*InitDesiredTSSITable)(IN struct _RTMP_ADAPTER *pAd);
-	int (*ATETssiCalibration)(
-				IN struct _RTMP_ADAPTER 	*pAd,
-				IN PSTRING				arg);
-	int (*ATETssiCalibrationExtend)(
-				IN struct _RTMP_ADAPTER 	*pAd,
-				IN PSTRING				arg);
+	int (*ATETssiCalibration)(struct _RTMP_ADAPTER *pAd, PSTRING arg);
+	int (*ATETssiCalibrationExtend)(struct _RTMP_ADAPTER *pAd, PSTRING arg);
+	int (*ATEReadExternalTSSI)(struct _RTMP_ADAPTER *pAd, PSTRING arg);
+
 	VOID (*AsicTxAlcGetAutoAgcOffset)(
 				IN struct _RTMP_ADAPTER	*pAd,
 				IN PCHAR				pDeltaPwr,
 				IN PCHAR				pTotalDeltaPwr,
 				IN PCHAR				pAgcCompensate,
-				IN PUCHAR				pBbpR49);
+				IN PCHAR 				pDeltaPowerByBbpR1);
 
-	int (*ATEReadExternalTSSI)(
-				IN struct _RTMP_ADAPTER 	*pAd,
-				IN PSTRING				arg);
 
+	
+	VOID (*AsicGetTxPowerOffset)(struct _RTMP_ADAPTER *pAd, ULONG *TxPwr);
+	VOID (*AsicExtraPowerOverMAC)(struct _RTMP_ADAPTER *pAd);
+	
 	/* Antenna */
-	VOID (*AsicAntennaDefaultReset)(
-				IN struct _RTMP_ADAPTER	*pAd,
-				IN EEPROM_ANTENNA_STRUC	*pAntenna);
-
-	VOID (*SetRxAnt)(
-				IN struct _RTMP_ADAPTER	*pAd,
-				IN UCHAR			Ant);
-
-	VOID (*HwAntEnable)(
-				IN struct _RTMP_ADAPTER *pAd);
+	VOID (*AsicAntennaDefaultReset)(struct _RTMP_ADAPTER *pAd, union _EEPROM_ANTENNA_STRUC *pAntenna);
+	VOID (*SetRxAnt)(struct _RTMP_ADAPTER *pAd, UCHAR Ant);
 
 	/* EEPROM */
 	VOID (*NICInitAsicFromEEPROM)(IN struct _RTMP_ADAPTER *pAd);
 
-	/* Vendor Specific */
-	VOID (*VdrTuning1)(IN struct _RTMP_ADAPTER *pAd);
-
-	/* Frequence Calibration */
-	VOID (*AsicFreqCalInit)(IN struct _RTMP_ADAPTER *pAd);
-	VOID (*AsicFreqCalStop)(IN struct _RTMP_ADAPTER *pAd);
-	VOID (*AsicFreqCal)(IN struct _RTMP_ADAPTER *pAd);
-	CHAR (*AsicFreqOffsetGet)(
-				IN struct _RTMP_ADAPTER	*pAd,
-				IN struct _RXWI_STRUC	*pRxWI);
-
-	VOID (*AsicVCOCalibration)(IN struct _RTMP_ADAPTER *pAd);
-
+	/* high power tuning */
+	VOID (*HighPowerTuning)(struct _RTMP_ADAPTER *pAd, struct _RSSI_SAMPLE *pRssi);
+	
 	/* Others */
 	VOID (*NetDevNickNameInit)(IN struct _RTMP_ADAPTER *pAd);
 
-	/* Others */
-	VOID (*ChipSpecific)(
-				IN struct _RTMP_ADAPTER	*pAd,
-				IN UINT32				StateId,
-				IN UINT32				FuncId,
-				IN VOID					*pData,
-				IN ULONG				Data);
+	/* The chip specific function list */
+	CHIP_SPEC_FUNC ChipSpecFunc[CHIP_SPEC_ID_NUM];
+	
 	VOID (*AsicResetBbpAgent)(IN struct _RTMP_ADAPTER *pAd);
+
+#ifdef CARRIER_DETECTION_SUPPORT
+	VOID (*ToneRadarProgram)(struct _RTMP_ADAPTER *pAd, ULONG  threshold);
+#endif /* CARRIER_DETECTION_SUPPORT */
+	VOID (*CckMrcStatusCtrl)(struct _RTMP_ADAPTER *pAd);
+	VOID (*RadarGLRTCompensate)(struct _RTMP_ADAPTER *pAd);
+	
+	VOID (*Calibration)(struct _RTMP_ADAPTER *pAd, UINT32 CalibrationID, UINT32 Parameter);
+	VOID (*SecondCCADetection)(struct _RTMP_ADAPTER *pAd);
+
+	int (*BurstWrite)(struct _RTMP_ADAPTER *ad, UINT32 Offset, UINT32 *Data, UINT32 Cnt);
+
+	int (*BurstRead)(struct _RTMP_ADAPTER *ad, UINT32 Offset, UINT32 Cnt, UINT32 *Data);
+
+	int (*RandomRead)(struct _RTMP_ADAPTER *ad, RTMP_REG_PAIR *RegPair, UINT32 Num);
+
+	int (*RFRandomRead)(struct _RTMP_ADAPTER *ad, BANK_RF_REG_PAIR *RegPair, UINT32 Num);
+
+	int (*ReadModifyWrite)(struct _RTMP_ADAPTER *ad, R_M_W_REG *RegPair, UINT32 Num);
+
+	int (*RFReadModifyWrite)(struct _RTMP_ADAPTER *ad, RF_R_M_W_REG *RegPair, UINT32 Num);
+
+	int (*RandomWrite)(struct _RTMP_ADAPTER *ad, RTMP_REG_PAIR *RegPair, UINT32 Num);
+
+	int (*RFRandomWrite)(struct _RTMP_ADAPTER *ad, BANK_RF_REG_PAIR *RegPair, UINT32 Num);
+
+	void (*DisableTxRx)(struct _RTMP_ADAPTER *ad, UCHAR Level);
+
+	void (*AsicRadioOn)(struct _RTMP_ADAPTER *ad, UCHAR Stage);
+
+	void (*AsicRadioOff)(struct _RTMP_ADAPTER *ad, u8 Stage);
+
+	void (*MCUCtrlInit)(struct _RTMP_ADAPTER *ad);
+	
+	void (*MCUCtrlExit)(struct _RTMP_ADAPTER *ad);
+
+	void (*usb_cfg_read)(struct _RTMP_ADAPTER *ad, u32 *value);
+
+	void (*usb_cfg_write)(struct _RTMP_ADAPTER *ad, u32 value);
 };
 
-#define RTMP_CHIP_ENABLE_AP_MIMOPS(__pAd, __ReduceCorePower)				\
-		if (__pAd->chipOps.EnableAPMIMOPS != NULL)							\
-			__pAd->chipOps.EnableAPMIMOPS(__pAd, __ReduceCorePower)
+#define RTMP_CHIP_ENABLE_AP_MIMOPS(__pAd, __ReduceCorePower)	\
+do {	\
+		if (__pAd->chipOps.EnableAPMIMOPS != NULL)	\
+			__pAd->chipOps.EnableAPMIMOPS(__pAd, __ReduceCorePower);	\
+} while (0)
 
-#define RTMP_CHIP_DISABLE_AP_MIMOPS(__pAd)									\
-		if (__pAd->chipOps.DisableAPMIMOPS != NULL)							\
-			__pAd->chipOps.DisableAPMIMOPS(__pAd)
+#define RTMP_CHIP_DISABLE_AP_MIMOPS(__pAd)	\
+do {	\
+		if (__pAd->chipOps.DisableAPMIMOPS != NULL)	\
+			__pAd->chipOps.DisableAPMIMOPS(__pAd);	\
+} while (0)
+	
+#define PWR_SAVING_OP(__pAd, __PwrOP, __PwrLevel, __ListenInterval, \
+						__PreTBTTLeadTime, __TIMByteOffset, __TIMBytePattern)	\
+do {	\
+		if (__pAd->chipOps.PwrSavingOP != NULL)	\
+			__pAd->chipOps.PwrSavingOP(__pAd, __PwrOP, __PwrLevel,	\
+										__ListenInterval,__PreTBTTLeadTime, \
+										__TIMByteOffset, __TIMBytePattern);	\
+} while (0)
 
-#define RTMP_CHIP_RX_SENSITIVITY_TUNING(__pAd)								\
-		if (__pAd->chipOps.RxSensitivityTuning != NULL)						\
-			__pAd->chipOps.RxSensitivityTuning(__pAd)
+#define RTMP_CHIP_RX_SENSITIVITY_TUNING(__pAd)	\
+do {	\
+		if (__pAd->chipOps.RxSensitivityTuning != NULL)	\
+			__pAd->chipOps.RxSensitivityTuning(__pAd);	\
+} while (0)
 
-#define RTMP_VDR_TUNING1(__pAd)												\
-		if (__pAd->chipOps.VdrTuning1 != NULL)								\
-			__pAd->chipOps.VdrTuning1(__pAd)
+#define RTMP_CHIP_ASIC_AGC_ADJUST(__pAd, __Rssi, __R66)	\
+do {	\
+		if (__pAd->chipOps.ChipAGCAdjust != NULL)	\
+			__R66 = __pAd->chipOps.ChipAGCAdjust(__pAd, __Rssi, __R66);	\
+} while (0)
 
-#define RTMP_CHIP_MSDU_TRANSMISSION_RESUME(__pAd)							\
-		if (__pAd->chipOps.ChipResumeMsduTransmission != NULL)				\
-			__pAd->chipOps.ChipResumeMsduTransmission(__pAd)
+#define RTMP_CHIP_ASIC_TSSI_TABLE_INIT(__pAd)	\
+do {	\
+		if (__pAd->chipOps.InitDesiredTSSITable != NULL)	\
+			__pAd->chipOps.InitDesiredTSSITable(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_BBP_ADJUST(__pAd)									\
-		if (__pAd->chipOps.ChipBBPAdjust != NULL)							\
-			__pAd->chipOps.ChipBBPAdjust(__pAd)
+#define RTMP_CHIP_ATE_TSSI_CALIBRATION(__pAd, __pData)	\
+do {	\
+		if (__pAd->chipOps.ATETssiCalibration != NULL)	\
+			__pAd->chipOps.ATETssiCalibration(__pAd, __pData);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_STA_BBP_ADJUST(__pAd, __Rssi, __R66)					\
-		if (__pAd->chipOps.ChipStaBBPAdjust != NULL)						\
-			__R66 = __pAd->chipOps.ChipStaBBPAdjust(__pAd, __Rssi, __R66)
+#define RTMP_CHIP_ATE_TSSI_CALIBRATION_EXTEND(__pAd, __pData)	\
+do {	\
+		if (__pAd->chipOps.ATETssiCalibrationExtend != NULL)	\
+			__pAd->chipOps.ATETssiCalibrationExtend(__pAd, __pData);	\
+} while (0)	
 
-#define RTMP_CHIP_ASIC_SWITCH_CHANNEL(__pAd, __Channel, __bScan)			\
-		if (__pAd->chipOps.ChipSwitchChannel != NULL)						\
-			__pAd->chipOps.ChipSwitchChannel(__pAd, __Channel, __bScan);	\
-		else																\
-			DBGPRINT(RT_DEBUG_ERROR, ("No switch channel function!!!\n"))
+#define RTMP_CHIP_ATE_READ_EXTERNAL_TSSI(__pAd, __pData)	\
+do {	\
+		if (__pAd->chipOps.ATEReadExternalTSSI != NULL)	\
+			__pAd->chipOps.ATEReadExternalTSSI(__pAd, __pData);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_TSSI_TABLE_INIT(__pAd)								\
-		if (__pAd->chipOps.InitDesiredTSSITable != NULL)					\
-			__pAd->chipOps.InitDesiredTSSITable(__pAd)
+#define RTMP_CHIP_ASIC_TX_POWER_OFFSET_GET(__pAd, __pCfgOfTxPwrCtrlOverMAC)	\
+do {	\
+		if (__pAd->chipOps.AsicGetTxPowerOffset != NULL)	\
+			__pAd->chipOps.AsicGetTxPowerOffset(__pAd, __pCfgOfTxPwrCtrlOverMAC);	\
+} while (0)
+		
+#define RTMP_CHIP_ASIC_AUTO_AGC_OFFSET_GET(	\
+		__pAd, __pDeltaPwr, __pTotalDeltaPwr, __pAgcCompensate, __pDeltaPowerByBbpR1)	\
+do {	\
+		if (__pAd->chipOps.AsicTxAlcGetAutoAgcOffset != NULL)	\
+			__pAd->chipOps.AsicTxAlcGetAutoAgcOffset(	\
+		__pAd, __pDeltaPwr, __pTotalDeltaPwr, __pAgcCompensate, __pDeltaPowerByBbpR1);	\
+} while (0)
 
-#define RTMP_CHIP_ATE_TSSI_CALIBRATION(__pAd, __pData)					\
-		if (__pAd->chipOps.ATETssiCalibration != NULL)					\
-			__pAd->chipOps.ATETssiCalibration(__pAd, __pData)
+#define RTMP_CHIP_ASIC_EXTRA_POWER_OVER_MAC(__pAd)	\
+do {	\
+		if (__pAd->chipOps.AsicExtraPowerOverMAC != NULL)	\
+			__pAd->chipOps.AsicExtraPowerOverMAC(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_ATE_TSSI_CALIBRATION_EXTEND(__pAd, __pData)			\
-		if (__pAd->chipOps.ATETssiCalibrationExtend != NULL)				\
-			__pAd->chipOps.ATETssiCalibrationExtend(__pAd, __pData)	
+#define RTMP_CHIP_ASIC_GET_TSSI_RATIO(__pAd, __DeltaPwr)	\
+do {	\
+		if (__pAd->chipOps.AsicFreqCalStop != NULL)	\
+			__pAd->chipOps.TSSIRatio(__DeltaPwr);	\
+} while (0)
 
-#define RTMP_CHIP_ATE_READ_EXTERNAL_TSSI(__pAd, __pData)					\
-		if (__pAd->chipOps.ATEReadExternalTSSI != NULL)					\
-			__pAd->chipOps.ATEReadExternalTSSI(__pAd, __pData)	
+#define RTMP_CHIP_ASIC_FREQ_CAL_STOP(__pAd)	\
+do {	\
+		if (__pAd->chipOps.AsicFreqCalStop != NULL)	\
+			__pAd->chipOps.AsicFreqCalStop(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_AUTO_AGC_OFFSET_GET(									\
-		__pAd, __pDeltaPwr, __pTotalDeltaPwr, __pAgcCompensate, __pBbpR49)	\
-		if (__pAd->chipOps.AsicTxAlcGetAutoAgcOffset != NULL)				\
-			__pAd->chipOps.AsicTxAlcGetAutoAgcOffset(						\
-		__pAd, __pDeltaPwr, __pTotalDeltaPwr, __pAgcCompensate, __pBbpR49)
+#define RTMP_CHIP_IQ_CAL(__pAd, __pChannel)	\
+do {	\
+		if (__pAd->chipOps.ChipIQCalibration != NULL)	\
+			 __pAd->chipOps.ChipIQCalibration(__pAd, __pChannel);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_AGC_INIT_VALUE_SET(__pAd, __Bandwidth)				\
-		if (__pAd->chipOps.RTMPSetAGCInitValue != NULL)						\
-			__pAd->chipOps.RTMPSetAGCInitValue(__pAd, __Bandwidth)
+#define RTMP_CHIP_HIGH_POWER_TUNING(__pAd, __pRssi)	\
+do {	\
+		if (__pAd->chipOps.HighPowerTuning != NULL)	\
+			__pAd->chipOps.HighPowerTuning(__pAd, __pRssi);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_FREQ_CAL_INIT(__pAd)									\
-		if (__pAd->chipOps.AsicFreqCalInit != NULL)							\
-			__pAd->chipOps.AsicFreqCalInit(__pAd)
+#define RTMP_CHIP_ANTENNA_INFO_DEFAULT_RESET(__pAd, __pAntenna)	\
+do {	\
+		if (__pAd->chipOps.AsicAntennaDefaultReset != NULL)	\
+			__pAd->chipOps.AsicAntennaDefaultReset(__pAd, __pAntenna);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_FREQ_CAL_STOP(__pAd)									\
-		if (__pAd->chipOps.AsicFreqCalStop != NULL)							\
-			__pAd->chipOps.AsicFreqCalStop(__pAd)
+#define RTMP_NET_DEV_NICKNAME_INIT(__pAd)	\
+do {	\
+		if (__pAd->chipOps.NetDevNickNameInit != NULL)	\
+			__pAd->chipOps.NetDevNickNameInit(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_FREQ_CAL(__pAd)										\
-		if (__pAd->chipOps.AsicFreqCal != NULL)								\
-			 __pAd->chipOps.AsicFreqCal(__pAd)
+#define RTMP_EEPROM_ASIC_INIT(__pAd)	\
+do {	\
+		if (__pAd->chipOps.NICInitAsicFromEEPROM != NULL)	\
+			__pAd->chipOps.NICInitAsicFromEEPROM(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_FREQ_OFFSET_GET(__pAd, __pRxWI, __Offset)			\
-		if (__pAd->chipOps.AsicFreqOffsetGet != NULL)						\
-			__Offset = __pAd->chipOps.AsicFreqOffsetGet(__pAd, __pRxWI)
+#define RTMP_CHIP_SPECIFIC(__pAd, __FuncId, __pData, __Data)	\
+do {	\
+		if ((__FuncId >= 0) && (__FuncId < CHIP_SPEC_RESV_FUNC))	\
+		{	\
+			if (__pAd->chipOps.ChipSpecFunc[__FuncId] != NULL)	\
+				__pAd->chipOps.ChipSpecFunc[__FuncId](__pAd, __pData, __Data);	\
+		}	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_VCO_CAL(__pAd)										\
-		if (__pAd->chipOps.AsicVCOCalibration != NULL)						\
-			__pAd->chipOps.AsicVCOCalibration(__pAd)
+#define RTMP_CHIP_ASIC_RESET_BBP_AGENT(__pAd)	\
+do {	\
+		if (__pAd->chipOps.AsicResetBbpAgent != NULL)	\
+			__pAd->chipOps.AsicResetBbpAgent(__pAd);	\
+		else	\
+		{	\
+			BBP_CSR_CFG_STRUC	BbpCsr;	\
+			DBGPRINT(RT_DEBUG_INFO, ("Reset BBP Agent busy bit.!! \n"));	\
+			RTMP_IO_READ32(__pAd, H2M_BBP_AGENT, &BbpCsr.word);	\
+			BbpCsr.field.Busy = 0;	\
+			RTMP_IO_WRITE32(__pAd, H2M_BBP_AGENT, BbpCsr.word);	\
+		}	\
+} while (0)
 
-#define RTMP_CHIP_ANTENNA_INFO_DEFAULT_RESET(__pAd, __pAntenna)				\
-		if (__pAd->chipOps.AsicAntennaDefaultReset != NULL)					\
-			__pAd->chipOps.AsicAntennaDefaultReset(__pAd, __pAntenna)
+#define RTMP_CHIP_UPDATE_BEACON(__pAd, Offset, Value, Unit)	\
+do {	\
+		if (__pAd->chipOps.BeaconUpdate != NULL)	\
+			__pAd->chipOps.BeaconUpdate(__pAd, Offset, Value, Unit);	\
+} while (0)
 
-#define RTMP_NET_DEV_NICKNAME_INIT(__pAd)									\
-		if (__pAd->chipOps.NetDevNickNameInit != NULL)						\
-			__pAd->chipOps.NetDevNickNameInit(__pAd)
+#ifdef CARRIER_DETECTION_SUPPORT
+#define	RTMP_CHIP_CARRIER_PROGRAM(__pAd, threshold)	\
+do {	\
+		if(__pAd->chipOps.ToneRadarProgram != NULL)	\
+			__pAd->chipOps.ToneRadarProgram(__pAd, threshold);	\
+} while (0)
+#endif /* CARRIER_DETECTION_SUPPORT */
 
-#define RTMP_EEPROM_ASIC_INIT(__pAd)										\
-		if (__pAd->chipOps.NICInitAsicFromEEPROM != NULL)					\
-			__pAd->chipOps.NICInitAsicFromEEPROM(__pAd)
+#define RTMP_CHIP_CCK_MRC_STATUS_CTRL(__pAd)	\
+do {	\
+		if(__pAd->chipOps.CckMrcStatusCtrl != NULL)	\
+			__pAd->chipOps.CckMrcStatusCtrl(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_SPECIFIC(__pAd, __StateId, __FuncId, __pData, __Data)		\
-		if (__pAd->chipOps.ChipSpecific != NULL)							\
-			__pAd->chipOps.ChipSpecific(__pAd, __StateId, __FuncId, __pData, __Data)
+#define RTMP_CHIP_RADAR_GLRT_COMPENSATE(__pAd) \
+do {	\
+		if(__pAd->chipOps.RadarGLRTCompensate != NULL)	\
+			__pAd->chipOps.RadarGLRTCompensate(__pAd);	\
+} while (0)
 
-#define RTMP_CHIP_ASIC_RESET_BBP_AGENT(									\
-		__pAd)	\
-		if (__pAd->chipOps.AsicResetBbpAgent != NULL)				\
-			__pAd->chipOps.AsicResetBbpAgent(						\
-		__pAd)
 
-/*
-	Used in RTMP_CHIP_SPECIFIC(), FuncId
+#define CHIP_CALIBRATION(__pAd, __CalibrationID, __parameter) \
+do {	\
+	if(__pAd->chipOps.Calibration != NULL) \
+		__pAd->chipOps.Calibration(__pAd, __CalibrationID, __parameter); \
+} while (0)
 
-	Note: These definitions only can be used "once".
+#define RTMP_CHIP_CALIBRATION(__pAd, __CalibrationID, __parameter) \
+do {	\
+	if(__pAd->chipOps.Calibration != NULL) \
+		__pAd->chipOps.Calibration(__pAd, __CalibrationID, __parameter); \
+} while (0)
 
-	EX: You can not use RTMP_CHIP_SPEC_WLAN_MODE_CHANGE in a() and b().
-	If you want to use RTMP_CHIP_SPEC_WLAN_MODE_CHANGE in b(), you need to
-	create another function name. Or for chip1, RTMP_CHIP_SPEC_WLAN_MODE_CHANGE
-	can be used in a() and b() but for chip2, RTMP_CHIP_SPEC_WLAN_MODE_CHANGE
-	can only be used in a(). It will be confused for different chips.
-*/
-/* RT305x */
-#define RTMP_CHIP_SPEC_STATE_WMODE_CMD							0x00000001
-#define RTMP_CHIP_SPEC_WLAN_MODE_CHANGE							0x00000001
+#define BURST_WRITE(_pAd, _Offset, _pData, _Cnt)	\
+do {												\
+		if (_pAd->chipOps.BurstWrite != NULL)		\
+			_pAd->chipOps.BurstWrite(_pAd, _Offset, _pData, _Cnt);\
+} while (0)
 
-#define RTMP_CHIP_SPEC_STATE_INIT								0x00000002
-#define RTMP_CHIP_SPEC_INITIALIZATION							0x00000001
+#define BURST_READ(_pAd, _Offset, _Cnt, _pData)	\
+do {											\
+		if (_pAd->chipOps.BurstRead != NULL)	\
+			_pAd->chipOps.BurstRead(_pAd, _Offset, _Cnt, _pData);	\
+} while (0)
 
-#define RTMP_CHIP_SEPC_STATE_HT_SET								0x00000003
-#define RTMP_CHIP_SPEC_HT_MODE_CHANGE							0x00000001
+#define RANDOM_READ(_pAd, _RegPair, _Num)	\
+do {										\
+		if (_pAd->chipOps.RandomRead != NULL)	\
+			_pAd->chipOps.RandomRead(_pAd, _RegPair, _Num);	\
+} while (0)
 
-#define RTMP_CHIP_SPEC_STATE_AP_PERIODIC						0x00000004
-#define RTMP_CHIP_SPEC_HIGH_POWER_PATCH_AP						0x00000001
+#define RF_RANDOM_READ(_pAd, _RegPair, _Num)	\
+do {											\
+		if (_pAd->chipOps.RFRandomRead != NULL)	\
+			_pAd->chipOps.RFRandomRead(_pAd, _RegPair, _Num); \
+} while (0)
 
-#define RTMP_CHIP_SPEC_STATE_STA_PERIODIC						0x00000005
-#define RTMP_CHIP_SPEC_HIGH_POWER_PATCH_STA						0x00000001
+#define READ_MODIFY_WRITE(_pAd, _RegPair, _Num)	\
+do {	\
+		if (_pAd->chipOps.ReadModifyWrite != NULL)	\
+			_pAd->chipOps.ReadModifyWrite(_pAd, _RegPair, _Num);	\
+} while (0)
 
-/* function prototype */
-VOID RtmpChipOpsHook(
-	IN VOID *pCB);
+#define RF_READ_MODIFY_WRITE(_pAd, _RegPair, _Num)	\
+do {	\
+		if (_pAd->chipOps.RFReadModifyWrite != NULL)	\
+			_pAd->chipOps.RFReadModifyWrite(_pAd, _RegPair, _Num);	\
+} while (0)
 
-VOID RtmpChipBcnSpecInit(
-	IN struct _RTMP_ADAPTER *pAd);
+#define RANDOM_WRITE(_pAd, _RegPair, _Num)	\
+do {	\
+		if (_pAd->chipOps.RandomWrite != NULL)	\
+			_pAd->chipOps.RandomWrite(_pAd, _RegPair, _Num);	\
+} while (0)
 
-VOID AsicGetTxPowerOffset(
-	IN struct _RTMP_ADAPTER		*pAd,
-	IN PULONG					TxPwr);
+#define RF_RANDOM_WRITE(_pAd, _RegPair, _Num)	\
+do {	\
+		if (_pAd->chipOps.RFRandomWrite != NULL)	\
+			_pAd->chipOps.RFRandomWrite(_pAd, _RegPair, _Num);	\
+} while (0)
 
-VOID HWAntennaDiversityEnable(
-	IN struct _RTMP_ADAPTER     *pAd);
+#define RTMP_SECOND_CCA_DETECTION(__pAd)	\
+do {	\
+	if (__pAd->chipOps.SecondCCADetection != NULL)	\
+	{	\
+		__pAd->chipOps.SecondCCADetection(__pAd);	\
+	}	\
+} while (0)
+
+#define DISABLE_TX_RX(_pAd, _Level)	\
+do {	\
+	if (_pAd->chipOps.DisableTxRx != NULL)	\
+		_pAd->chipOps.DisableTxRx(_pAd, _Level);	\
+} while (0)
+
+#define ASIC_RADIO_ON(_pAd, _Stage)	\
+do {	\
+	if (_pAd->chipOps.AsicRadioOn != NULL)	\
+		_pAd->chipOps.AsicRadioOn(_pAd, _Stage);	\
+} while (0)
+
+#define ASIC_RADIO_OFF(_pAd, _Stage)	\
+do {	\
+	if (_pAd->chipOps.AsicRadioOff != NULL)	\
+		_pAd->chipOps.AsicRadioOff(_pAd, _Stage);	\
+} while (0)
+
+#define MCU_CTRL_INIT(_pAd)	\
+do {	\
+	if (_pAd->chipOps.MCUCtrlInit != NULL)	\
+		_pAd->chipOps.MCUCtrlInit(_pAd);	\
+} while (0)
+
+#define MCU_CTRL_EXIT(_pAd)	\
+do {	\
+	if (_pAd->chipOps.MCUCtrlExit != NULL)	\
+		_pAd->chipOps.MCUCtrlExit(_pAd);	\
+} while (0)
+
+#define USB_CFG_READ(_ad, _pvalue)	\
+do {	\
+	if (_ad->chipOps.usb_cfg_read != NULL)	\
+		_ad->chipOps.usb_cfg_read(_ad, _pvalue);	\
+} while (0)
+
+#define USB_CFG_WRITE(_ad, _value)	\
+do {	\
+	if (_ad->chipOps.usb_cfg_write != NULL)	\
+		_ad->chipOps.usb_cfg_write(_ad, _value);	\
+} while (0)
+		
+int RtmpChipOpsHook(VOID *pCB);
+VOID RtmpChipBcnInit(struct _RTMP_ADAPTER *pAd);
+VOID RtmpChipBcnSpecInit(struct _RTMP_ADAPTER *pAd);
+#ifdef RLT_MAC
+VOID rlt_bcn_buf_init(struct _RTMP_ADAPTER *pAd);
+#endif /* RLT_MAC */
+
+VOID RtmpChipWriteHighMemory(
+	IN	struct _RTMP_ADAPTER *pAd,
+	IN	USHORT			Offset,
+	IN	UINT32			Value,
+	IN	UINT8			Unit);
+
+VOID RtmpChipWriteMemory(
+	IN	struct _RTMP_ADAPTER *pAd,
+	IN	USHORT			Offset,
+	IN	UINT32			Value,
+	IN	UINT8			Unit);
+
+VOID RTMPReadChannelPwr(struct _RTMP_ADAPTER *pAd);
+VOID RTMPReadTxPwrPerRate(struct _RTMP_ADAPTER *pAd);
+
+
+VOID NetDevNickNameInit(IN struct _RTMP_ADAPTER *pAd);
+
+
+
+
 
 /* global variable */
 extern FREQUENCY_ITEM RtmpFreqItems3020[];
@@ -913,5 +1218,12 @@ extern UCHAR NUM_OF_3020_CHNL;
 extern FREQUENCY_ITEM *FreqItems3020;
 extern RTMP_RF_REGS RF2850RegTable[];
 extern UCHAR NUM_OF_2850_CHNL;
+
+BOOLEAN AsicWaitPDMAIdle(struct _RTMP_ADAPTER *pAd, INT round, INT wait_us);
+INT AsicSetPreTbttInt(struct _RTMP_ADAPTER *pAd, BOOLEAN enable);
+INT AsicReadAggCnt(struct _RTMP_ADAPTER *pAd, ULONG *aggCnt, int cnt_len);
+
+VOID StopDmaTx(struct _RTMP_ADAPTER *pAd, UCHAR Level);
+VOID StopDmaRx(struct _RTMP_ADAPTER *pAd, UCHAR Level);
 
 #endif /* __RTMP_CHIP_H__ */

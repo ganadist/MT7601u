@@ -31,8 +31,7 @@
 
 #ifdef CONFIG_STA_SUPPORT
 #ifdef PROFILE_STORE
-NDIS_STATUS WriteDatThread(
-	IN  RTMP_ADAPTER *pAd);
+NDIS_STATUS WriteDatThread(RTMP_ADAPTER *pAd);
 #endif /* PROFILE_STORE */
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -44,10 +43,10 @@ RTMP_PCI_CONFIG RtmpPciConfig, *pRtmpPciConfig = &RtmpPciConfig;
 RTMP_USB_CONFIG RtmpUsbConfig, *pRtmpUsbConfig = &RtmpUsbConfig;
 
 VOID RtmpDrvOpsInit(
-	OUT		VOID				*pDrvOpsOrg,
-	INOUT	VOID				*pDrvNetOpsOrg,
-	IN		RTMP_PCI_CONFIG		*pPciConfig,
-	IN		RTMP_USB_CONFIG		*pUsbConfig)
+	OUT VOID *pDrvOpsOrg,
+	INOUT VOID *pDrvNetOpsOrg,
+	IN RTMP_PCI_CONFIG *pPciConfig,
+	IN RTMP_USB_CONFIG *pUsbConfig)
 {
 	RTMP_DRV_ABL_OPS *pDrvOps = (RTMP_DRV_ABL_OPS *)pDrvOpsOrg;
 #ifdef RTMP_USB_SUPPORT
@@ -73,17 +72,22 @@ VOID RtmpDrvOpsInit(
 #ifdef MBSS_SUPPORT
 	pDrvOps->MBSS_PacketSend = MBSS_PacketSend;
 #endif /* MBSS_SUPPORT */
+#ifdef WDS_SUPPORT
+	pDrvOps->WDS_PacketSend = WDS_PacketSend;
+#endif /* WDS_SUPPORT */
 #ifdef APCLI_SUPPORT
 	pDrvOps->APC_PacketSend = APC_PacketSend;
 #endif /* APCLI_SUPPORT */
 
 	pDrvOps->RTMP_COM_IoctlHandle = RTMP_COM_IoctlHandle;
+
+
 #ifdef CONFIG_STA_SUPPORT
 	pDrvOps->RTMP_STA_IoctlHandle = RTMP_STA_IoctlHandle;
-#endif /* CONFIG_STA_SUPPORT */
+	pDrvOps->RTMPDrvSTAOpen = RTMPDrvSTAOpen;
+	pDrvOps->RTMPDrvSTAClose = RTMPDrvSTAClose;
+#endif
 
-	pDrvOps->RTMPDrvOpen = RTMPDrvOpen;
-	pDrvOps->RTMPDrvClose = RTMPDrvClose;
 	pDrvOps->RTMPInfClose = RTMPInfClose;
 	pDrvOps->rt28xx_init = rt28xx_init;
 
@@ -96,6 +100,7 @@ VOID RtmpDrvOpsInit(
 /*	pRtmpDrvNetOps->RtmpDrvUsbBulkOutRTSFrameComplete = RTUSBBulkOutRTSFrameComplete;*/
 	pRtmpDrvNetOps->RtmpDrvUsbBulkOutPsPollComplete = RTUSBBulkOutPsPollComplete;
 	pRtmpDrvNetOps->RtmpDrvUsbBulkRxComplete = RTUSBBulkRxComplete;
+	//pRtmpDrvNetOps->RtmpDrvUsbBulkCmdRspEventComplete =RTUSBBulkCmdRspEventComplete;
 	*pDrvNetOps = *pRtmpDrvNetOps;
 #endif /* RTMP_USB_SUPPORT */
 }
@@ -106,35 +111,82 @@ RTMP_BUILD_DRV_OPS_FUNCTION_BODY
 #endif /* LINUX */
 
 
-int rt28xx_init(
-	IN VOID		*pAdSrc,
-	IN PSTRING	pDefaultMac, 
-	IN PSTRING	pHostName)
+int rt28xx_init(VOID *pAdSrc, PSTRING pDefaultMac, PSTRING pHostName)
 {
-	PRTMP_ADAPTER	pAd = (PRTMP_ADAPTER)pAdSrc;
-	UINT					index;
-	UCHAR					TmpPhy;
-	NDIS_STATUS				Status;
-	UINT32 					MacCsr0 = 0;
-
+	RTMP_ADAPTER *pAd = (RTMP_ADAPTER *)pAdSrc;
+	UINT index;
+	NDIS_STATUS Status;
+	
 	if (pAd == NULL)
 		return FALSE;
+
+#ifdef RT65xx
+	if (pAd->WlanFunCtrl.field.WLAN_EN == 0)
+		RT65xx_WLAN_ChipOnOff(pAd, TRUE, FALSE);
+#endif /* RT65xx */
+
+#ifdef RT3290
+	DBGPRINT(RT_DEBUG_OFF, ("MACVersion=0x%x\n", pAd->MACVersion));
+	if (IS_RT3290(pAd))
+	{
+		UINT32 MacRegValue;
+		OSCCTL_STRUC osCtrl = {.word = 0};
+		CMB_CTRL_STRUC cmbCtrl = {.word = 0};
+		WLAN_FUN_CTRL_STRUC WlanFunCtrl = {.word = 0};
+			
+		RTMPEnableWlan(pAd, TRUE, TRUE);
+
+		RTMP_IO_READ32(pAd, WLAN_FUN_CTRL, &WlanFunCtrl.word);
+		if (WlanFunCtrl.field.WLAN_EN == TRUE)
+		{
+			WlanFunCtrl.field.PCIE_APP0_CLK_REQ = TRUE;
+			RTMP_IO_WRITE32(pAd, WLAN_FUN_CTRL, WlanFunCtrl.word);
+		}
+			
+		//Enable ROSC_EN first then CAL_REQ
+		RTMP_IO_READ32(pAd, OSCCTL, &osCtrl.word);
+		osCtrl.field.ROSC_EN = TRUE; /* HW force */
+		RTMP_IO_WRITE32(pAd, OSCCTL, osCtrl.word);	
+		
+		osCtrl.field.ROSC_EN = TRUE; /* HW force */
+		osCtrl.field.CAL_REQ = TRUE;
+		osCtrl.field.REF_CYCLE = 0x27;
+		RTMP_IO_WRITE32(pAd, OSCCTL, osCtrl.word);
+
+		RTMP_IO_READ32(pAd, CMB_CTRL, &cmbCtrl.word);
+		pAd->CmbCtrl.word = cmbCtrl.word;
+
+		/* Overwrite default Coex Parameter */
+		RTMP_IO_READ32(pAd, COEXCFG0, &MacRegValue);
+		MacRegValue &= ~(0xFF000000);
+		MacRegValue |= 0x5E000000;
+		RTMP_IO_WRITE32(pAd, COEXCFG0, MacRegValue);
+	}
+
+	if (IS_RT3290LE(pAd))
+	{
+		PLL_CTRL_STRUC PllCtrl;
+		RTMP_IO_READ32(pAd, PLL_CTRL, &PllCtrl.word);
+		PllCtrl.field.VCO_FIXED_CURRENT_CONTROL = 0x1;			
+		RTMP_IO_WRITE32(pAd, PLL_CTRL, PllCtrl.word);
+	}
+#endif /* RT3290 */
 
 #ifdef CONFIG_STA_SUPPORT
 #ifdef PCIE_PS_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
-    	/* If dirver doesn't wake up firmware here,*/
-    	/* NICLoadFirmware will hang forever when interface is up again.*/
-    	if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE) &&
-        	OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_ADVANCE_POWER_SAVE_PCIE_DEVICE))
-    	{
-        	AUTO_WAKEUP_STRUC AutoWakeupCfg;
-			AsicForceWakeup(pAd, TRUE);
-        	AutoWakeupCfg.word = 0;
-	    	RTMP_IO_WRITE32(pAd, AUTO_WAKEUP_CFG, AutoWakeupCfg.word);
-        	OPSTATUS_CLEAR_FLAG(pAd, fOP_STATUS_DOZE);
-    	}
+	    	/* If dirver doesn't wake up firmware here,*/
+	    	/* NICLoadFirmware will hang forever when interface is up again.*/
+	    	if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE) &&
+	        	OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_ADVANCE_POWER_SAVE_PCIE_DEVICE))
+	    	{
+	        	AUTO_WAKEUP_STRUC AutoWakeupCfg;
+				AsicForceWakeup(pAd, TRUE);
+	        	AutoWakeupCfg.word = 0;
+		    	RTMP_IO_WRITE32(pAd, AUTO_WAKEUP_CFG, AutoWakeupCfg.word);
+	        	OPSTATUS_CLEAR_FLAG(pAd, fOP_STATUS_DOZE);
+	    	}
 	}
 #endif /* PCIE_PS_SUPPORT */
 #endif /* CONFIG_STA_SUPPORT */
@@ -152,22 +204,12 @@ int rt28xx_init(
 
 	/* Make sure MAC gets ready.*/
 	index = 0;
-	do
-	{
-		RTMP_IO_READ32(pAd, MAC_CSR0, &MacCsr0);
-		pAd->MACVersion = MacCsr0;
+	if (WaitForAsicReady(pAd) != TRUE)
+		goto err1;
 
-		if ((pAd->MACVersion != 0x00) && (pAd->MACVersion != 0xFFFFFFFF))
-			break;
+	DBGPRINT(RT_DEBUG_TRACE, ("MAC[Ver:Rev=0x%08x : 0x%08x]\n",
+				pAd->MACVersion, pAd->MacIcVersion));
 
-		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))			
-			goto err1;
-		
-		RTMPusecDelay(10);
-	} while (index++ < 100);
-	DBGPRINT(RT_DEBUG_TRACE, ("MAC_CSR0  [ Ver:Rev=0x%08x]\n", pAd->MACVersion));
-
-	RtmpChipOpsHook(pAd);
 
 	if (MAX_LEN_OF_MAC_TABLE > MAX_AVAILABLE_CLIENT_WCID(pAd))
 	{
@@ -176,18 +218,17 @@ int rt28xx_init(
 	}
 
 
-	/* Disable DMA*/
 	RT28XXDMADisable(pAd);
 
-	/* Load 8051 firmware*/
 	Status = NICLoadFirmware(pAd);
+	
 	if (Status != NDIS_STATUS_SUCCESS)
 	{
 		DBGPRINT_ERR(("NICLoadFirmware failed, Status[=0x%08x]\n", Status));
 		goto err1;
 	}
-
-	NICLoadRateSwitchingParams(pAd);
+	
+	MCU_CTRL_INIT(pAd);
 
 	/* Disable interrupts here which is as soon as possible*/
 	/* This statement should never be true. We might consider to remove it later*/
@@ -197,28 +238,28 @@ int rt28xx_init(
 #else
 	Status = RTMPAllocTxRxRingMemory(pAd);
 #endif /* RESOURCE_PRE_ALLOC */
-
+	
 	if (Status != NDIS_STATUS_SUCCESS)
 	{
 		DBGPRINT_ERR(("RTMPAllocTxRxMemory failed, Status[=0x%08x]\n", Status));
 		goto err2;
 	}
+	
+	Status = RtmpNetTaskInit(pAd);
+	if (Status != NDIS_STATUS_SUCCESS)
+		goto err5;
+	
+#ifdef WLAN_SKB_RECYCLE
+    skb_queue_head_init(&pAd->rx0_recycle);
+#endif /* WLAN_SKB_RECYCLE */
 
 	RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_INTERRUPT_IN_USE);
-
-	/* initialize MLME*/
 	
+	/* initialize MLME*/
 	Status = RtmpMgmtTaskInit(pAd);
 	if (Status != NDIS_STATUS_SUCCESS)
 		goto err3;
-
-	Status = MlmeInit(pAd);
-	if (Status != NDIS_STATUS_SUCCESS)
-	{
-		DBGPRINT_ERR(("MlmeInit failed, Status[=0x%08x]\n", Status));
-		goto err4;
-	}
-
+	
 #ifdef RMTP_RBUS_SUPPORT
 #ifdef VIDEO_TURBINE_SUPPORT
 	VideoConfigInit(pAd);
@@ -226,15 +267,8 @@ int rt28xx_init(
 #endif /* RMTP_RBUS_SUPPORT */
 
 	/* Initialize pAd->StaCfg, pAd->ApCfg, pAd->CommonCfg to manufacture default*/
-	
 	UserCfgInit(pAd);
 
-	Status = RtmpNetTaskInit(pAd);
-	if (Status != NDIS_STATUS_SUCCESS)
-		goto err5;
-
-/*	COPY_MAC_ADDR(pAd->ApCfg.MBSSID[apidx].Bssid, netif->hwaddr);*/
-/*	pAd->bForcePrintTX = TRUE;*/
 
 	CfgInitHook(pAd);
 
@@ -256,22 +290,39 @@ int rt28xx_init(
 		goto err6;	
 	}
 
-	
 	/* Init the hardware, we need to init asic before read registry, otherwise mac register will be reset*/
-	
 	Status = NICInitializeAdapter(pAd, TRUE);
 	if (Status != NDIS_STATUS_SUCCESS)
 	{
 		DBGPRINT_ERR(("NICInitializeAdapter failed, Status[=0x%08x]\n", Status));
 		if (Status != NDIS_STATUS_SUCCESS)
 		goto err6;
-	}	
+	}
+	
+	Status = MlmeInit(pAd);
+	if (Status != NDIS_STATUS_SUCCESS)
+	{
+		DBGPRINT_ERR(("MlmeInit failed, Status[=0x%08x]\n", Status));
+		goto err4;
+	}
 
 
 	/* Read parameters from Config File */
 	/* unknown, it will be updated in NICReadEEPROMParameters */
 	pAd->RfIcType = RFIC_UNKNOWN;
 	Status = RTMPReadParametersHook(pAd);
+
+#ifdef CONFIG_FPGA_MODE
+#ifdef CAPTURE_MODE
+	cap_mode_init(pAd);
+#endif /* CAPTURE_MODE */
+#endif /* CONFIG_FPGA_MODE */
+
+#ifdef CONFIG_STA_SUPPORT
+#ifdef CREDENTIAL_STORE
+	RecoverConnectInfo(pAd);
+#endif /* CREDENTIAL_STORE */
+#endif /* CONFIG_STA_SUPPORT */
 
 	DBGPRINT(RT_DEBUG_OFF, ("1. Phy Mode = %d\n", pAd->CommonCfg.PhyMode));
 	if (Status != NDIS_STATUS_SUCCESS)
@@ -304,60 +355,47 @@ int rt28xx_init(
 
 	/* after reading Registry, we now know if in AP mode or STA mode*/
 
-	/* Load 8051 firmware; crash when FW image not existent*/
-	/* Status = NICLoadFirmware(pAd);*/
-	/* if (Status != NDIS_STATUS_SUCCESS)*/
-	/*    break;*/
-
 	DBGPRINT(RT_DEBUG_OFF, ("2. Phy Mode = %d\n", pAd->CommonCfg.PhyMode));
 
 	/* We should read EEPROM for all cases.  rt2860b*/
-	NICReadEEPROMParameters(pAd, (PSTRING)pDefaultMac);	
+	NICReadEEPROMParameters(pAd, (PSTRING)pDefaultMac);
 #ifdef CONFIG_STA_SUPPORT
 #endif /* CONFIG_STA_SUPPORT */
 
 	DBGPRINT(RT_DEBUG_OFF, ("3. Phy Mode = %d\n", pAd->CommonCfg.PhyMode));
 
-	NICInitAsicFromEEPROM(pAd); /*rt2860b*/
-#ifdef CONFIG_STA_SUPPORT	
-#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
-/*	if (IS_RT3593(pAd))*/
-/*	{*/
-		
-		/* Initialize the frequency calibration*/
-		
-		RTMP_CHIP_ASIC_FREQ_CAL_INIT(pAd);
-/*	}*/
-#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
-#endif /* CONFIG_STA_SUPPORT */
+#ifdef LED_CONTROL_SUPPORT
+	/* Send LED Setting to MCU */
+	RTMPInitLEDMode(pAd);	
+#endif /* LED_CONTROL_SUPPORT */
+
+	NICInitAsicFromEEPROM(pAd); /* rt2860b */
+	
+#ifdef RALINK_ATE
+	if (ATEInit(pAd) != NDIS_STATUS_SUCCESS)
+	{
+		DBGPRINT(RT_DEBUG_ERROR, ("%s(): ATE initialization failed !\n", __FUNCTION__));
+		goto err6;
+	}
+#endif /* RALINK_ATE */
+
 
 #ifdef RTMP_INTERNAL_TX_ALC
-	
 	/* Initialize the desired TSSI table*/
-	
 	RTMP_CHIP_ASIC_TSSI_TABLE_INIT(pAd);
 #endif /* RTMP_INTERNAL_TX_ALC */
 
 #ifdef RTMP_TEMPERATURE_COMPENSATION
-	
 	/* Temperature compensation, initialize the lookup table */
-	
-	DBGPRINT(RT_DEBUG_ERROR, ("IS_RT5392 = %d, bAutoTxAgcG = %d\n", IS_RT5392(pAd), pAd->bAutoTxAgcG));
-	if (IS_RT5392(pAd) && pAd->bAutoTxAgcG && pAd->CommonCfg.TempComp != 0)
-	{
+	DBGPRINT(RT_DEBUG_OFF, ("bAutoTxAgcG = %d\n", pAd->bAutoTxAgcG));
+
+	if (pAd->chipCap.bTempCompTxALC && pAd->bAutoTxAgcG)
 		InitLookupTable(pAd);
-	}
 #endif /* RTMP_TEMPERATURE_COMPENSATION */
 
 
-
 	/* Set PHY to appropriate mode*/
-	TmpPhy = pAd->CommonCfg.PhyMode;
-	pAd->CommonCfg.PhyMode = 0xff;
-	RTMPSetPhyMode(pAd, TmpPhy);
-#ifdef DOT11_N_SUPPORT
-	SetCommonHT(pAd);
-#endif /* DOT11_N_SUPPORT */
+	RTMPSetPhyMode(pAd, pAd->CommonCfg.PhyMode);
 
 	/* No valid channels.*/
 	if (pAd->ChannelListNum == 0)
@@ -374,16 +412,19 @@ int rt28xx_init(
 
 
 
-/*		APInitialize(pAd);*/
+	/* APInitialize(pAd);*/
 
 #ifdef IKANOS_VX_1X0
 	VR_IKANOS_FP_Init(pAd->ApCfg.BssidNum, pAd->PermanentAddress);
 #endif /* IKANOS_VX_1X0 */
 
 #ifdef RTMP_MAC_USB
-	AsicSendCommandToMcu(pAd, 0x31, 0xff, 0x00, 0x02);
+	AsicSendCommandToMcu(pAd, 0x31, 0xff, 0x00, 0x02, FALSE);
 	RTMPusecDelay(10000);
 #endif /* RTMP_MAC_USB */
+
+#ifdef RALINK_ATE
+#endif /* RALINK_ATE */
 
 
 	/*
@@ -393,17 +434,13 @@ int rt28xx_init(
 	*/
 
 
+
 	if (pAd && (Status != NDIS_STATUS_SUCCESS))
 	{
-		
-		/* Undo everything if it failed*/
-		
 		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_INTERRUPT_IN_USE))
 		{
-/*			NdisMDeregisterInterrupt(&pAd->Interrupt);*/
 			RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_INTERRUPT_IN_USE);
 		}
-/*		RTMPFreeAdapter(pAd);  we will free it in disconnect()*/
 	}
 	else if (pAd)
 	{
@@ -438,6 +475,10 @@ int rt28xx_init(
 
 	/* Various AP function init*/
 
+#ifdef UAPSD_SUPPORT
+        UAPSD_Init(pAd);
+#endif /* UAPSD_SUPPORT */
+
 	/* assign function pointers*/
 
 
@@ -458,19 +499,73 @@ int rt28xx_init(
 	}
 #endif /* CONFIG_STA_SUPPORT */
 
+	/* auto-fall back settings */
+#ifdef RANGE_EXTEND
+	RTMP_IO_WRITE32(pAd, HT_FBK_CFG1, 0xedcba980);
+#endif // RANGE_EXTEND //
+#ifdef DOT11N_SS3_SUPPORT
+	if (pAd->CommonCfg.TxStream >= 3)
+	{
+		RTMP_IO_WRITE32(pAd, TX_FBK_CFG_3S_0, 0x12111008);
+		RTMP_IO_WRITE32(pAd, TX_FBK_CFG_3S_1, 0x16151413);
+	}
+#endif /* DOT11N_SS3_SUPPORT */
+
+#ifdef STREAM_MODE_SUPPORT
+	RtmpStreamModeInit(pAd);
+#endif /* STREAM_MODE_SUPPORT */
+
+
+#ifdef DOT11_N_SUPPORT
+#ifdef TXBF_SUPPORT
+	if (pAd->CommonCfg.ITxBfTimeout)
+	{
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R179, 0x02);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R180, 0);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R182, pAd->CommonCfg.ITxBfTimeout & 0xFF);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R180, 1);
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R182, (pAd->CommonCfg.ITxBfTimeout>>8) & 0xFF);
+	}
+
+	if (pAd->CommonCfg.ETxBfTimeout)
+	{
+		RTMP_IO_WRITE32(pAd, TX_TXBF_CFG_3, pAd->CommonCfg.ETxBfTimeout);
+	}
+#endif /* TXBF_SUPPORT */
+#endif /* DOT11_N_SUPPORT */
 
 
 
-
-	RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_STATE_INIT,
-						RTMP_CHIP_SPEC_INITIALIZATION, NULL, 0);
-
+#ifdef RT3290
+	if (IS_RT3290(pAd))
+	{
+		WLAN_FUN_CTRL_STRUC     WlanFunCtrl = {.word = 0};
+		RTMP_MAC_PWRSV_EN(pAd, TRUE, TRUE);	
+		//
+		// Too much time for reading efuse(enter/exit L1), and our device will hang up
+		// Enable L1
+		//
+		RTMP_IO_READ32(pAd, WLAN_FUN_CTRL, &WlanFunCtrl.word);
+		if (WlanFunCtrl.field.WLAN_EN == TRUE)
+		{
+			WlanFunCtrl.field.PCIE_APP0_CLK_REQ = FALSE;
+			RTMP_IO_WRITE32(pAd, WLAN_FUN_CTRL, WlanFunCtrl.word);
+		}
+	}
+#endif /* RT3290 */
 
 	DBGPRINT_S(Status, ("<==== rt28xx_init, Status=%x\n", Status));
 
 	return TRUE;
 
+/*err7:
+	APStop(pAd);*/
 err6:
+
+#ifdef IGMP_SNOOP_SUPPORT
+	MultiCastFilterTableReset(&pAd->pMulticastFilterTable);
+#endif /* IGMP_SNOOP_SUPPORT */
+
 	MeasureReqTabExit(pAd);
 	TpcReqTabExit(pAd);
 err5:	
@@ -478,9 +573,14 @@ err5:
 	UserCfgExit(pAd);
 err4:	
 	MlmeHalt(pAd);
+	RTMP_TimerListRelease(pAd);
 err3:	
 	RtmpMgmtTaskExit(pAd);
+#ifdef RTMP_TIMER_TASK_SUPPORT
+	NdisFreeSpinLock(&pAd->TimerQLock);
+#endif /* RTMP_TIMER_TASK_SUPPORT */
 err2:
+	MCU_CTRL_EXIT(pAd);
 #ifdef RESOURCE_PRE_ALLOC
 	RTMPResetTxRxRingMemory(pAd);
 #else
@@ -489,6 +589,10 @@ err2:
 
 err1:
 
+#ifdef RT3290
+	if (IS_RT3290(pAd))
+		RTMPEnableWlan(pAd, FALSE, FALSE);
+#endif /* RT3290 */
 
 #ifdef DOT11_N_SUPPORT
 	if(pAd->mpdu_blk_pool.mem)
@@ -504,86 +608,97 @@ err0:
 err0:
 #endif /* ST */
 
-	DBGPRINT(RT_DEBUG_ERROR, ("!!! rt28xx Initialized fail !!!\n"));
+	DBGPRINT(RT_DEBUG_ERROR, ("!!! rt28xx init fail !!!\n"));
 	return FALSE;
 }
 
 
-VOID RTMPDrvOpen(
-	IN VOID			*pAdSrc)
-{
-	PRTMP_ADAPTER	pAd = (PRTMP_ADAPTER)pAdSrc;
-
 #ifdef CONFIG_STA_SUPPORT
-#endif /* CONFIG_STA_SUPPORT */
+VOID RTMPDrvSTAOpen(
+	IN VOID *pAdSrc)
+{
+	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdSrc;
+	UINT32 reg = 0;
+
+	RTMP_CLEAR_PSFLAG(pAd, fRTMP_PS_MCU_SLEEP);
+
+
+#ifdef CONFIG_FPGA_MODE
+#ifdef CUSTOMER_DEMO
+	set_fpga_mode(pAd, "6");
+#endif /* CUSTOMER_DEMO */
+#endif /* CONFIG_FPGA_MODE */
 
 	/* Enable Interrupt*/
 	RTMP_IRQ_ENABLE(pAd);
 
 	/* Now Enable RxTx*/
 	RTMPEnableRxTx(pAd);
+
 	RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_START_UP);
 
+#ifdef MT76x0
+	if (IS_MT76x0(pAd))
 	{
-	UINT32 reg = 0;
+		/* Select Q2 to receive command response */
+		andes_fun_set(pAd, Q_SELECT, pAd->chipCap.CmdRspRxRing);
+
+#ifdef MT76x0_TSSI_CAL_COMPENSATION
+		RTMP_IO_WRITE32(pAd, MAC_SYS_CTRL, 0x8);
+#endif /* MT76x0_TSSI_CAL_COMPENSATION */
+	}
+#endif /* MT76x0 */
+
 	RTMP_IO_READ32(pAd, 0x1300, &reg);  /* clear garbage interrupts*/
-	printk("0x1300 = %08x\n", reg);
-	}
-
-	{
-/*	u32 reg;*/
-/*	UINT8  byte;*/
-/*	u16 tmp;*/
-
-/*	RTMP_IO_READ32(pAd, XIFS_TIME_CFG, &reg);*/
-
-/*	tmp = 0x0805;*/
-/*	reg  = (reg & 0xffff0000) | tmp;*/
-/*	RTMP_IO_WRITE32(pAd, XIFS_TIME_CFG, reg);*/
-
-	}
-
-
-#ifdef CONFIG_STA_SUPPORT
-#ifdef PCIE_PS_SUPPORT
-	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
-        RTMPInitPCIeLinkCtrlValue(pAd);
-#endif /* PCIE_PS_SUPPORT */
-
-
-#endif /* CONFIG_STA_SUPPORT */
+	DBGPRINT(RT_DEBUG_OFF, ("0x1300 = %08x\n", reg));
 
 
 
-#ifdef CONFIG_STA_SUPPORT
+
+//+++Add by shiang for debug
+	DBGPRINT(RT_DEBUG_OFF, ("%s(1):Check if PDMA is idle!\n", __FUNCTION__));
+	AsicWaitPDMAIdle(pAd, 5, 10);
+//---Add by shiang for debug
+
 	/*
 		To reduce connection time, 
 		do auto reconnect here instead of waiting STAMlmePeriodicExec to do auto reconnect.
 	*/
 	if (pAd->OpMode == OPMODE_STA)
 		MlmeAutoReconnectLastSSID(pAd);
-#endif /* CONFIG_STA_SUPPORT */
 
+//+++Add by shiang for debug
+	DBGPRINT(RT_DEBUG_OFF, ("%s(2):Check if PDMA is idle!\n", __FUNCTION__));
+	AsicWaitPDMAIdle(pAd, 5, 10);
+//---Add by shiang for debug
 
 
 
 }
 
-
-VOID RTMPDrvClose(
-	IN VOID				*pAdSrc,
-	IN VOID				*net_dev)
+VOID RTMPDrvSTAClose(
+	IN VOID *pAdSrc,
+	IN VOID *net_dev)
 {
-	PRTMP_ADAPTER	pAd = (PRTMP_ADAPTER)pAdSrc;
-	BOOLEAN 		Cancelled;
-	UINT32			i = 0;
-
-
+	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdSrc;
+	BOOLEAN Cancelled;
+	UINT32 i = 0;
 	Cancelled = FALSE;
 
+#ifdef CREDENTIAL_STORE
+	if (pAd->IndicateMediaState == NdisMediaStateConnected)
+	{	
+		StoreConnectInfo(pAd);
+	}
+	else
+	{
+		RTMP_SEM_LOCK(&pAd->StaCtIf.Lock);
+		pAd->StaCtIf.Changeable = FALSE;
+		RTMP_SEM_UNLOCK(&pAd->StaCtIf.Lock);
+	}
+#endif
 
 
-#ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
 #ifdef PCIE_PS_SUPPORT
@@ -602,11 +717,17 @@ VOID RTMPDrvClose(
 #endif /* RTMP_MAC_USB */
 
 	}
-#endif /* CONFIG_STA_SUPPORT */
 
+	/* RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD); */
 	RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS);
 
-
+#ifdef EXT_BUILD_CHANNEL_LIST
+	if (pAd->CommonCfg.pChDesp != NULL)
+		os_free_mem(NULL, pAd->CommonCfg.pChDesp);
+	pAd->CommonCfg.pChDesp = NULL;
+	pAd->CommonCfg.DfsType = MAX_RD_REGION;
+#endif /* EXT_BUILD_CHANNEL_LIST */
+	pAd->CommonCfg.bCountryFlag = FALSE;
 
 
 	for (i = 0 ; i < NUM_OF_TX_RING; i++)
@@ -618,12 +739,6 @@ VOID RTMPDrvClose(
 		}
 	}
 	
-#ifdef RTMP_MAC_USB
-	RtmpOsUsbEmptyUrbCheck(&pAd->wait, &pAd->BulkInLock, pAd->PendingRx);
-
-#endif /* RTMP_MAC_USB */
-
-
 	/* Stop Mlme state machine*/
 	MlmeHalt(pAd);
 	
@@ -631,18 +746,16 @@ VOID RTMPDrvClose(
 	RtmpNetTaskExit(pAd);
 
 
-#ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
 		MacTableReset(pAd);
-#ifdef LED_CONTROL_SUPPORT
-		RTMPSetLED(pAd, LED_LINK_DOWN);
-#endif /* LED_CONTROL_SUPPORT */
-
-		MlmeRadioOff(pAd);
+#if defined(WOW_SUPPORT) && defined(RTMP_MAC_USB) && defined(WOW_IFDOWN_SUPPORT)
+		if (pAd->WOW_Cfg.bEnable == TRUE)
+			RT28xxUsbAsicWOWEnable(pAd);
+		else
+#endif /* WOW_SUPPORT */
+			MlmeRadioOff(pAd);
 	}
-#endif /* CONFIG_STA_SUPPORT */
-
 
 	MeasureReqTabExit(pAd);
 	TpcReqTabExit(pAd);
@@ -651,10 +764,13 @@ VOID RTMPDrvClose(
 	RTMPExitLEDMode(pAd);
 #endif // LED_CONTROL_SUPPORT
 
+	RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_MCU_SEND_IN_BAND_CMD);
 
 	/* Close kernel threads*/
 	RtmpMgmtTaskExit(pAd);
 
+	//MCU_CTRL_EXIT(pAd);
+	
 
 	/* Free IRQ*/
 	if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_INTERRUPT_IN_USE))
@@ -662,7 +778,17 @@ VOID RTMPDrvClose(
 		RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_INTERRUPT_IN_USE);
 	}
 
-	/* Free Ring or USB buffers*/
+#ifdef SINGLE_SKU_V2
+	{
+		CH_POWER *ch, *ch_temp;
+		DlListForEachSafe(ch, ch_temp, &pAd->SingleSkuPwrList, CH_POWER, List)
+		{
+			DlListDel(&ch->List);
+			os_free_mem(NULL, ch);
+		}
+	}
+#endif /* SINGLE_SKU_V2 */
+
 #ifdef RESOURCE_PRE_ALLOC
 	RTMPResetTxRxRingMemory(pAd);
 #else
@@ -672,6 +798,10 @@ VOID RTMPDrvClose(
 
 	RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS);
 
+#ifdef WLAN_SKB_RECYCLE
+	skb_queue_purge(&pAd->rx0_recycle);
+#endif /* WLAN_SKB_RECYCLE */
+
 #ifdef DOT11_N_SUPPORT
 	/* Free BA reorder resource*/
 	ba_reordering_resource_release(pAd);
@@ -679,17 +809,12 @@ VOID RTMPDrvClose(
 
 	UserCfgExit(pAd); /* must after ba_reordering_resource_release */
 
-#ifdef CONFIG_STA_SUPPORT
-#endif /* CONFIG_STA_SUPPORT */
 
 	RTMP_CLEAR_FLAG(pAd, fRTMP_ADAPTER_START_UP);
 
-/*+++Modify by woody to solve the bulk fail+++*/
-#ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
 	}
-#endif /* CONFIG_STA_SUPPORT */
 
 	/* clear MAC table */
 	/* TODO: do not clear spin lock, such as fLastChangeAccordingMfbLock */
@@ -698,8 +823,18 @@ VOID RTMPDrvClose(
 	/* release all timers */
 	RTMPusecDelay(2000);
 	RTMP_TimerListRelease(pAd);
-}
 
+#ifdef RTMP_TIMER_TASK_SUPPORT
+	NdisFreeSpinLock(&pAd->TimerQLock);
+#endif /* RTMP_TIMER_TASK_SUPPORT */
+
+#ifdef CONFIG_FPGA_MODE
+#ifdef CAPTURE_MODE
+	cap_mode_deinit(pAd);
+#endif /* CAPTURE_MODE */
+#endif /* CONFIG_FPGA_MODE */
+}
+#endif
 
 VOID RTMPInfClose(
 	IN VOID				*pAdSrc)
@@ -749,6 +884,9 @@ VOID RTMPInfClose(
 #endif /* QOS_DLS_SUPPORT */
 
 		if (INFRA_ON(pAd) &&
+#if defined(WOW_SUPPORT) && defined(RTMP_MAC_USB) && defined(WOW_IFDOWN_SUPPORT) /* In WOW state, can't issue disassociation reqeust */
+			pAd->WOW_Cfg.bEnable == FALSE &&
+#endif /* WOW_SUPPORT */
 			(!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
 		{
 			MLME_DISASSOC_REQ_STRUCT	DisReq;
@@ -1042,4 +1180,3 @@ NDIS_STATUS WriteDatThread(
 #endif /* PROFILE_STORE */
 #endif /* CONFIG_STA_SUPPORT */
 
-/* End of rtmp_init_inf.c */

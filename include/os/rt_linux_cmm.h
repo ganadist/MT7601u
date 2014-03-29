@@ -59,25 +59,20 @@ void Rtmp_Drv_Ops_##_func(VOID *__pDrvOps, VOID *__pNetOps, 	\
 #define def_to_str(s)    #s
 
 
-
-
-
-
-#ifdef RT3070
-#define RTMP_DRV_NAME	"rt3070" xdef_to_str(RT28xx_MODE)
-#define RT_CHIPSET		3070
-RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
-#define RTMP_DRV_OPS_FUNCTION				RTMP_DRV_OPS_FUNCTION_BODY(3070)
-#define RTMP_BUILD_DRV_OPS_FUNCTION_BODY	RTMP_BUILD_DRV_OPS_FUNCTION(3070)
-#endif /* RT3070 */
-
-
-
+#ifdef RTMP_MAC_USB
+#define RTMP_DRV_NAME	"rtusb" xdef_to_str(RT28xx_MODE)
+RTMP_DECLARE_DRV_OPS_FUNCTION(usb);
+#define RTMP_DRV_OPS_FUNCTION				RTMP_DRV_OPS_FUNCTION_BODY(usb)
+#define RTMP_BUILD_DRV_OPS_FUNCTION_BODY	RTMP_BUILD_DRV_OPS_FUNCTION(usb)
+#endif /* RTMP_MAC_USB */
 
 #else
 
 #ifdef RTMP_MAC_USB
 #define RTMP_DRV_NAME	"rt2870"
+#ifdef HE_SUPPORT
+#define RTMP_DRV_NAME   "rtsta"
+#endif
 #else
 #define RTMP_DRV_NAME	"rt2860"
 #endif /* RTMP_MAC_USB */
@@ -166,24 +161,12 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 #define NDIS_MINIPORT_TIMER			OS_RSTRUC
 #define RTMP_OS_TIMER				OS_RSTRUC
 
-#define RTMP_OS_FREE_TIMER(__pAd)											\
-	DBGPRINT(RT_DEBUG_ERROR, ("%s: free timer resources!\n", __FUNCTION__));\
-	RTMP_OS_Free_Rscs(&((__pAd)->RscTimerMemList))
-#define RTMP_OS_FREE_TASK(__pAd)											\
-	DBGPRINT(RT_DEBUG_ERROR, ("%s: free task resources!\n", __FUNCTION__));	\
-	RTMP_OS_Free_Rscs(&((__pAd)->RscTaskMemList))
-#define RTMP_OS_FREE_LOCK(__pAd)											\
-	DBGPRINT(RT_DEBUG_ERROR, ("%s: free lock resources!\n", __FUNCTION__));	\
-	RTMP_OS_Free_Rscs(&((__pAd)->RscLockMemList))
-#define RTMP_OS_FREE_TASKLET(__pAd)											\
-	DBGPRINT(RT_DEBUG_ERROR, ("%s: free tasklet resources!\n", __FUNCTION__));\
-	RTMP_OS_Free_Rscs(&((__pAd)->RscTaskletMemList))
-#define RTMP_OS_FREE_SEM(__pAd)												\
-	DBGPRINT(RT_DEBUG_ERROR, ("%s: free semaphore resources!\n", __FUNCTION__));\
-	RTMP_OS_Free_Rscs(&((__pAd)->RscSemMemList))
-#define RTMP_OS_FREE_ATOMIC(__pAd)												\
-	DBGPRINT(RT_DEBUG_ERROR, ("%s: free atomic resources!\n", __FUNCTION__));\
-	RTMP_OS_Free_Rscs(&((__pAd)->RscAtomicMemList))
+#define RTMP_OS_FREE_TIMER(__pAd)
+#define RTMP_OS_FREE_LOCK(__pAd)
+#define RTMP_OS_FREE_TASKLET(__pAd)
+#define RTMP_OS_FREE_TASK(__pAd)
+#define RTMP_OS_FREE_SEM(__pAd)
+#define RTMP_OS_FREE_ATOMIC(__pAd)
 
 #endif /* OS_ABL_FUNC_SUPPORT */
 
@@ -221,6 +204,10 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 #define NdisFreeSpinLock						OS_NdisFreeSpinLock
 #define RTMP_SEM_LOCK							OS_SEM_LOCK
 #define RTMP_SEM_UNLOCK							OS_SEM_UNLOCK
+#define RTMP_SPIN_LOCK_IRQ						OS_SPIN_LOCK_IRQ
+#define RTMP_SPIN_UNLOCK_IRQ					OS_SPIN_UNLOCK_IRQ
+#define RTMP_SPIN_LOCK_IRQSAVE					OS_SPIN_LOCK_IRQSAVE
+#define RTMP_SPIN_UNLOCK_IRQRESTORE				OS_SPIN_UNLOCK_IRQRESTORE
 #define RTMP_IRQ_LOCK							OS_IRQ_LOCK
 #define RTMP_IRQ_UNLOCK							OS_IRQ_UNLOCK
 #define RTMP_INT_LOCK							OS_INT_LOCK
@@ -233,13 +220,14 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 
 #define RTMP_SEM_EVENT_INIT_LOCKED(__pSema, __pSemaList)	OS_SEM_EVENT_INIT_LOCKED(__pSema)
 #define RTMP_SEM_EVENT_INIT(__pSema, __pSemaList)			OS_SEM_EVENT_INIT(__pSema)
-#define RTMP_SEM_EVENT_DESTORY					OS_SEM_EVENT_DESTORY
+#define RTMP_SEM_EVENT_DESTROY					OS_SEM_EVENT_DESTROY
 #define RTMP_SEM_EVENT_WAIT						OS_SEM_EVENT_WAIT
 #define RTMP_SEM_EVENT_UP						OS_SEM_EVENT_UP
 
 #define RTUSBMlmeUp								OS_RTUSBMlmeUp
 
 #define RTMP_OS_ATMOIC_INIT(__pAtomic, __pAtomicList)
+#define RTMP_OS_ATMOIC_DESTROY(__pAtomic)
 #define RTMP_THREAD_PID_KILL(__PID)				KILL_THREAD_PID(__PID, SIGTERM, 1)
 
 #else
@@ -250,13 +238,14 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 
 #define RTMP_SEM_EVENT_INIT_LOCKED 				RtmpOsSemaInitLocked
 #define RTMP_SEM_EVENT_INIT						RtmpOsSemaInit
-#define RTMP_SEM_EVENT_DESTORY					RtmpOsSemaDestory
+#define RTMP_SEM_EVENT_DESTROY					RtmpOsSemaDestroy
 #define RTMP_SEM_EVENT_WAIT(_pSema, _status)	((_status) = RtmpOsSemaWaitInterruptible((_pSema)))
 #define RTMP_SEM_EVENT_UP						RtmpOsSemaWakeUp
 
 #define RTUSBMlmeUp								RtmpOsMlmeUp
 
 #define RTMP_OS_ATMOIC_INIT						RtmpOsAtomicInit
+#define RTMP_OS_ATMOIC_DESTROY					RtmpOsAtomicDestroy
 #define RTMP_THREAD_PID_KILL					RtmpThreadPidKill
 
 /* */
@@ -264,6 +253,8 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 /* */
 #define NdisAllocateSpinLock(__pAd, __pLock)		RtmpOsAllocateLock(__pLock, &(__pAd)->RscLockMemList)
 #define NdisFreeSpinLock							RtmpOsFreeSpinLock
+
+
 
 #define RTMP_SEM_LOCK(__lock)					\
 {												\
@@ -274,6 +265,10 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 {												\
 	RtmpOsSpinUnLockBh(__lock);					\
 }
+#define RTMP_SPIN_LOCK_IRQ						RtmpOsSpinLockIrq
+#define RTMP_SPIN_UNLOCK_IRQ					RtmpOsSpinUnlockIrq
+#define RTMP_SPIN_LOCK_IRQSAVE					RtmpOsSpinLockIrqSave
+#define RTMP_SPIN_UNLOCK_IRQRESTORE				RtmpOsSpinUnlockIrqRestore
 
 /* sample, use semaphore lock to replace IRQ lock, 2007/11/15 */
 #ifdef MULTI_CORE_SUPPORT
@@ -303,6 +298,8 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 #define RTMP_INT_LOCK(__Lock, __Flag)	RtmpOsIntLock(__Lock, &__Flag)
 #define RTMP_INT_UNLOCK					RtmpOsIntUnLock
 
+
+
 #define NdisAcquireSpinLock				RTMP_SEM_LOCK
 #define NdisReleaseSpinLock				RTMP_SEM_UNLOCK
 
@@ -319,12 +316,26 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 #define RTMP_NET_TASK_STRUCT		OS_NET_TASK_STRUCT
 #define PRTMP_NET_TASK_STRUCT		POS_NET_TASK_STRUCT
 
+typedef struct completion RTMP_OS_COMPLETION; 
+
+#define RTMP_OS_INIT_COMPLETION(__pCompletion)	\
+		init_completion(__pCompletion)
+
+#define RTMP_OS_EXIT_COMPLETION(__pCompletion)
+
+#define RTMP_OS_COMPLETE(__pCompletion)	\
+		complete(__pCompletion)
+
+#define RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(__pCompletion, __Timeout)	\
+		wait_for_completion_timeout(__pCompletion, __Timeout)
+
 #ifdef WORKQUEUE_BH	
 #define RTMP_OS_TASKLET_SCHE(__pTasklet)							\
 		schedule_work(__pTasklet)
-#define RTMP_OS_TASKLET_INIT(__pAd, __pTasklet, __pFunc)			\
-		INIT_WORK(__pTasklet, __pFunc)
-#define RTMP_OS_TASKLET_KILL(__pTasklet)
+#define RTMP_OS_TASKLET_INIT(__pAd, __pTasklet, __pFunc, __Data)	\
+		INIT_WORK((struct work_struct *)__pTasklet, (work_func_t)__pFunc)
+#define RTMP_OS_TASKLET_KILL(__pTasklet) \
+		cancel_work_sync(__pTasklet)
 #else
 #define RTMP_OS_TASKLET_SCHE(__pTasklet)							\
 		tasklet_hi_schedule(__pTasklet)
@@ -340,8 +351,22 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 #else
 
 /* rt_linux_cmm.h */
-typedef OS_RSTRUC					RTMP_NET_TASK_STRUCT;
-typedef OS_RSTRUC					*PRTMP_NET_TASK_STRUCT;
+typedef OS_RSTRUC RTMP_NET_TASK_STRUCT;
+typedef OS_RSTRUC *PRTMP_NET_TASK_STRUCT;
+typedef OS_RSTRUC RTMP_OS_COMPLETION;
+typedef OS_RSTRUC *PRTMP_OS_COMPLETION;
+
+#define RTMP_OS_INIT_COMPLETION(__pCompletion)	\
+		RtmpOsInitCompletion(__pCompletion)
+
+#define RTMP_OS_EXIT_COMPLETION(__pCompletion)	\
+		RtmpOsExitCompletion(__pCompletion)
+
+#define RTMP_OS_COMPLETE(__pCompletion)	\
+		RtmpOsComplete(__pCompletion)
+
+#define RTMP_OS_WAIT_FOR_COMPLETION_TIMEOUT(__pCompletion, __Timeout)	\
+		RtmpOsWaitForCompletionTimeout(__pCompletion, __Timeout)
 
 #define RTMP_OS_TASKLET_SCHE(__pTasklet)					\
 		RtmpOsTaskletSche(__pTasklet)
@@ -391,6 +416,12 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 	will be 64-bit, but in UTIL/NET modules, it maybe 32-bit.
 	This will cause size mismatch problem when OS_ABL = yes.
 */
+/*
+	In big-endian & 32-bit DMA address platform, if you use long long to
+	record DMA address, when you call kernel function to set DMA address,
+	the address will be 0 because you need to do swap I think.
+	So if you sure your DMA address is 32-bit, do not use RTMP_DMA_ADDR_64.
+*/
 #define ra_dma_addr_t					unsigned long long
 
 #else
@@ -401,6 +432,7 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 #endif /* RTMP_USB_SUPPORT */
 
 #define RTMP_OS_PCI_VENDOR_ID			PCI_VENDOR_ID
+#define RTMP_OS_PCI_DEVICE_ID			PCI_DEVICE_ID
 
 #define ra_dma_addr_t					dma_addr_t
 
@@ -415,6 +447,10 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 #define APCLI_IF_UP_CHECK(pAd, ifidx) (RtmpOSNetDevIsUp((pAd)->ApCfg.ApCliTab[(ifidx)].dev) == TRUE)
 
 
+#define RTMP_OS_NETDEV_SET_PRIV		RtmpOsSetNetDevPriv
+#define RTMP_OS_NETDEV_GET_PRIV		RtmpOsGetNetDevPriv
+#define RT_DEV_PRIV_FLAGS_GET		RtmpDevPrivFlagsGet
+#define RT_DEV_PRIV_FLAGS_SET		RtmpDevPrivFlagsSet
+
 #endif /* __RT_LINUX_CMM_H__ */
 
-/* End of rt_linux_cmm.h */

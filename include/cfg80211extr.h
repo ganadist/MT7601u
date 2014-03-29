@@ -69,7 +69,7 @@
 	(__pBandInfo)->TxStream = __pAd->CommonCfg.TxStream;					\
 	(__pBandInfo)->RxStream = __pAd->CommonCfg.RxStream;					\
 	(__pBandInfo)->MaxTxPwr = __pAd->CommonCfg.DefineMaxTxPwr;				\
-	if (__pAd->CommonCfg.PhyMode == PHY_11B)								\
+	if (WMODE_EQUAL(__pAd->CommonCfg.PhyMode, WMODE_B))				\
 		(__pBandInfo)->FlgIsBMode = TRUE;									\
 	else																	\
 		(__pBandInfo)->FlgIsBMode = FALSE;									\
@@ -87,7 +87,7 @@
 	(__pBandInfo)->TxStream = __pAd->CommonCfg.TxStream;					\
 	(__pBandInfo)->RxStream = __pAd->CommonCfg.RxStream;					\
 	(__pBandInfo)->MaxTxPwr = 0;											\
-	if (__pAd->CommonCfg.PhyMode == PHY_11B)								\
+	if (WMODE_EQUAL(__pAd->CommonCfg.PhyMode, WMODE_B))				\
 		(__pBandInfo)->FlgIsBMode = TRUE;									\
 	else																	\
 		(__pBandInfo)->FlgIsBMode = FALSE;									\
@@ -101,6 +101,14 @@
 
 
 /* utilities used in DRV module */
+INT CFG80211DRV_IoctlHandle(
+	IN	VOID					*pAdSrc,
+	IN	RTMP_IOCTL_INPUT_STRUCT	*wrq,
+	IN	INT						cmd,
+	IN	USHORT					subcmd,
+	IN	VOID					*pData,
+	IN	ULONG					Data);
+
 BOOLEAN CFG80211DRV_OpsSetChannel(
 	VOID						*pAdOrg,
 	VOID						*pData);
@@ -133,6 +141,14 @@ BOOLEAN CFG80211DRV_KeyAdd(
 	VOID						*pData);
 
 VOID CFG80211DRV_RegNotify(
+	VOID						*pAdOrg,
+	VOID						*pData);
+
+VOID CFG80211DRV_SurveyGet(
+	VOID						*pAdOrg,
+	VOID						*pData);
+
+VOID CFG80211DRV_PmkidConfig(
 	VOID						*pAdOrg,
 	VOID						*pData);
 
@@ -177,9 +193,19 @@ VOID CFG80211_Scaning(
 
 #ifdef RFKILL_HW_SUPPORT
 VOID CFG80211_RFKillStatusUpdate(
-	IN PVOID	pAd,
-	IN BOOLEAN	active);
+	IN PVOID					pAd,
+	IN BOOLEAN					active);
 #endif /* RFKILL_HW_SUPPORT */
+
+VOID CFG80211_UnRegister(
+	IN VOID						*pAdOrg,
+	IN VOID						*pNetDev);
+
+#ifdef RT_P2P_SPECIFIC_WIRELESS_EVENT
+INT CFG80211_SendWirelessEvent(
+	IN VOID                                         *pAdCB,
+	IN UCHAR 					*pMacAddr);
+#endif /* RT_P2P_SPECIFIC_WIRELESS_EVENT */
 
 #endif /* RT_CFG80211_SUPPORT */
 

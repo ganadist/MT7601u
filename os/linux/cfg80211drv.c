@@ -41,6 +41,126 @@
 
 
 
+INT CFG80211DRV_IoctlHandle(
+	IN	VOID					*pAdSrc,
+	IN	RTMP_IOCTL_INPUT_STRUCT	*wrq,
+	IN	INT						cmd,
+	IN	USHORT					subcmd,
+	IN	VOID					*pData,
+	IN	ULONG					Data)
+{
+	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdSrc;
+
+
+	switch(cmd)
+	{
+		case CMD_RTPRIV_IOCTL_80211_START:
+		case CMD_RTPRIV_IOCTL_80211_END:
+			/* nothing to do */
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_CB_GET:
+			*(VOID **)pData = (VOID *)(pAd->pCfg80211_CB);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_CB_SET:
+			pAd->pCfg80211_CB = pData;
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_CHAN_SET:
+			if (CFG80211DRV_OpsSetChannel(pAd, pData) != TRUE)
+				return NDIS_STATUS_FAILURE;
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_VIF_CHG:
+			if (CFG80211DRV_OpsChgVirtualInf(pAd, pData, Data) != TRUE)
+				return NDIS_STATUS_FAILURE;
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_SCAN:
+			CFG80211DRV_OpsScan(pAd);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_IBSS_JOIN:
+			CFG80211DRV_OpsJoinIbss(pAd, pData);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_STA_LEAVE:
+			CFG80211DRV_OpsLeave(pAd);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_STA_GET:
+			if (CFG80211DRV_StaGet(pAd, pData) != TRUE)
+				return NDIS_STATUS_FAILURE;
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_KEY_ADD:
+			CFG80211DRV_KeyAdd(pAd, pData);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_KEY_DEFAULT_SET:
+#ifdef CONFIG_STA_SUPPORT
+			pAd->StaCfg.DefaultKeyId = Data; /* base 0 */
+#endif /* CONFIG_STA_SUPPORT */
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_CONNECT_TO:
+			CFG80211DRV_Connect(pAd, pData);
+			break;
+
+#ifdef RFKILL_HW_SUPPORT
+		case CMD_RTPRIV_IOCTL_80211_RFKILL:
+		{
+			UINT32 data = 0;
+			BOOLEAN active;
+
+			/* Read GPIO pin2 as Hardware controlled radio state */
+			RTMP_IO_READ32(pAd, GPIO_CTRL_CFG, &data);
+			active = !!(data & 0x04);
+
+			if (!active)
+			{
+				RTMPSetLED(pAd, LED_RADIO_OFF);
+				*(UINT8 *)pData = 0;
+			}
+			else
+				*(UINT8 *)pData = 1;
+		}
+			break;
+#endif /* RFKILL_HW_SUPPORT */
+
+		case CMD_RTPRIV_IOCTL_80211_REG_NOTIFY_TO:
+			CFG80211DRV_RegNotify(pAd, pData);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_UNREGISTER:
+			CFG80211_UnRegister(pAd, pData);
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_BANDINFO_GET:
+		{
+			CFG80211_BAND *pBandInfo = (CFG80211_BAND *)pData;
+			CFG80211_BANDINFO_FILL(pAd, pBandInfo);
+		}
+			break;
+
+		case CMD_RTPRIV_IOCTL_80211_SURVEY_GET:
+			CFG80211DRV_SurveyGet(pAd, pData);
+			break;
+
+#ifdef RT_P2P_SPECIFIC_WIRELESS_EVENT
+		case CMD_RTPRIV_IOCTL_80211_SEND_WIRELESS_EVENT:
+			CFG80211_SendWirelessEvent(pAd, pData);
+			break;
+#endif /* RT_P2P_SPECIFIC_WIRELESS_EVENT */
+		default:
+			return NDIS_STATUS_FAILURE;
+	}
+
+	return NDIS_STATUS_SUCCESS;
+}
+
+
 BOOLEAN CFG80211DRV_OpsSetChannel(
 	VOID						*pAdOrg,
 	VOID						*pData)
@@ -311,8 +431,8 @@ BOOLEAN CFG80211DRV_StaGet(
 
 
 	/* fill tx rate */
-    if ((pAd->CommonCfg.PhyMode <= PHY_11G) ||
-		(pAd->MacTab.Content[BSSID_WCID].HTPhyMode.field.MODE <= MODE_OFDM))
+    if ((!WMODE_CAP_N(pAd->CommonCfg.PhyMode)) ||
+	 (pAd->MacTab.Content[BSSID_WCID].HTPhyMode.field.MODE <= MODE_OFDM))
 	{
 		PhyInfo.word = pAd->StaCfg.HTPhyMode.word;
 	}
@@ -405,6 +525,7 @@ BOOLEAN CFG80211DRV_Connect(
 
 
 	pConnInfo = (CMD_RTPRIV_IOCTL_80211_CONNECT *)pData;
+
 	/* change to infrastructure mode if we are in ADHOC mode */
 	Set_NetworkType_Proc(pAd, "Infra");
 
@@ -552,23 +673,31 @@ VOID CFG80211DRV_RegNotify(
 }
 
 
-VOID CFG80211_UnRegister(
-	IN PRTMP_ADAPTER		pAd,
-	IN VOID					*pNetDev)
+VOID CFG80211DRV_SurveyGet(
+	VOID						*pAdOrg,
+	VOID						*pData)
 {
-#ifdef CONFIG_STA_SUPPORT
-	UINT32 BssId;
+	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdOrg;
+	CMD_RTPRIV_IOCTL_80211_SURVEY *pSurveyInfo;
 
-	/* free channel information for scan table */
-	for(BssId=0; BssId<MAX_LEN_OF_BSS_TABLE; BssId++)
-	{
-		if (pAd->ScanTab.BssEntry[BssId].pCfg80211_Chan != NULL)
-			os_free_mem(NULL, pAd->ScanTab.BssEntry[BssId].pCfg80211_Chan);
-		/* End of if */
 
-		pAd->ScanTab.BssEntry[BssId].pCfg80211_Chan = NULL;
-	} /* End of for */
-#endif /* CONFIG_STA_SUPPORT */
+	pSurveyInfo = (CMD_RTPRIV_IOCTL_80211_SURVEY *)pData;
+
+	pSurveyInfo->pCfg80211 = pAd->pCfg80211_CB;
+
+#ifdef AP_QLOAD_SUPPORT
+	pSurveyInfo->ChannelTimeBusy = pAd->QloadLatestChannelBusyTimePri;
+	pSurveyInfo->ChannelTimeExtBusy = pAd->QloadLatestChannelBusyTimeSec;
+#endif /* AP_QLOAD_SUPPORT */
+}
+
+
+VOID CFG80211_UnRegister(
+	IN VOID						*pAdOrg,
+	IN VOID						*pNetDev)
+{
+	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdOrg;
+
 
 	/* sanity check */
 	if (pAd->pCfg80211_CB == NULL)
@@ -717,11 +846,13 @@ VOID CFG80211_RegRuleApply(
 {
 	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdCB;
 	VOID *pBand24G, *pBand5G;
-	RADAR_DETECT_STRUCT	*pRadarDetect;
 	UINT32 IdBand, IdChan, IdPwr;
 	UINT32 ChanNum, ChanId, Power, RecId, DfsType;
 	BOOLEAN FlgIsRadar;
 	ULONG IrqFlags;
+#ifdef DFS_SUPPORT	
+	RADAR_DETECT_STRUCT	*pRadarDetect;
+#endif /* DFS_SUPPORT */
 
 
 	CFG80211DBG(RT_DEBUG_ERROR, ("crda> CFG80211_RegRuleApply ==>\n"));
@@ -741,7 +872,9 @@ VOID CFG80211_RegRuleApply(
 
 	/* 2.4GHZ & 5GHz */
 	RecId = 0;
+#ifdef DFS_SUPPORT	
 	pRadarDetect = &pAd->CommonCfg.RadarDetect;
+#endif /* DFS_SUPPORT */
 
 	/* find the DfsType */
 	DfsType = CE;
@@ -769,6 +902,9 @@ VOID CFG80211_RegRuleApply(
 				if ((pAlpha2[0] == ChRegion[IdReg].CountReg[0]) &&
 					(pAlpha2[1] == ChRegion[IdReg].CountReg[1]))
 				{
+					if (pAd->CommonCfg.DfsType != MAX_RD_REGION)
+						DfsType = pAd->CommonCfg.DfsType;
+					else
 					DfsType = ChRegion[IdReg].DfsType;
 	
 					CFG80211DBG(RT_DEBUG_ERROR,
@@ -809,28 +945,21 @@ VOID CFG80211_RegRuleApply(
 				/* the channel is not allowed in the regulatory domain */
 				/* get next channel information */
 				continue;
-			} /* End of if */
+			}
 
-			if ((pAd->CommonCfg.PhyMode == PHY_11A) ||
-				(pAd->CommonCfg.PhyMode == PHY_11AN_MIXED))
+			if (!WMODE_CAP_2G(pAd->CommonCfg.PhyMode))
 			{
 				/* 5G-only mode */
 				if (ChanId <= CFG80211_NUM_OF_CHAN_2GHZ)
-					continue; /* check next */
-				/* End of if */
-			} /* End of if */
+					continue;
+			}
 
-			if ((pAd->CommonCfg.PhyMode != PHY_11A) &&
-				(pAd->CommonCfg.PhyMode != PHY_11ABG_MIXED) &&
-				(pAd->CommonCfg.PhyMode != PHY_11AN_MIXED) &&
-				(pAd->CommonCfg.PhyMode != PHY_11ABGN_MIXED) &&
-				(pAd->CommonCfg.PhyMode != PHY_11AGN_MIXED))
+			if (!WMODE_CAP_5G(pAd->CommonCfg.PhyMode))
 			{
-				/* 2.5G-only mode */
+				/* 2.4G-only mode */
 				if (ChanId > CFG80211_NUM_OF_CHAN_2GHZ)
-					continue; /* check next */
-				/* End of if */
-			} /* End of if */
+					continue;
+			}
 
 			for(IdPwr=0; IdPwr<MAX_NUM_OF_CHANNELS; IdPwr++)
 			{
@@ -858,23 +987,7 @@ VOID CFG80211_RegRuleApply(
 					pAd->ChannelList[RecId].RegulatoryDomain = DfsType;
 
 					/* re-set DFS info. */
-					pRadarDetect->RDDurRegion = DfsType;
-
-					if (DfsType == JAP_W53)
-						pRadarDetect->DfsSessionTime = 15;
-					else if (DfsType == JAP_W56)
-						pRadarDetect->DfsSessionTime = 13;
-					else if (DfsType == JAP)
-						pRadarDetect->DfsSessionTime = 5;
-					else if (DfsType == FCC)
-					{
-						pRadarDetect->DfsSessionTime = 5;
-					}
-					else if (DfsType == CE)
-						pRadarDetect->DfsSessionTime = 13;
-					else
-						pRadarDetect->DfsSessionTime = 13;
-					/* End of if */
+					pAd->CommonCfg.RDDurRegion = DfsType;
 
 					CFG80211DBG(RT_DEBUG_ERROR,
 								("Chan %03d:\tpower %d dBm, "
@@ -948,7 +1061,7 @@ VOID CFG80211_Scaning(
 
 	/* init */
 	/* Note: Can not use local variable to do pChan */
-	if (pAd->CommonCfg.PhyMode >= PHY_11ABGN_MIXED)
+	if (WMODE_CAP_N(pAd->CommonCfg.PhyMode))
 		FlgIsNMode = TRUE;
 	else
 		FlgIsNMode = FALSE;
@@ -959,7 +1072,6 @@ VOID CFG80211_Scaning(
 		BW = 1;
 
 	CFG80211OS_Scaning(pCfg80211_CB,
-						&pAd->ScanTab.BssEntry[BssIdx].pCfg80211_Chan,
 						ChanId,
 						pFrame,
 						FrameLen,
@@ -1097,6 +1209,19 @@ BOOLEAN CFG80211_SupBandReInit(
 
 	return CFG80211OS_SupBandReInit(CFG80211CB, &BandInfo);
 } /* End of CFG80211_SupBandReInit */
+
+#ifdef RT_P2P_SPECIFIC_WIRELESS_EVENT
+INT CFG80211_SendWirelessEvent(
+	IN VOID                                         *pAdCB,
+	IN UCHAR 					*pMacAddr)
+{
+	PRTMP_ADAPTER pAd = (PRTMP_ADAPTER)pAdCB;
+
+	P2pSendWirelessEvent(pAd, RT_P2P_CONNECTED, NULL, pMacAddr);
+	
+	return 0;
+}
+#endif /* RT_P2P_SPECIFIC_WIRELESS_EVENT */
 
 
 #endif /* RT_CFG80211_SUPPORT */

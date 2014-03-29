@@ -76,4 +76,3 @@
 
 #endif /* __RTMP_OS_ABL_H__ */
 
-/* End of rtmp_osabl.h */

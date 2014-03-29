@@ -195,7 +195,7 @@ static void rtusb_dataout_complete(unsigned long data)
 	pAd->watchDogTxPendingCnt[BulkOutPipeId] = 0;
 	
 	if (Status == USB_ST_NOERROR)
-	{	
+	{		
 		pAd->BulkOutComplete++;
 
 		RTMP_IRQ_UNLOCK(&pAd->BulkOutLock[BulkOutPipeId], IrqFlags);
@@ -205,6 +205,8 @@ static void rtusb_dataout_complete(unsigned long data)
 		FREE_HTTX_RING(pAd, BulkOutPipeId, pHTTXContext);			
 		/*RTMP_IRQ_UNLOCK(&pAd->TxContextQueueLock[BulkOutPipeId], IrqFlags); */
 
+#ifdef UAPSD_SUPPORT
+#endif /* UAPSD_SUPPORT */
 
 	}
 	else	/* STATUS_OTHER */
@@ -396,7 +398,10 @@ static void rx_done_tasklet(unsigned long data)
 	pRxContext->IRPPending = FALSE;
 	pRxContext->BulkInOffset += RTMP_USB_URB_LEN_GET(pUrb); /*pUrb->actual_length; */
 	/*NdisInterlockedDecrement(&pAd->PendingRx); */
-	pAd->PendingRx--;
+	
+	if (pAd->PendingRx > 0) {
+		pAd->PendingRx--;
+	}
 
 	if (Status == USB_ST_NOERROR)
 	{
@@ -420,6 +425,7 @@ static void rx_done_tasklet(unsigned long data)
 		if ((!RTMP_TEST_FLAG(pAd, (fRTMP_ADAPTER_RESET_IN_PROGRESS |
 									fRTMP_ADAPTER_BULKIN_RESET |
 									fRTMP_ADAPTER_HALT_IN_PROGRESS |
+									fRTMP_ADAPTER_RADIO_OFF |
 									fRTMP_ADAPTER_NIC_NOT_EXIST))))
 		{
 			
@@ -452,6 +458,7 @@ static void rx_done_tasklet(unsigned long data)
 }
 
 
+
 static void rtusb_mgmt_dma_done_tasklet(unsigned long data)
 {
 	PRTMP_ADAPTER 	pAd;
@@ -474,6 +481,12 @@ static void rtusb_mgmt_dma_done_tasklet(unsigned long data)
 	ASSERT((pAd->MgmtRing.TxDmaIdx == index));
 
 	RTMP_IRQ_LOCK(&pAd->BulkOutLock[MGMTPIPEIDX], IrqFlags);
+
+
+#ifdef UAPSD_SUPPORT
+	/* Qos Null frame with EOSP shall have valid Wcid value. reference RtmpUSBMgmtKickOut() API. */
+	/* otherwise will be value of MCAST_WCID. */
+#endif /* UAPSD_SUPPORT */
 
 
 	if (Status != USB_ST_NOERROR)
@@ -816,6 +829,7 @@ static void rtusb_ate_ac0_dma_done_tasklet(unsigned long data)
 		{
 			if (pAd->ate.QID == BulkOutPipeId)
 			{
+#ifdef RELASE_EXCLUDE
 				/*
 					Let Rx can have a chance to break in during Tx process,
 					especially for loopback mode in QA ATE.
@@ -825,7 +839,8 @@ static void rtusb_ate_ac0_dma_done_tasklet(unsigned long data)
 					Q   : Now Rx is handled by tasklet, do we still need this delay ?
 					Ans : Even tasklet is used, Rx/Tx < 1 if we do not delay for a while right here.
 				*/
-				RTMPusecDelay(500);
+#endif /* RELASE_EXCLUDE */
+				RTMPusecDelay(10);
 				pAd->ate.TxDoneCount++;
 #ifdef RELASE_EXCLUDE
 				DBGPRINT(RT_DEBUG_INFO, ("pAd->ate.TxDoneCount == %d\n", pAd->ate.TxDoneCount));
@@ -873,15 +888,15 @@ static void rtusb_ate_ac0_dma_done_tasklet(unsigned long data)
 	}
 
 #ifdef RELASE_EXCLUDE
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->pAd = 0x%lx\n", (ULONG)&pNullContext->pAd));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->pUrb = 0x%lx\n", (ULONG)&pNullContext->pUrb));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->TransferBuffer = 0x%lx\n", (ULONG)&pNullContext->TransferBuffer));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->BulkOutPipeId = %d\n", pNullContext->BulkOutPipeId));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->BulkOutSize = %ld\n", pNullContext->BulkOutSize));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->InUse = %d\n", (pNullContext->InUse==TRUE)));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->bWaitingBulkOut = %d\n", (pNullContext->bWaitingBulkOut==TRUE)));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->IRPPending = %d\n", (pNullContext->IRPPending==TRUE)));
-	DBGPRINT(RT_DEBUG_OFF, ("pNullContext->LastOne = %d\n", (pNullContext->LastOne==TRUE)));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->pAd = 0x%lx\n", (ULONG)&pNullContext->pAd));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->pUrb = 0x%lx\n", (ULONG)&pNullContext->pUrb));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->TransferBuffer = 0x%lx\n", (ULONG)&pNullContext->TransferBuffer));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->BulkOutPipeId = %d\n", pNullContext->BulkOutPipeId));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->BulkOutSize = %ld\n", pNullContext->BulkOutSize));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->InUse = %d\n", (pNullContext->InUse==TRUE)));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->bWaitingBulkOut = %d\n", (pNullContext->bWaitingBulkOut==TRUE)));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->IRPPending = %d\n", (pNullContext->IRPPending==TRUE)));
+	DBGPRINT(RT_DEBUG_INFO, ("pNullContext->LastOne = %d\n", (pNullContext->LastOne==TRUE)));
 #endif /* RELASE_EXCLUDE */
 	
 
@@ -936,6 +951,7 @@ NDIS_STATUS RtmpNetTaskInit(
 	
 	/* Create receive tasklet */
 	RTMP_OS_TASKLET_INIT(pAd, &pObj->rx_done_task, rx_done_tasklet, (ULONG)pAd);
+	//RTMP_OS_TASKLET_INIT(pAd, &pObj->cmd_rsp_event_task, cmd_rsp_event_tasklet, (ULONG)pAd);
 	RTMP_OS_TASKLET_INIT(pAd, &pObj->mgmt_dma_done_task, rtusb_mgmt_dma_done_tasklet, (unsigned long)pAd);
 	RTMP_OS_TASKLET_INIT(pAd, &pObj->ac0_dma_done_task, rtusb_ac0_dma_done_tasklet, (unsigned long)pAd);
 #ifdef RALINK_ATE
@@ -960,6 +976,7 @@ void RtmpNetTaskExit(IN RTMP_ADAPTER *pAd)
 	pObj = (POS_COOKIE) pAd->OS_Cookie;
 
 	RTMP_OS_TASKLET_KILL(&pObj->rx_done_task);
+	RTMP_OS_TASKLET_KILL(&pObj->cmd_rsp_event_task);
 	RTMP_OS_TASKLET_KILL(&pObj->mgmt_dma_done_task);
 	RTMP_OS_TASKLET_KILL(&pObj->ac0_dma_done_task);
 #ifdef RALINK_ATE

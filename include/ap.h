@@ -29,6 +29,23 @@
 #define __AP_H__
 
 
+
+
+/* ============================================================= */
+/*      Common definition */
+/* ============================================================= */
+#define MBSS_VLAN_INFO_GET(												\
+	__pAd, __VLAN_VID, __VLAN_Priority, __FromWhichBSSID) 				\
+{																		\
+	if ((__FromWhichBSSID < __pAd->ApCfg.BssidNum) &&					\
+		(__FromWhichBSSID < HW_BEACON_MAX_NUM) &&						\
+		(__pAd->ApCfg.MBSSID[__FromWhichBSSID].VLAN_VID != 0))			\
+	{																	\
+		__VLAN_VID = __pAd->ApCfg.MBSSID[__FromWhichBSSID].VLAN_VID;	\
+		__VLAN_Priority = __pAd->ApCfg.MBSSID[__FromWhichBSSID].VLAN_Priority; \
+	}																	\
+}
+
 /* ============================================================= */
 /*      Function Prototypes */
 /* ============================================================= */
@@ -75,9 +92,9 @@ VOID APRxEAPOLFrameIndicate(
 	IN	UCHAR			FromWhichBSSID);
 
 NDIS_STATUS APCheckRxError(
-	IN	PRTMP_ADAPTER	pAd,
-	IN	PRT28XX_RXD_STRUC		pRxD,
-	IN	UCHAR			Wcid);
+	IN RTMP_ADAPTER *pAd,
+	IN RXINFO_STRUC *pRxInfo,
+	IN UCHAR Wcid);
 
 BOOLEAN APCheckClass2Class3Error(
     IN  PRTMP_ADAPTER   pAd,
@@ -107,17 +124,6 @@ VOID APAssocStateMachineInit(
     IN  STATE_MACHINE *S, 
     OUT STATE_MACHINE_FUNC Trans[]);
 
-VOID  APPeerAssocReqAction(
-    IN  PRTMP_ADAPTER   pAd, 
-    IN  MLME_QUEUE_ELEM *Elem);
-
-VOID  APPeerReassocReqAction(
-    IN  PRTMP_ADAPTER   pAd, 
-    IN  MLME_QUEUE_ELEM *Elem);
-
-VOID  APPeerDisassocReqAction(
-    IN  PRTMP_ADAPTER   pAd, 
-    IN  MLME_QUEUE_ELEM *Elem);
 
 VOID MbssKickOutStas(
 	IN PRTMP_ADAPTER pAd,
@@ -130,29 +136,12 @@ VOID APMlmeKickOutSta(
 	IN UCHAR Wcid,
 	IN USHORT Reason);
 
-VOID APMlmeDisassocReqAction(
-    IN PRTMP_ADAPTER pAd, 
-    IN MLME_QUEUE_ELEM *Elem);
+
 
 VOID  APCls3errAction(
     IN  PRTMP_ADAPTER   pAd, 
 	IN 	ULONG Wcid,
     IN	PHEADER_802_11	pHeader);
-
-
-USHORT APBuildAssociation(
-    IN PRTMP_ADAPTER pAd,
-    IN MAC_TABLE_ENTRY *pEntry,
-    IN USHORT CapabilityInfo,
-    IN UCHAR  MaxSupportedRateIn500Kbps,
-    IN UCHAR  *RSN,
-    IN UCHAR  *pRSNLen, 
-    IN BOOLEAN bWmmCapable,
-    IN ULONG  RalinkIe,
-    IN EXT_CAP_INFO_ELEMENT ExtCapInfo,
-	IN HT_CAPABILITY_IE		*pHtCapability,
-	OUT UCHAR		 *pHtCapabilityLen,
-    OUT USHORT *pAid);
 
 /*
 VOID	RTMPAddClientSec(
@@ -276,31 +265,6 @@ VOID WpaStateMachineInit(
 VOID APMlmePeriodicExec(
     IN  PRTMP_ADAPTER   pAd);
 
-VOID APMlmeSelectTxRateTable(
-	IN PRTMP_ADAPTER		pAd,
-	IN PMAC_TABLE_ENTRY		pEntry,
-	IN PUCHAR				*ppTable,
-	IN PUCHAR				pTableSize,
-	IN PUCHAR				pInitTxRateIdx);
-
-VOID APMlmeSetTxRate(
-	IN PRTMP_ADAPTER		pAd,
-	IN PMAC_TABLE_ENTRY		pEntry,
-	IN PRTMP_TX_RATE_SWITCH	pTxRate);
-
-VOID APMlmeSelectRateSwitchTable11N3SReplacement(
-	IN PUCHAR	*ppTable);
-
-
-VOID APMlmeDynamicTxRateSwitching(
-    IN PRTMP_ADAPTER pAd);
-
-VOID APQuickResponeForRateUpExec(
-    IN PVOID SystemSpecific1, 
-    IN PVOID FunctionContext, 
-    IN PVOID SystemSpecific2, 
-    IN PVOID SystemSpecific3);
-
 BOOLEAN APMsgTypeSubst(
     IN PRTMP_ADAPTER pAd,
     IN PFRAME_802_11 pFrame, 
@@ -312,16 +276,6 @@ VOID APQuickResponeForRateUpExec(
     IN PVOID FunctionContext, 
     IN PVOID SystemSpecific2, 
     IN PVOID SystemSpecific3);
-
-#ifdef NEW_RATE_ADAPT_SUPPORT
-VOID APMlmeDynamicTxRateSwitchingAdapt(
-    IN PRTMP_ADAPTER pAd,
-    IN ULONG idx);
-
-VOID APQuickResponeForRateUpExecAdapt(
-    IN PRTMP_ADAPTER pAd,
-    IN ULONG idx);
-#endif /*NEW_RATE_ADAPT_SUPPORT */
 
 #ifdef RTMP_MAC_USB
 VOID BeaconUpdateExec(
@@ -358,24 +312,6 @@ VOID APCleanupPsQueue(
     IN  PRTMP_ADAPTER   pAd,
     IN  PQUEUE_HEADER   pQueue);
 
-VOID MacTableReset(
-    IN  PRTMP_ADAPTER   pAd);
-
-MAC_TABLE_ENTRY *MacTableInsertEntry(
-    IN  PRTMP_ADAPTER   pAd, 
-    IN  PUCHAR          pAddr,
-	IN	UCHAR			apidx,
-	IN	UCHAR           OpMode,
-	IN BOOLEAN	CleanAll); 
-
-BOOLEAN MacTableDeleteEntry(
-    IN  PRTMP_ADAPTER   pAd, 
-	IN USHORT wcid,
-    IN  PUCHAR          pAddr);
-
-MAC_TABLE_ENTRY *MacTableLookup(
-    IN  PRTMP_ADAPTER   pAd, 
-    IN  PUCHAR          pAddr);
 
 VOID MacTableMaintenance(
     IN PRTMP_ADAPTER pAd);
@@ -440,22 +376,8 @@ BOOLEAN PeerAssocReqCmmSanity(
     IN PRTMP_ADAPTER pAd, 
 	IN BOOLEAN isRessoc,
     IN VOID *Msg, 
-    IN ULONG MsgLen, 
-    OUT PUCHAR pAddr2,
-    OUT USHORT *pCapabilityInfo, 
-    OUT USHORT *pListenInterval, 
-    OUT PUCHAR pApAddr,
-    OUT UCHAR *pSsidLen,
-    OUT char *Ssid,
-    OUT UCHAR *pRatesLen,
-    OUT UCHAR Rates[],
-    OUT UCHAR *RSN,
-    OUT UCHAR *pRSNLen,
-    OUT BOOLEAN *pbWmmCapable,
-    OUT ULONG  *pRalinkIe,
-    OUT EXT_CAP_INFO_ELEMENT	*pExtCapInfo,
-    OUT UCHAR		 *pHtCapabilityLen,
-    OUT HT_CAPABILITY_IE *pHtCapability);
+    IN INT MsgLen,
+    IN IE_LISTS *ie_lists);
 
 
 BOOLEAN PeerDisassocReqSanity(

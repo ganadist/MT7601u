@@ -30,12 +30,8 @@
 
 #include "chip/chip_id.h"
 
-typedef VOID *(*RTMP_NET_ETH_CONVERT_DEV_SEARCH)(
-			IN	VOID			*net_dev_, 
-			IN	UCHAR			*pData);
-
-typedef int (*RTMP_NET_PACKET_TRANSMIT)(
-			IN	VOID			*pPacket);
+typedef VOID *(*RTMP_NET_ETH_CONVERT_DEV_SEARCH)(VOID *net_dev, UCHAR *pData);
+typedef int (*RTMP_NET_PACKET_TRANSMIT)(VOID *pPacket);
 
 #ifdef LINUX
 #ifdef OS_ABL_FUNC_SUPPORT
@@ -45,37 +41,25 @@ typedef int (*RTMP_NET_PACKET_TRANSMIT)(
 /* Note: No need to put any compile option here */
 typedef struct _RTMP_DRV_ABL_OPS {
 
-NDIS_STATUS	(*RTMPAllocAdapterBlock)(
-	IN  PVOID					handle,
-	OUT	VOID					**ppAdapter);
-
-VOID	(*RTMPFreeAdapter)(
-	IN	VOID					*pAd);
-
-BOOLEAN (*RtmpRaDevCtrlExit)(
-	IN	VOID					*pAd);
-
-INT (*RtmpRaDevCtrlInit)(
-	IN	VOID					*pAd,
-	IN	RTMP_INF_TYPE			infType);
-
-VOID (*RTMPHandleInterrupt)(
-	IN	VOID					*pAd);
-
+NDIS_STATUS	(*RTMPAllocAdapterBlock)(PVOID handle, VOID **ppAdapter);
+VOID (*RTMPFreeAdapter)(VOID *pAd);
+BOOLEAN (*RtmpRaDevCtrlExit)(VOID *pAd);
+INT (*RtmpRaDevCtrlInit)(VOID *pAd, RTMP_INF_TYPE infType);
+VOID (*RTMPHandleInterrupt)(VOID *pAd);
 INT (*RTMP_COM_IoctlHandle)(
-	IN	VOID					*pAd, 
-	IN	RTMP_IOCTL_INPUT_STRUCT	*wrq,
-	IN	INT						cmd,
-	IN	USHORT					subcmd,
-	IN	VOID					*pData,
-	IN	ULONG					Data);
+	IN	VOID *pAd, 
+	IN	RTMP_IOCTL_INPUT_STRUCT *wrq,
+	IN	INT cmd,
+	IN	USHORT subcmd,
+	IN	VOID *pData,
+	IN	ULONG Data);
 
 int (*RTMPSendPackets)(
-	IN	NDIS_HANDLE				MiniportAdapterContext,
-	IN	PPNDIS_PACKET			ppPacketArray,
-	IN	UINT					NumberOfPackets,
-	IN	UINT32					PktTotalLen,
-	IN	RTMP_NET_ETH_CONVERT_DEV_SEARCH	Func);
+	IN	NDIS_HANDLE MiniportAdapterContext,
+	IN	PPNDIS_PACKET ppPacketArray,
+	IN	UINT NumberOfPackets,
+	IN	UINT32 PktTotalLen,
+	IN	RTMP_NET_ETH_CONVERT_DEV_SEARCH Func);
 
 int (*MBSS_PacketSend)(
 	IN	PNDIS_PACKET				pPktSrc, 
@@ -119,20 +103,15 @@ INT (*RTMP_STA_IoctlHandle)(
 	IN	ULONG					Data,
 	IN  USHORT                  priv_flags);
 
-VOID (*RTMPDrvOpen)(
-	IN	VOID					*pAd);
+VOID (*RTMPDrvSTAOpen)(VOID *pAd);
+VOID (*RTMPDrvAPOpen)(VOID *pAd);
 
-VOID (*RTMPDrvClose)(
-	IN	VOID					*pAd,
-	IN	VOID					*net_dev);
+VOID (*RTMPDrvSTAClose)(VOID *pAd, VOID *net_dev);
+VOID (*RTMPDrvAPClose)(VOID *pAd, VOID *net_dev);
 
-VOID (*RTMPInfClose)(
-	IN	VOID					*pAd);
+VOID (*RTMPInfClose)(VOID *pAd);
 
-int (*rt28xx_init)(
-	IN	VOID					*pAd, 
-	IN	PSTRING					pDefaultMac,
-	IN	PSTRING					pHostName);
+int (*rt28xx_init)(VOID *pAd,  PSTRING pDefaultMac, PSTRING pHostName);
 } RTMP_DRV_ABL_OPS;
 
 extern RTMP_DRV_ABL_OPS *pRtmpDrvOps;
@@ -150,8 +129,7 @@ VOID RtmpDrvOpsInit(
 
 /* ========================================================================== */
 /* operators used in DRIVER module */
-typedef void (*RTMP_DRV_USB_COMPLETE_HANDLER)(
-			IN	VOID			*pURB);
+typedef void (*RTMP_DRV_USB_COMPLETE_HANDLER)(VOID *pURB);
 
 typedef struct _RTMP_NET_ABL_OPS {
 
@@ -163,6 +141,7 @@ RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutNullFrameComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutRTSFrameComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkOutPsPollComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkRxComplete;
+RTMP_DRV_USB_COMPLETE_HANDLER	RtmpNetUsbBulkCmdRspEventComplete;
 
 /* drv complete handlers */
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutDataPacketComplete;
@@ -171,19 +150,16 @@ RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutNullFrameComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutRTSFrameComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkOutPsPollComplete;
 RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkRxComplete;
+RTMP_DRV_USB_COMPLETE_HANDLER	RtmpDrvUsbBulkCmdRspEventComplete;
+
 #endif /* RTMP_USB_SUPPORT */
 
 } RTMP_NET_ABL_OPS;
 
 extern RTMP_NET_ABL_OPS *pRtmpDrvNetOps;
 
-VOID RtmpNetOpsInit(
-	IN VOID				*pNetOpsOrg);
-
-VOID RtmpNetOpsSet(
-	IN VOID				*pNetOpsOrg);
-
-
+VOID RtmpNetOpsInit(VOID *pNetOpsOrg);
+VOID RtmpNetOpsSet(VOID *pNetOpsOrg);
 
 
 /* ========================================================================== */
@@ -204,29 +180,20 @@ VOID RtmpNetOpsSet(
 #define P2P_PacketSend (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->P2P_PacketSend)
 #define RTMP_AP_IoctlHandle (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMP_AP_IoctlHandle)
 #define RTMP_STA_IoctlHandle (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMP_STA_IoctlHandle)
-#define RTMPDrvOpen (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvOpen)
-#define RTMPDrvClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvClose)
+#define RTMPDrvSTAOpen (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvSTAOpen)
+#define RTMPDrvAPOpen (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvAPOpen)
+#define RTMPDrvSTAClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvSTAClose)
+#define RTMPDrvAPClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPDrvAPClose)
 #define RTMPInfClose (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->RTMPInfClose)
 #define rt28xx_init (((RTMP_DRV_ABL_OPS *)(pRtmpDrvOps))->rt28xx_init)
 
 #else /* RTMP_MODULE_OS && OS_ABL_FUNC_SUPPORT */
 
-NDIS_STATUS RTMPAllocAdapterBlock(
-	IN	PVOID			handle,
-	OUT VOID   			**ppAdapter);
-
-VOID RTMPFreeAdapter(
-	IN  VOID   			*pAd);
-
-BOOLEAN RtmpRaDevCtrlExit(
-	IN	VOID			*pAd);
-
-INT RtmpRaDevCtrlInit(
-	IN	VOID			*pAd, 
-	IN	RTMP_INF_TYPE	infType);
-
-VOID RTMPHandleInterrupt(
-	IN	VOID			*pAd);
+NDIS_STATUS RTMPAllocAdapterBlock(PVOID handle, VOID **ppAdapter);
+VOID RTMPFreeAdapter(VOID *pAd);
+BOOLEAN RtmpRaDevCtrlExit(VOID *pAd);
+INT RtmpRaDevCtrlInit(VOID *pAd, RTMP_INF_TYPE infType);
+VOID RTMPHandleInterrupt(VOID *pAd);
 
 INT RTMP_COM_IoctlHandle(
 	IN	VOID					*pAd, 
@@ -280,23 +247,18 @@ INT RTMP_STA_IoctlHandle(
 	IN  USHORT                  priv_flags );
 #endif /* CONFIG_STA_SUPPORT */
 
-VOID RTMPDrvOpen(
-	IN VOID						*pAd);
-
-VOID RTMPDrvClose(
-	IN VOID						*pAd,
-	IN VOID						*net_dev);
-
-VOID RTMPInfClose(
-	IN VOID						*pAd);
+VOID RTMPDrvSTAOpen(VOID *pAd);
+VOID RTMPDrvAPOpen(VOID *pAd);
+VOID RTMPDrvSTAClose(VOID *pAd, VOID *net_dev);
+VOID RTMPDrvAPClose(VOID *pAd, VOID *net_dev);
+VOID RTMPInfClose(VOID *pAd);
 
 int rt28xx_init(
 	IN VOID						*pAd, 
 	IN PSTRING					pDefaultMac, 
 	IN PSTRING					pHostName);
 
-PNET_DEV RtmpPhyNetDevMainCreate(
-	IN VOID						*pAd);
+PNET_DEV RtmpPhyNetDevMainCreate(VOID *pAd);
 #endif /* RTMP_MODULE_OS */
 
 
@@ -462,13 +424,17 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_NIC_NOT_EXIST_SET(__pAd)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_NIC_NOT_EXIST, 0, NULL, 0)
 
+#define RTMP_DRIVER_MCU_SLEEP_CLEAR(__pAd)	\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_MCU_SLEEP_CLEAR, 0, NULL, 0)
+
+
 #ifdef CONFIG_APSTA_MIXED_SUPPORT
 #define RTMP_DRIVER_MAX_IN_BITS_SET(__pAd, __MaxInBit)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_MAX_IN_BIT, 0, NULL, __MaxInBit)
 #endif /* CONFIG_APSTA_MIXED_SUPPORT */
-#ifdef CONFIG_STA_SUPPORT
-#ifdef CONFIG_PM
-#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
+//#ifdef CONFIG_STA_SUPPORT
+//#ifdef CONFIG_PM
+//#ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 
 #define RTMP_DRIVER_USB_DEV_GET(__pAd, __pUsbDev)                                                       \
         RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_USB_DEV_GET, 0, __pUsbDev, 0)
@@ -482,17 +448,11 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_ADAPTER_SUSPEND_CLEAR(__pAd)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_CLEAR, 0, NULL, 0)
 
+#define RTMP_DRIVER_ADAPTER_END_DISSASSOCIATE(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SEND_DISSASSOCIATE, 0, NULL, 0)
+
 #define RTMP_DRIVER_ADAPTER_SUSPEND_TEST(__pAd, __flag)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_SUSPEND_TEST, 0,  __flag, 0)
-
-#define RTMP_DRIVER_ADAPTER_CPU_SUSPEND_SET(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_CPU_SUSPEND_SET, 0, NULL, 0)
-
-#define RTMP_DRIVER_ADAPTER_CPU_SUSPEND_CLEAR(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_CPU_SUSPEND_CLEAR, 0, NULL, 0)
-
-#define RTMP_DRIVER_ADAPTER_CPU_SUSPEND_TEST(__pAd, __flag)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_CPU_SUSPEND_TEST, 0,  __flag, 0)
 
 #define RTMP_DRIVER_ADAPTER_IDLE_RADIO_OFF_TEST(__pAd, __flag)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_IDLE_RADIO_OFF_TEST, 0,  __flag, 0)
@@ -503,12 +463,26 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_ADAPTER_RT28XX_USB_ASICRADIO_ON(__pAd)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_ASICRADIO_ON, 0, NULL, 0)
 
-#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
-#endif /* CONFIG_PM */	
+
+#ifdef WOW_SUPPORT
+#ifdef RTMP_MAC_USB
+#define RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_STATUS(__pAd, __flag)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_STATUS, 0, __flag, 0)
+
+#define RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_ENABLE(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_ENABLE, 0, NULL, 0)
+
+#define RTMP_DRIVER_ADAPTER_RT28XX_USB_WOW_DISABLE(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_RT28XX_USB_WOW_DISABLE, 0, NULL, 0)
+#endif /* RTMP_MAC_USB */
+#endif /* WOW_SUPPORT */
+
+//#endif /* USB_SUPPORT_SELECTIVE_SUSPEND */
+//#endif /* CONFIG_PM */	
 
 #define RTMP_DRIVER_AP_SSID_GET(__pAd, pData)								\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_AP_BSSID_GET, 0, pData, 0)
-#endif /* CONFIG_STA_SUPPORT */
+//#endif /* CONFIG_STA_SUPPORT */
 
 #define RTMP_DRIVER_VIRTUAL_INF_NUM_GET(__pAd, __pIfNum)					\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_VIRTUAL_INF_GET, 0, __pIfNum, 0)
@@ -516,8 +490,8 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_CHANNEL_GET(__pAd, __Channel)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_SIOCGIWFREQ, 0, __Channel, 0)
 
-#define RTMP_DRIVER_IOCTL_SANITY_CHECK(__pAd)								\
-	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_SANITY_CHECK, 0, NULL, 0)
+#define RTMP_DRIVER_IOCTL_SANITY_CHECK(__pAd, __SetCmd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_SANITY_CHECK, 0, __SetCmd, 0)
 
 #define RTMP_DRIVER_BITRATE_GET(__pAd, __pBitRate)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_AP_SIOCGIWRATEQ, 0, __pBitRate, 0)
@@ -533,6 +507,11 @@ VOID RTMP_P2P_Remove(
 
 #define RTMP_DRIVER_P2P_INF_CHECK(__pAd, __InfId)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_INF_P2P_CHECK, 0, NULL, __InfId)
+
+#ifdef EXT_BUILD_CHANNEL_LIST
+#define RTMP_DRIVER_SET_PRECONFIG_VALUE(__pAd)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_SET_PRECONFIG_VALUE, 0, NULL, 0)
+#endif /* EXT_BUILD_CHANNEL_LIST */
 
 /* cfg80211 */
 #define RTMP_DRIVER_CFG80211_START(__pAd)									\
@@ -570,6 +549,10 @@ VOID RTMP_P2P_Remove(
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_80211_UNREGISTER, 0, __pNetDev, 0)
 #define RTMP_DRIVER_80211_BANDINFO_GET(__pAd, __pBandInfo)				\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_80211_BANDINFO_GET, 0, __pBandInfo, 0)
+#define RTMP_DRIVER_80211_SURVEY_GET(__pAd, __pSurveyInfo)				\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_80211_SURVEY_GET, 0, __pSurveyInfo, 0)
+#define RTMP_DRIVER_80211_PMKID_CTRL(__pAd, __pPmkidInfo)				\
+	RTMP_STA_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_STA_SIOCSIWPMKSA, 0, __pPmkidInfo, 0, 0);
 #endif /* RT_CFG80211_SUPPORT */
 
 /* mesh */
@@ -639,6 +622,11 @@ VOID RTMP_P2P_Remove(
 #define RTMP_DRIVER_MAC_ADDR_GET(__pAd, __pMacAddr)							\
 	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_MAC_ADDR_GET, 0, __pMacAddr, 0)
 	
+#define RTMP_DRIVER_ADAPTER_CSO_SUPPORT_TEST(__pAd, __flag)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_CSO_SUPPORT_TEST, 0,  __flag, 0)
+
+#define RTMP_DRIVER_ADAPTER_TSO_SUPPORT_TEST(__pAd, __flag)								\
+	RTMP_COM_IoctlHandle(__pAd, NULL, CMD_RTPRIV_IOCTL_ADAPTER_TSO_SUPPORT_TEST, 0,  __flag, 0)
+
 #endif /* __RT_OS_NET_H__ */
 
-/* End of rt_os_net.h */
