@@ -57,7 +57,7 @@ typedef VOID	pregs;
 
 #ifdef RTMP_MAC_USB
 #define STA_PROFILE_PATH			"/etc/Wireless/RT2870STA/RT2870STA.dat"
-#define STA_DRIVER_VERSION			"2.5.0.0"
+#define STA_DRIVER_VERSION			"2.5.0.3"
 #ifdef MULTIPLE_CARD_SUPPORT
 #define CARD_INFO_PATH			"/etc/Wireless/RT2870STA/RT2870STACard.dat"
 #endif /* MULTIPLE_CARD_SUPPORT */
@@ -915,6 +915,7 @@ extern int rausb_control_msg(VOID *dev,
 
 #ifdef RTMP_MAC_USB
 #ifdef CONFIG_STA_SUPPORT
+#undef EEPROM_BIN_FILE_NAME /* Avoid APSTA mode re-define issue */
 #define EEPROM_BIN_FILE_NAME  "/etc/Wireless/RT2870STA/e2p.bin"
 #endif /* CONFIG_STA_SUPPORT */
 #endif /* RTMP_MAC_USB */

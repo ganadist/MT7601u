@@ -1065,7 +1065,7 @@ INT RTUSBCmdThread(
 
 	pTask = (RTMP_OS_TASK *)Context;
 	pAd = (PRTMP_ADAPTER)RTMP_OS_TASK_DATA_GET(pTask);
-
+	
 	if (pAd == NULL)
 		return 0;
 	

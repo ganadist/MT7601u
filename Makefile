@@ -9,7 +9,7 @@ TARGET = LINUX
 endif
 
 ifeq ($(CHIPSET),)
-CHIPSET = 3070
+CHIPSET = 5370
 endif
 
 #OS ABL - YES or NO
@@ -74,6 +74,7 @@ endif
 #RELEASE Package
 RELEASE = DPO
 
+
 ifeq ($(TARGET),LINUX)
 MAKE = make
 endif
@@ -107,8 +108,8 @@ CROSS_COMPILE = mips-linux-
 endif
 
 ifeq ($(PLATFORM),SIGMA)
-LINUX_SRC = /home/snowpin/Sigma/sigma8654_evb/sigma_8654/Tango3_SDK/smp86xx_kernel_source_R2.6.22-4/linux-2.6.22.19
-CROSS_COMPILE = /opt/sigma_toolchain/bin/mipsel-linux-
+LINUX_SRC = /root/sigma/smp86xx_kernel_source_2.7.172.0/linux-2.6.15
+CROSS_COMPILE = /root/sigma/smp86xx_toolchain_2.7.172.0/build_mipsel_nofpu/staging_dir/bin/mipsel-linux-
 endif
 
 ifeq ($(PLATFORM),SIGMA_8622)
@@ -401,6 +402,7 @@ release:
 ifeq ($(RELEASE), DPO)
 	gcc -o striptool/banner striptool/banner.c
 	./striptool/banner -b striptool/copyright.gpl -s DPO/ -d DPO_GPL -R
+	./striptool/banner -b striptool/copyright.frm -s DPO_GPL/include/firmware.h
 endif
 
 prerelease:
@@ -422,7 +424,7 @@ ifeq ($(TARGET), LINUX)
 	cp -f os/linux/Makefile.clean os/linux/Makefile
 	$(MAKE) -C os/linux clean
 	rm -rf os/linux/Makefile
-endif
+endif	
 ifeq ($(TARGET), UCOS)
 	$(MAKE) -C os/ucos clean MODE=$(RT28xx_MODE)
 endif
@@ -478,7 +480,7 @@ else
 	$(MAKE) -C $(LINUX_SRC) SUBDIRS=$(RT28xx_DIR)/os/linux modules
 endif
 endif
-	
+
 osdrv:
 ifneq (,$(findstring 2.4,$(LINUX_SRC)))
 	cp -f os/linux/Makefile.4 $(RT28xx_DIR)/os/linux/Makefile

@@ -77,7 +77,6 @@
 #ifdef CONFIG_STA_SUPPORT
 #define CW_MAX_IN_BITS              10        /* actual CwMax = 2^CW_MAX_IN_BITS - 1 */
 #endif /* CONFIG_STA_SUPPORT */
-
 #ifdef CONFIG_APSTA_MIXED_SUPPORT
 extern UINT32 CW_MAX_IN_BITS;
 #endif /* CONFIG_APSTA_MIXED_SUPPORT */
@@ -1080,6 +1079,8 @@ typedef struct {
 	EXT_CAP_INFO_ELEMENT ExtCapInfo;	/* this is the extened capibility IE appreed in MGMT frames. Doesn't need to update once set in Init. */
 	UCHAR			NewExtChanOffset;
 	CHAR    Rssi;
+
+
 	CHAR	MinSNR;	
     UCHAR   Privacy;			/* Indicate security function ON/OFF. Don't mess up with auth mode. */
 	UCHAR	Hidden;
@@ -1125,6 +1126,7 @@ typedef struct {
 	EDCA_PARM           EdcaParm;
 	QOS_CAPABILITY_PARM QosCapability;
 	QBSS_LOAD_PARM      QbssLoad;
+
 
 
 #ifdef CONFIG_STA_SUPPORT
@@ -1250,6 +1252,7 @@ typedef struct _MLME_AUX {
 
 #ifdef CONFIG_STA_SUPPORT
 #endif /* CONFIG_STA_SUPPORT */
+
 } MLME_AUX, *PMLME_AUX;
 
 typedef struct _MLME_ADDBA_REQ_STRUCT{

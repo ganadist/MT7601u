@@ -69,7 +69,7 @@ ULONG OS_NumOfPktAlloc = 0, OS_NumOfPktFree = 0;
  * path so throughput should not be impacted
  */
 BOOLEAN FlgIsUtilInit = FALSE;
-NDIS_SPIN_LOCK UtilSemLock;
+OS_NDIS_SPIN_LOCK UtilSemLock;
 
 
 /*
@@ -306,7 +306,7 @@ void RtmpFlashRead(
 #ifdef RA_MTD_RW_BY_NUM
 	ra_mtd_read(MTD_NUM_FACTORY, 0, (size_t) b, p);
 #else
-	ra_mtd_read_nm("Factory", 0, (size_t) b, p);
+	ra_mtd_read_nm("Factory", a&0xFFFF, (size_t) b, p);
 #endif
 #endif /* CONFIG_RALINK_FLASH_API */
 }
@@ -322,7 +322,7 @@ void RtmpFlashWrite(
 #ifdef RA_MTD_RW_BY_NUM
 	ra_mtd_write(MTD_NUM_FACTORY, 0, (size_t) b, p);
 #else
-	ra_mtd_write_nm("Factory", 0, (size_t) b, p);
+	ra_mtd_write_nm("Factory", a&0xFFFF, (size_t) b, p);
 #endif
 #endif /* CONFIG_RALINK_FLASH_API */
 }
@@ -1370,6 +1370,7 @@ static UINT32 RtmpOSWirelessEventTranslate(IN UINT32 eventType) {
 	case RT_WLAN_EVENT_EXPIRED:
 		eventType = IWEVEXPIRED;
 		break;
+
 	default:
 		printk("Unknown event: %d\n", eventType);
 		break;
@@ -1930,7 +1931,7 @@ VOID RtmpDrvAllE2PPrint(IN VOID *pReserved,
 	mm_segment_t orig_fs;
 	STRING *msg;//[1024];
 	USHORT eepAddr = 0;
-	USHORT eepValue;	
+	USHORT eepValue;
 
 	os_alloc_mem(NULL, (UCHAR **)&msg, 1024);
 
@@ -1963,7 +1964,7 @@ VOID RtmpDrvAllE2PPrint(IN VOID *pReserved,
 
 					printk("%s", msg);
 					eepAddr += AddrStep;
-					pMacContent += AddrStep;
+					pMacContent += (AddrStep/2);
 				}
 				sprintf(msg, "\nDump all EEPROM values to %s\n",
 					fileName);
@@ -4782,6 +4783,9 @@ INT32 RtmpThreadPidKill(IN RTMP_OS_PID PID) {
 }
 
 long RtmpOsSimpleStrtol(IN const char *cp, IN char **endp, IN unsigned int base) {
+	return simple_strtol(cp,
+			     endp,
+			     base);
 	return simple_strtol(cp, endp, base);
 }
 

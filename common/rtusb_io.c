@@ -445,6 +445,9 @@ NTSTATUS	RTUSBReadBBPRegister(
 	BBP_CSR_CFG_STRUC	BbpCsr;
 	UINT			i = 0;
 	NTSTATUS		status;
+	int				RET = 0;
+
+	RTMP_SEM_EVENT_WAIT(&(pAd->UsbVendorReq_semaphore2), RET);
 	
 	/* Verify the busy condition*/
 	do
@@ -467,6 +470,8 @@ NTSTATUS	RTUSBReadBBPRegister(
 		*pValue = pAd->BbpWriteLatch[Id];
 	
 		DBGPRINT_RAW(RT_DEBUG_ERROR, ("Retry count exhausted or device removed!!!\n"));
+		RTMP_SEM_EVENT_UP(&(pAd->UsbVendorReq_semaphore2));
+		
 		return STATUS_UNSUCCESSFUL;
 	}
 
@@ -502,8 +507,10 @@ NTSTATUS	RTUSBReadBBPRegister(
 		*pValue = pAd->BbpWriteLatch[Id];
 
 		DBGPRINT_RAW(RT_DEBUG_ERROR, ("Retry count exhausted or device removed!!!\n"));
+		RTMP_SEM_EVENT_UP(&(pAd->UsbVendorReq_semaphore2));
 		return STATUS_UNSUCCESSFUL;
 	}
+	RTMP_SEM_EVENT_UP(&(pAd->UsbVendorReq_semaphore2));
 	
 	return STATUS_SUCCESS;
 }
@@ -532,6 +539,10 @@ NTSTATUS	RTUSBWriteBBPRegister(
 	BBP_CSR_CFG_STRUC	BbpCsr;
 	UINT			i = 0;
 	NTSTATUS		status;
+	int				RET = 0;
+
+	RTMP_SEM_EVENT_WAIT(&(pAd->UsbVendorReq_semaphore2), RET);
+	
 	/* Verify the busy condition*/
 	do
 	{
@@ -549,6 +560,7 @@ NTSTATUS	RTUSBWriteBBPRegister(
 	if ((i == RETRY_LIMIT) || (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
 	{
 		DBGPRINT_RAW(RT_DEBUG_ERROR, ("Retry count exhausted or device removed!!!\n"));
+		RTMP_SEM_EVENT_UP(&(pAd->UsbVendorReq_semaphore2));
 		return STATUS_UNSUCCESSFUL;
 	}
 
@@ -561,6 +573,7 @@ NTSTATUS	RTUSBWriteBBPRegister(
 	RTUSBWriteMACRegister(pAd, BBP_CSR_CFG, BbpCsr.word);
 	
 	pAd->BbpWriteLatch[Id] = Value;
+	RTMP_SEM_EVENT_UP(&(pAd->UsbVendorReq_semaphore2));
 
 	return STATUS_SUCCESS;
 }
@@ -1787,8 +1800,8 @@ VOID RTUSBWatchDog(IN RTMP_ADAPTER *pAd)
 		RTMP_IO_WRITE32(pAd, PBF_CFG, 0xf40012);
 		while((MACValue &0xff) != 0 && (idx++ < 10))
 		{
-			RTMP_IO_READ32(pAd, TXRXQ_PCNT, &MACValue);
-			RTMPusecDelay(1);
+		        RTMP_IO_READ32(pAd, TXRXQ_PCNT, &MACValue);
+		        RTMPusecDelay(1);
 		}
 		RTMP_IO_WRITE32(pAd, PBF_CFG, 0xf40006);
 	}

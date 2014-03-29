@@ -1066,6 +1066,19 @@ VOID PeerAssocRspAction(
 			if (Status == MLME_SUCCESS) {
 				UCHAR MaxSupportedRateIn500Kbps = 0;
 				UCHAR idx;
+				PMAC_TABLE_ENTRY pEntry = NULL;
+
+				/*
+					In roaming case, LinkDown wouldn't be invoked.
+					For preventing finding MacTable Hash index malfunction,
+					we need to do MacTableDeleteEntry here.
+				*/
+				pEntry = MacTableLookup(pAd, pAd->CommonCfg.Bssid);	
+				if (pEntry)	
+				{
+					MacTableDeleteEntry(pAd, pEntry->Aid, pEntry->Addr);
+					pEntry = NULL;	
+				}
 
 				/* supported rates array may not be sorted. sort it and find the maximum rate */
 				for (idx = 0; idx < SupRateLen; idx++) {
@@ -1165,13 +1178,53 @@ VOID PeerReassocRspAction(
 			RTMPCancelTimer(&pAd->MlmeAux.ReassocTimer,
 					&TimerCancelled);
 
-			if (Status == MLME_SUCCESS) {
+			if (Status == MLME_SUCCESS) 
+			{
+				UCHAR MaxSupportedRateIn500Kbps = 0;
+				UCHAR idx;
+				PMAC_TABLE_ENTRY pEntry = NULL;
+
+				/*
+					In roaming case, LinkDown wouldn't be invoked.
+					For preventing finding MacTable Hash index malfunction,
+					we need to do MacTableDeleteEntry here.
+				*/
+				pEntry = MacTableLookup(pAd, pAd->CommonCfg.Bssid);	
+				if (pEntry)	
+				{
+					MacTableDeleteEntry(pAd, pEntry->Aid, pEntry->Addr);
+					pEntry = NULL;	
+				}
+
+				/* supported rates array may not be sorted. sort it and find the maximum rate */
+				for (idx = 0; idx < SupRateLen; idx++) {
+					if (MaxSupportedRateIn500Kbps <
+					    (SupRate[idx] & 0x7f))
+						MaxSupportedRateIn500Kbps =
+						    SupRate[idx] & 0x7f;
+				}
+
+				for (idx = 0; idx < ExtRateLen; idx++) {
+					if (MaxSupportedRateIn500Kbps <
+					    (ExtRate[idx] & 0x7f))
+						MaxSupportedRateIn500Kbps =
+						    ExtRate[idx] & 0x7f;
+				}
+				
 				/* go to procedure listed on page 376 */
 				AssocPostProc(pAd, Addr2, CapabilityInfo, Aid,
 					      SupRate, SupRateLen, ExtRate,
 					      ExtRateLen, &EdcaParm,
 					      &HtCapability, HtCapabilityLen,
 					      &AddHtInfo);
+
+				StaAddMacTableEntry(pAd,
+						    &pAd->MacTab.Content[BSSID_WCID],
+						    MaxSupportedRateIn500Kbps,
+						    &HtCapability,
+						    HtCapabilityLen, &AddHtInfo,
+						    AddHtInfoLen,
+						    CapabilityInfo);
 
 #ifdef WPA_SUPPLICANT_SUPPORT
 #ifndef NATIVE_WPA_SUPPLICANT_SUPPORT

@@ -218,6 +218,7 @@ INT	Show_PMK_Proc(
 	OUT	PSTRING			pBuf,
 	IN	ULONG			BufLen);
 
+
 extern INT	Set_AP_WscConfStatus_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
 	IN	PSTRING			arg);
@@ -433,7 +434,8 @@ INT	Set_Cmm_WirelessMode_Proc(
 		SetCommonHT(pAd);
 #endif /* DOT11_N_SUPPORT */
 
-		RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_WLAN_MODE_CHANGE, NULL, 0);
+		RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_STATE_WMODE_CMD,
+							RTMP_CHIP_SPEC_WLAN_MODE_CHANGE, NULL, 0);
 
 	}
 	else
@@ -1232,7 +1234,6 @@ NDIS_STATUS RTMPWPARemoveKeyProc(
 								/* Otherwise, it will set by the NIC.*/
 	BOOLEAN 	bAuthenticator; /* indicate key is set by authenticator.*/
 	INT 		i;
-
 	DBGPRINT(RT_DEBUG_TRACE,("---> RTMPWPARemoveKeyProc\n"));
 	
 	pKey = (PNDIS_802_11_REMOVE_KEY) pBuf;
@@ -1257,15 +1258,15 @@ NDIS_STATUS RTMPWPARemoveKeyProc(
 		/* b. If not broadcast, remove the pairwise specified by BSSID*/
 		for (i = 0; i < SHARE_KEY_NUM; i++)
 		{
-			if (MAC_ADDR_EQUAL(pAd->SharedKey[BSS0][i].BssId, pKey->BSSID))
-			{
-				DBGPRINT(RT_DEBUG_TRACE,("RTMPWPARemoveKeyProc(KeyIdx=%d)\n", i));
-				pAd->SharedKey[BSS0][i].KeyLen = 0;
-				pAd->SharedKey[BSS0][i].CipherAlg = CIPHER_NONE;
-				AsicRemoveSharedKeyEntry(pAd, BSS0, (UCHAR)i);
-				Status = NDIS_STATUS_SUCCESS;
-				break;
-			}
+				if (MAC_ADDR_EQUAL(pAd->SharedKey[BSS0][i].BssId, pKey->BSSID))
+				{
+					DBGPRINT(RT_DEBUG_TRACE,("RTMPWPARemoveKeyProc(KeyIdx=%d)\n", i));
+					pAd->SharedKey[BSS0][i].KeyLen = 0;
+					pAd->SharedKey[BSS0][i].CipherAlg = CIPHER_NONE;
+					AsicRemoveSharedKeyEntry(pAd, BSS0, (UCHAR)i);
+					Status = NDIS_STATUS_SUCCESS;
+					break;
+				}
 		}
 	}
 	/* 3. Group Key*/
@@ -1551,8 +1552,23 @@ VOID	RTMPSetHT(
 		pAd->CommonCfg.HtCapability.ExtHtCapInfo.RDGSupport = 0;
 	}
 
-	pAd->CommonCfg.HtCapability.HtCapParm.MaxRAmpduFactor = 3;
-	pAd->CommonCfg.DesiredHtPhy.MaxRAmpduFactor = 3;
+	if (RxStream == 1)
+	{
+		/*
+			New chip use larger buffer, we can increase MaxRAmpduFactor
+			the WPA2/AES throughput can boost from 65Mbps to 84Mbps
+			after modified the value from 3 to 2.
+			All 3070, 3370, 3090, 3390, 5390, 5370 need the modification
+			to improve Throughput.
+		*/
+		pAd->CommonCfg.HtCapability.HtCapParm.MaxRAmpduFactor = 2;
+		pAd->CommonCfg.DesiredHtPhy.MaxRAmpduFactor = 2;
+	}
+	else
+	{
+		pAd->CommonCfg.HtCapability.HtCapParm.MaxRAmpduFactor = 3;
+		pAd->CommonCfg.DesiredHtPhy.MaxRAmpduFactor = 3;
+	}
 
 	DBGPRINT(RT_DEBUG_TRACE, ("RTMPSetHT : RxBAWinLimit = %d\n", pAd->CommonCfg.BACapability.field.RxBAWinLimit));
 
@@ -1645,7 +1661,8 @@ VOID	RTMPSetHT(
 			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R3, BBP3Value);
 			pAd->CommonCfg.BBPCurrentBW = BW_40;
 
-			RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_HT_MODE_CHANGE, NULL, BW_40);
+			RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SEPC_STATE_HT_SET,
+								RTMP_CHIP_SPEC_HT_MODE_CHANGE, NULL, BW_40);
 		}
 	}
 	else
@@ -1662,7 +1679,8 @@ VOID	RTMPSetHT(
 			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R4, BBPValue);
 			pAd->CommonCfg.BBPCurrentBW = BW_20;
 
-			RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_HT_MODE_CHANGE, NULL, BW_20);
+			RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SEPC_STATE_HT_SET,
+								RTMP_CHIP_SPEC_HT_MODE_CHANGE, NULL, BW_20);
 		}
 	}
 		
@@ -2180,10 +2198,10 @@ VOID	RTMPCommSiteSurveyData(
 	NDIS_802_11_ENCRYPTION_STATUS	ap_cipher = Ndis802_11EncryptionDisabled;
 	NDIS_802_11_AUTHENTICATION_MODE	ap_auth_mode = Ndis802_11AuthModeOpen;
 
-	/*Channel*/
+		/*Channel*/
 		sprintf(msg+strlen(msg),"%-4d", pBss->Channel);
 
-	/*SSID*/
+		/*SSID*/
 	NdisZeroMemory(Ssid, (MAX_LEN_OF_SSID +1));
 	if (RTMPCheckStrPrintAble((PCHAR)pBss->Ssid, pBss->SsidLen))
 		NdisMoveMemory(Ssid, pBss->Ssid, pBss->SsidLen);
@@ -2194,10 +2212,10 @@ VOID	RTMPCommSiteSurveyData(
 		for (idx = 0; (idx < 14) && (idx < pBss->SsidLen); idx++)
 			sprintf(Ssid + 2 + (idx*2), "%02X", (UCHAR)pBss->Ssid[idx]);
 	}
-	sprintf(msg+strlen(msg),"%-33s", Ssid);      
+		sprintf(msg+strlen(msg),"%-33s", Ssid);      
 		
-	/*BSSID*/
-	sprintf(msg+strlen(msg),"%02x:%02x:%02x:%02x:%02x:%02x   ", 
+		/*BSSID*/
+		sprintf(msg+strlen(msg),"%02x:%02x:%02x:%02x:%02x:%02x   ", 
 			pBss->Bssid[0], 
 			pBss->Bssid[1],
 			pBss->Bssid[2], 
@@ -2426,7 +2444,7 @@ VOID RTMPIoctlGetSiteSurvey(
 
 
 
-#define	MAC_LINE_LEN	(14+4+4+10+10+10+6+6)	/* Addr+aid+psm+datatime+rxbyte+txbyte+current tx rate+last tx rate*/
+#define	MAC_LINE_LEN	(1+14+4+4+4+4+10+10+10+6+6+1)	/* "\n"+Addr+AP+aid+psm+AUTH+datatime+rxbyte+txbyte+current tx rate+last tx rate+"\n" */
 VOID RTMPIoctlGetMacTable(
 	IN PRTMP_ADAPTER pAd, 
 	IN RTMP_IOCTL_INPUT_STRUCT *wrq)
@@ -2485,7 +2503,7 @@ VOID RTMPIoctlGetMacTable(
 
 
 /*	msg = kmalloc(sizeof(CHAR)*(MAX_LEN_OF_MAC_TABLE*MAC_LINE_LEN), MEM_ALLOC_FLAG);*/
-	os_alloc_mem(NULL, (UCHAR **)&msg, sizeof(CHAR)*(MAX_LEN_OF_MAC_TABLE*MAC_LINE_LEN)+100);
+	os_alloc_mem(NULL, (UCHAR **)&msg, sizeof(CHAR)*(MAX_LEN_OF_MAC_TABLE*MAC_LINE_LEN));
 	if (msg == NULL)
 	{
 		DBGPRINT(RT_DEBUG_ERROR, ("%s():Alloc memory failed\n", __FUNCTION__));
@@ -4173,4 +4191,84 @@ void  getRate(HTTRANSMIT_SETTING HTSetting, ULONG* fLastTxRxRate)
 	return;
 }
 
+INT	Set_Antenna_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg)
+{
+	ANT_DIVERSITY_TYPE UsedAnt;
+	DBGPRINT(RT_DEBUG_OFF, ("==> Set_Antenna_Proc *******************\n"));
 
+	UsedAnt = simple_strtol(arg, 0, 10);
+#ifdef ANT_DIVERSITY_SUPPORT
+    pAd->CommonCfg.bRxAntDiversity = UsedAnt;
+#endif /* ANT_DIVERSITY_SUPPORT */
+
+	switch (UsedAnt)
+	{
+#ifdef ANT_DIVERSITY_SUPPORT
+		/* 0: Disabe --> set Antenna CON1*/
+		case ANT_DIVERSITY_DISABLE:
+#endif /* ANT_DIVERSITY_SUPPORT */
+		/* 2: Fix in the PHY Antenna CON1*/
+		case ANT_FIX_ANT0:
+			AsicSetRxAnt(pAd, 0);
+			DBGPRINT(RT_DEBUG_OFF, ("<== Set_Antenna_Proc(Fix in Ant CON1), (%d,%d)\n", 
+					pAd->RxAnt.Pair1PrimaryRxAnt, pAd->RxAnt.Pair1SecondaryRxAnt));
+			break;
+#ifdef ANT_DIVERSITY_SUPPORT
+		/* 1: Enable --> HW/SW Antenna diversity*/
+		case ANT_DIVERSITY_ENABLE:
+			if ((pAd->chipCap.FlgIsHwAntennaDiversitySup) && (pAd->chipOps.HwAntEnable)) // HW_ANT_DIV (PPAD)
+			{
+				pAd->chipOps.HwAntEnable(pAd);
+				pAd->CommonCfg.bRxAntDiversity = ANT_HW_DIVERSITY_ENABLE;
+			}	
+			else // SW_ANT_DIV
+			{
+				pAd->RxAnt.EvaluateStableCnt = 0;
+				pAd->CommonCfg.bRxAntDiversity = ANT_SW_DIVERSITY_ENABLE;
+			}
+
+			DBGPRINT(RT_DEBUG_OFF, ("<== Set_Antenna_Proc(Auto Switch Mode), (%d,%d)\n", 
+					pAd->RxAnt.Pair1PrimaryRxAnt, pAd->RxAnt.Pair1SecondaryRxAnt));
+			break;
+#endif /* ANT_DIVERSITY_SUPPORT */
+    	/* 3: Fix in the PHY Antenna CON2*/
+		case ANT_FIX_ANT1:
+			AsicSetRxAnt(pAd, 1);
+			DBGPRINT(RT_DEBUG_OFF, ("<== Set_Antenna_Proc(Fix in Ant CON2), (%d,%d)\n", 
+					pAd->RxAnt.Pair1PrimaryRxAnt, pAd->RxAnt.Pair1SecondaryRxAnt));
+			break;
+#ifdef ANT_DIVERSITY_SUPPORT
+		/* 4: Enable SW Antenna Diversity */
+		case ANT_SW_DIVERSITY_ENABLE:
+			pAd->RxAnt.EvaluateStableCnt = 0;
+			DBGPRINT(RT_DEBUG_OFF, ("<== Set_Antenna_Proc(Auto Switch Mode --> SW), (%d,%d)\n", 
+					pAd->RxAnt.Pair1PrimaryRxAnt, pAd->RxAnt.Pair1SecondaryRxAnt));
+			break;
+		/* 5: Enable HW Antenna Diversity - PPAD */
+		case ANT_HW_DIVERSITY_ENABLE:
+			if ((pAd->chipCap.FlgIsHwAntennaDiversitySup) && (pAd->chipOps.HwAntEnable)) // HW_ANT_DIV (PPAD)
+				pAd->chipOps.HwAntEnable(pAd);
+			DBGPRINT(RT_DEBUG_OFF, ("<== Set_Antenna_Proc(Auto Switch Mode --> HW), (%d,%d)\n", 
+					pAd->RxAnt.Pair1PrimaryRxAnt, pAd->RxAnt.Pair1SecondaryRxAnt));
+			break;
+#endif /* ANT_DIVERSITY_SUPPORT */
+		default:
+			DBGPRINT(RT_DEBUG_ERROR, ("<== Set_Antenna_Proc(N/A cmd: %d), (%d,%d)\n", UsedAnt,
+					pAd->RxAnt.Pair1PrimaryRxAnt, pAd->RxAnt.Pair1SecondaryRxAnt));
+			break;
+	}
+	
+	return TRUE;
+}
+			
+
+#ifdef RT5350
+INT Set_Hw_Antenna_Div_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg)
+{
+	return Set_Antenna_Proc(pAd, arg);	
+}
+#endif // RT5350 //

@@ -842,28 +842,10 @@ INT set_eFuseGetFreeBlockCount_Proc(
    	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg)
 {
-	USHORT i;
-	USHORT	LogicalAddress;
-	USHORT efusefreenum=0;
+	UINT efusefreenum=0;
 	if (pAd->bUseEfuse == FALSE && pAd->bFroceEEPROMBuffer == FALSE)
 		return FALSE;
-	for (i = pAd->chipCap.EFUSE_USAGE_MAP_START; i <= pAd->chipCap.EFUSE_USAGE_MAP_END; i+=2)
-	{
-		eFusePhysicalReadRegisters(pAd, i, 2, &LogicalAddress);
-		if( (LogicalAddress & 0xff) == 0)
-		{
-			efusefreenum= (UCHAR) (pAd->chipCap.EFUSE_USAGE_MAP_END-i+1);
-			break;
-		}
-		else if(( (LogicalAddress >> 8) & 0xff) == 0)
-		{
-			efusefreenum = (UCHAR) (pAd->chipCap.EFUSE_USAGE_MAP_END-i);
-			break;
-		}
-
-		if(i == pAd->chipCap.EFUSE_USAGE_MAP_END)
-			efusefreenum = 0;
-	}
+	eFuseGetFreeBlockCount(pAd, &efusefreenum);	
 	printk("efuseFreeNumber is %d\n",efusefreenum);
 	return TRUE;
 }
@@ -1600,7 +1582,7 @@ VOID eFuseGetFreeBlockCount(IN PRTMP_ADAPTER pAd,
 		EndBlock = pAd->chipCap.EFUSE_USAGE_MAP_END; 
 	}
 
-	for (i = StartBlock; i < EndBlock; i+=2)
+	for (i = StartBlock; i <= EndBlock; i+=2)
 	{
 		eFusePhysicalReadRegisters(pAd, i, 2, &LogicalAddress);
 		
@@ -1631,7 +1613,7 @@ VOID eFuseGetFreeBlockCount(IN PRTMP_ADAPTER pAd,
 		*EfuseFreeBlock = 0;
 		return;	
 	}
-	for (i = EndBlock; i > StartBlock; i-=2)
+	for (i = EndBlock; i >= StartBlock; i-=2)
 	{
 		eFusePhysicalReadRegisters(pAd, i, 2, &LogicalAddress);
 				

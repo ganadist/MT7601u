@@ -153,6 +153,7 @@
 #define BBP_R53			53
 #define BBP_R54			54
 #define BBP_R55			55
+#define BBP_R60			60
 #define BBP_R57			57
 #define BBP_R62			62 /* Rx SQ0 Threshold HIGH */
 #define BBP_R63			63
@@ -179,6 +180,8 @@
 #define BBP_R91			91
 #define BBP_R92			92
 #define BBP_R94			94 /* Tx Gain Control */
+#define BBP_R95			95
+#define BBP_R98			98
 #define BBP_R103		103
 #define BBP_R104		104
 #define BBP_R105		105
@@ -201,6 +204,8 @@
 #define BBP_R126		126
 #define BBP_R127		127
 #define BBP_R128		128
+#define BBP_R134		134
+#define BBP_R135		135
 #define BBP_R137		137
 #define BBP_R138		138 /* add by johnli, RF power sequence setup, ADC dynamic on/off control */
 #define BBP_R140		140
@@ -208,7 +213,12 @@
 #define BBP_R142		142
 #define BBP_R143		143
 #define BBP_R148		148
+#define BBP_R150		150
+#define BBP_R151		151
 #define BBP_R152		152
+#define BBP_R153		153
+#define BBP_R154		154
+#define BBP_R155		155
 #define BBP_R160		160 /* RT3883 Tx BF control */
 #define BBP_R161		161
 #define BBP_R162		162
@@ -232,10 +242,38 @@
 #define BBP_R189		189
 #define BBP_R190		190
 #define BBP_R191		191
+#define BBP_R253		253
 #define BBP_R255		255
 
 #define BBPR94_DEFAULT	0x06 /* Add 1 value will gain 1db */
 
+#ifdef RT_BIG_ENDIAN
+typedef union _BBP_R47_STRUC {
+	struct
+	{
+		UCHAR	Adc6On:1;
+		UCHAR	Reserved:2; 
+		UCHAR	TssiMode:2;
+		UCHAR	TssiUpdateReq:1;
+		UCHAR	TssiReportSel:2;
+	} field;
+
+	UCHAR		byte;
+} BBP_R47_STRUC, *PBBP_R47_STRUC;
+#else
+typedef union _BBP_R47_STRUC {
+	struct
+	{
+		UCHAR	TssiReportSel:2;
+		UCHAR	TssiUpdateReq:1;
+		UCHAR	TssiMode:2;
+		UCHAR	Reserved:2; 
+		UCHAR	Adc6On:1;
+	} field;
+	
+	UCHAR		byte;
+} BBP_R47_STRUC, *PBBP_R47_STRUC;
+#endif
 
 /* */
 /* BBP R49 TSSI (Transmit Signal Strength Indicator) */
@@ -443,7 +481,9 @@ typedef union _BBP_R182_STRUC {
 } BBP_R182_STRUC, *PBBP_R182_STRUC;
 #endif /* RT_BIG_ENDIAN */
 
-#ifdef RT30xx
+#if defined(RT5370) || defined(RT5390) //for hw antenna diversity (PPAD)
+	#define MAX_BBP_ID	255
+#elif RT30xx
 	/* edit by johnli, RF power sequence setup, add BBP R138 for ADC dynamic on/off control */
 	#define MAX_BBP_ID	185
 #elif defined(RT2883)
@@ -469,7 +509,7 @@ typedef union _BBP_R182_STRUC {
 
 #define RSSI_FOR_VERY_LOW_SENSIBILITY   -35
 #define RSSI_FOR_LOW_SENSIBILITY		-58
-#define RSSI_FOR_MID_LOW_SENSIBILITY	-80
+#define RSSI_FOR_MID_LOW_SENSIBILITY	-65 /*-80*/
 #define RSSI_FOR_MID_SENSIBILITY		-90
 
 /*****************************************************************************
@@ -503,6 +543,42 @@ typedef union _BBP_R182_STRUC {
 
 
 #ifdef RT30xx
+#ifdef ANT_DIVERSITY_SUPPORT
+/*Need to collect each ant's rssi concurrently */
+/*rssi1 is report to pair2 Ant and rss2 is reprot to pair1 Ant when 4 Ant */
+
+#ifdef CONFIG_STA_SUPPORT
+#define STA_COLLECT_RX_ANTENNA_AVERAGE_RSSI(_pAd, _rssi1, _rssi2)					\
+{																				\
+	SHORT	AvgRssi;															\
+	UCHAR	UsedAnt;															\
+	if (_pAd->RxAnt.EvaluatePeriod == 0)									\
+	{																		\
+		UsedAnt = _pAd->RxAnt.Pair1PrimaryRxAnt;							\
+		AvgRssi = _pAd->RxAnt.Pair1AvgRssi[UsedAnt];						\
+		if (AvgRssi < 0)													\
+			AvgRssi = AvgRssi - (AvgRssi >> 3) + _rssi1;					\
+		else																\
+			AvgRssi = _rssi1 << 3;											\
+		_pAd->RxAnt.Pair1AvgRssi[UsedAnt] = AvgRssi;						\
+	}																		\
+	else																	\
+	{																		\
+		UsedAnt = _pAd->RxAnt.Pair1SecondaryRxAnt;							\
+		AvgRssi = _pAd->RxAnt.Pair1AvgRssi[UsedAnt];						\
+		if ((AvgRssi < 0) && (_pAd->RxAnt.FirstPktArrivedWhenEvaluate))		\
+			AvgRssi = AvgRssi - (AvgRssi >> 3) + _rssi1;					\
+		else																\
+		{																	\
+			_pAd->RxAnt.FirstPktArrivedWhenEvaluate = TRUE;					\
+			AvgRssi = _rssi1 << 3;											\
+		}																	\
+		_pAd->RxAnt.Pair1AvgRssi[UsedAnt] = AvgRssi;						\
+		_pAd->RxAnt.RcvPktNumWhenEvaluate++;								\
+	}																		\
+}
+#endif /* CONFIG_STA_SUPPORT */
+#endif /* ANT_DIVERSITY_SUPPORT */
 
 #define RTMP_ASIC_MMPS_DISABLE(_pAd)							\
 	do{															\

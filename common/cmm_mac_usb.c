@@ -1013,7 +1013,7 @@ err:
 			RTMPFreeUsbBulkBufStruct(pAd, 
 										&pHTTxContext->pUrb, 
 										&pHTTxContext->TransferBuffer,
-										sizeof(TX_BUFFER),
+										sizeof(HTTX_BUFFER),
 										pHTTxContext->data_dma);
 		}
 	}
@@ -1177,7 +1177,7 @@ VOID	RTMPFreeTxRxRingMemory(
 			RTMPFreeNdisPacket(pAd, pAd->MgmtRing.Cell[i].pNdisPacket);
 			pAd->MgmtRing.Cell[i].pNdisPacket = NULL;
 			if (pMLMEContext)
-				pMLMEContext->TransferBuffer = NULL; 
+			pMLMEContext->TransferBuffer = NULL; 
 		}
 		
 	}
@@ -1388,6 +1388,9 @@ VOID RT28xx_UpdateBeaconToAsic(
 /*	USHORT			shortValue;*/
 	BOOLEAN			bBcnReq = FALSE;
 	UCHAR			bcn_idx = 0;
+#ifdef SPECIFIC_BCN_BUF_SUPPORT	
+	unsigned long irqFlag;
+#endif /* SPECIFIC_BCN_BUF_SUPPORT */
 
 
 	if (pBeaconFrame == NULL)
@@ -1404,11 +1407,18 @@ VOID RT28xx_UpdateBeaconToAsic(
 	
 	if (bBcnReq == FALSE)
 	{
+#ifdef SPECIFIC_BCN_BUF_SUPPORT
+		RTMP_MAC_SHR_MSEL_LOCK(pAd, HIGHER_SHRMEM, irqFlag);
+#endif /* SPECIFIC_BCN_BUF_SUPPORT */	
 		/* when the ra interface is down, do not send its beacon frame */
 		/* clear all zero */
 		for(i=0; i<TXWI_SIZE; i+=4) {
 			RTMP_IO_WRITE32(pAd, pAd->BeaconOffset[bcn_idx] + i, 0x00);
 		}
+#ifdef SPECIFIC_BCN_BUF_SUPPORT
+		RTMP_MAC_SHR_MSEL_UNLOCK(pAd, LOWER_SHRMEM, irqFlag);	
+#endif /* SPECIFIC_BCN_BUF_SUPPORT */		
+
 		pBeaconSync->BeaconBitMap &= (~(BEACON_BITMAP_MASK & (1 << bcn_idx)));
 		NdisZeroMemory(pBeaconSync->BeaconTxWI[bcn_idx], TXWI_SIZE);
 	}
@@ -1424,6 +1434,12 @@ VOID RT28xx_UpdateBeaconToAsic(
 			NdisMoveMemory(pBeaconSync->BeaconTxWI[bcn_idx], &pAd->BeaconTxWI, TXWI_SIZE);
 		}
 		
+#ifdef SPECIFIC_BCN_BUF_SUPPORT
+		/*
+			Shared memory access selection (higher 8KB shared memory)
+		*/
+		RTMP_MAC_SHR_MSEL_LOCK(pAd, HIGHER_SHRMEM, irqFlag);
+#endif /* SPECIFIC_BCN_BUF_SUPPORT */		
 		if ((pBeaconSync->BeaconBitMap & (1 << bcn_idx)) != (1 << bcn_idx))
 		{
 			for (i=0; i<TXWI_SIZE; i+=4)  /* 16-byte TXWI field*/
@@ -1450,6 +1466,13 @@ VOID RT28xx_UpdateBeaconToAsic(
 			ptr +=2;
 			pBeaconFrame += 2;
 		}
+
+#ifdef SPECIFIC_BCN_BUF_SUPPORT
+		/*
+			Shared memory access selection (lower 16KB shared memory)
+		*/
+		RTMP_MAC_SHR_MSEL_UNLOCK(pAd, LOWER_SHRMEM, irqFlag);	
+#endif /* SPECIFIC_BCN_BUF_SUPPORT */
 
 		pBeaconSync->BeaconBitMap |= (1 << bcn_idx);
 	
@@ -1709,7 +1732,7 @@ VOID BeaconUpdateExec(
 VOID RT28xxUsbMlmeRadioOn(
 	IN PRTMP_ADAPTER pAd)
 {
-
+	
     DBGPRINT(RT_DEBUG_TRACE,("RT28xxUsbMlmeRadioOn()\n"));
 
 	if (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RADIO_OFF))
@@ -1724,8 +1747,29 @@ VOID RT28xxUsbMlmeRadioOn(
 
 #ifdef LED_CONTROL_SUPPORT
 	/* Set LED*/
+#ifdef CONFIG_STA_SUPPORT
 	RTMPSetLED(pAd, LED_RADIO_ON);
+#endif /* CONFIG_STA_SUPPORT */
 #endif /* LED_CONTROL_SUPPORT */
+
+#if defined(RT5370) || defined(RT5390)
+	if ((IS_RT5390(pAd)) && !(IS_RT5392(pAd)))
+	{
+		if (pAd->NicConfig2.field.AntOpt == 1)
+		{
+			if (pAd->NicConfig2.field.AntDiversity == 0)
+			{
+			 /* Main antenna */
+				AsicSetRxAnt(pAd, 0);
+			}
+			else
+			{
+			 /* Aux. antenna */
+				AsicSetRxAnt(pAd, 1);
+			}
+		}
+	}
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 }
 
 
@@ -1792,7 +1836,7 @@ VOID RT28xxUsbMlmeRadioOFF(
 
 #ifdef LED_CONTROL_SUPPORT
 	/* Set LED*/
-	RTMPSetLED(pAd, LED_RADIO_OFF);
+	RTMPSetLEDStatus(pAd, LED_RADIO_OFF);
 #endif /* LED_CONTROL_SUPPORT */
 
 
@@ -1804,7 +1848,7 @@ VOID RT28xxUsbAsicRadioOff(
 	IN PRTMP_ADAPTER pAd)
 {
 	WPDMA_GLO_CFG_STRUC	GloCfg;
-	INT					i;
+       INT                              i;
 	UINT32				Value;
 
 	DBGPRINT(RT_DEBUG_TRACE, ("--> %s\n", __FUNCTION__));

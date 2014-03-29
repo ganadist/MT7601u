@@ -86,7 +86,6 @@ EXPORT_SYMBOL(RtmpOsPktRcvHandle);
 EXPORT_SYMBOL(RtmpOsPktIappMakeUp);
 #endif /* IAPP_SUPPORT */
 EXPORT_SYMBOL(RtmpOsPktInit);
-EXPORT_SYMBOL(VLAN_8023_Header_Copy);
 EXPORT_SYMBOL(wlan_802_11_to_802_3_packet);
 EXPORT_SYMBOL(RtmpOsPktOffsetInit);
 

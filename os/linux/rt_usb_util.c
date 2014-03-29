@@ -37,6 +37,357 @@
 MODULE_LICENSE("GPL");
 #endif /* OS_ABL_SUPPORT */
 
+#ifdef RESOURCE_BOOT_ALLOC
+#include <linux/usb.h>
+#include <hcd.h>
+
+#define RTUSB_MAX_BUS_CNT 1
+
+struct rtusb_bulk_mem{
+	void *buf;
+	dma_addr_t data_dma;
+	int len;
+	int assigned;
+};
+
+
+struct rtusb_mem_pool{
+	struct rtusb_mem_pool *next;
+	struct usb_bus *bus;
+	struct device *dev;
+	struct rtusb_bulk_mem *buf_pool;
+	int pool_cnt;
+};
+
+
+enum RTUSB_POOL_STATE{
+	MEM_POOL_INVALID = 0,
+	MEM_POOL_INITING = 1,
+	MEM_POOL_INITED = 2,
+	MEM_POOL_STOPING = 3,
+	MEM_POOL_MAX,
+};
+
+
+enum RTUSB_POOL_STAT_OP{
+	POOL_STAT_CHK = 1,
+	POOL_STAT_CHG = 2
+};
+
+
+static DEFINE_SPINLOCK(rtusb_mem_lock);
+static enum RTUSB_POOL_STATE mem_pool_stat = MEM_POOL_INVALID;
+static struct rtusb_mem_pool *rtusb_buf_pool = NULL;
+
+
+void dump_mem_pool(void)
+{
+	struct rtusb_mem_pool *pool;
+	struct rtusb_bulk_mem *mem;
+	unsigned long irqflags;
+	int idx;
+
+	spin_lock_irqsave(&rtusb_mem_lock, irqflags);
+	if ((rtusb_buf_pool == NULL) || (mem_pool_stat == MEM_POOL_INVALID)) {
+		printk("%s(): Invalid pool(0x%p) status(%d)\n", 
+				__FUNCTION__, rtusb_buf_pool, mem_pool_stat);
+	} else {
+
+		printk("Dump Pre-allocated mem pool(Hdr:0x%p, flag:%d):\n", 
+				rtusb_buf_pool, mem_pool_stat);
+		
+		pool = rtusb_buf_pool;
+		while(pool) {
+			printk("\tbus(%s): controller=0x%p, pool=0x%p, pool_cnt=%d\n", pool->bus->bus_name, pool->dev, pool, pool->pool_cnt);
+			for (idx = 0; idx < pool->pool_cnt; idx++) {
+				mem = (struct rtusb_bulk_mem *)(pool->buf_pool + idx);
+				printk("\t\t%d(0x%p):Flag=%d, buf=0x%p, dma=0x%x, len=%d\n", 
+						idx, mem, mem->assigned, mem->buf, mem->data_dma, mem->len);
+			}
+			pool = pool->next;
+		}
+	}
+	spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+	
+}
+
+
+static int pool_stat_change(enum RTUSB_POOL_STATE old, enum RTUSB_POOL_STATE new)
+{
+	unsigned long irqflags;
+	int status = 0;
+
+	spin_lock_irqsave(&rtusb_mem_lock, irqflags);
+	if ((old != MEM_POOL_MAX) && (mem_pool_stat != old)) {
+		printk("%s(): invalid mem pool status(exp:%d, act:%d)\n", 
+				__FUNCTION__, old, mem_pool_stat);
+		status = -1;
+	}
+	else
+		mem_pool_stat = new;
+	spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+	
+	return status;
+}
+
+
+int rtusb_resource_recycle(struct usb_device *udev, void *buf, dma_addr_t dma)
+{
+	struct rtusb_mem_pool *pool;
+	struct usb_bus *dev_bus = udev->bus;
+	struct rtusb_bulk_mem *mem;
+	unsigned long irqflags;
+	int pool_idx;
+
+	printk("-->%s()\n", __FUNCTION__);
+	if (!dev_bus) {
+		printk("Error:Invalid dev_bus!\n");
+		return -1;
+	}
+
+	printk("Recycle mem(0x%x, 0x%x) for usb_dev(%s) which attached to bus(0x%p, %s), controller=0x%p\n", 
+			buf, dma, udev->product, dev_bus, dev_bus->bus_name, dev_bus->controller);
+	
+	spin_lock_irqsave(&rtusb_mem_lock, irqflags);
+	if ((rtusb_buf_pool == NULL) || (mem_pool_stat != MEM_POOL_INITED)) {
+		printk("%s(): Invalid pool(0x%p) status(%d)\n", 
+				__FUNCTION__, rtusb_buf_pool, mem_pool_stat);
+		spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+		return -1;
+	}
+
+	pool = rtusb_buf_pool;
+	while(pool != NULL)
+	{
+		if (dev_bus->controller == pool->dev)
+		{
+			printk("%s():Find attached controller(0x%p, %s)!\n", 
+					__FUNCTION__, pool->dev, (pool->bus ? pool->bus->bus_name : "Invalid"));
+			for (pool_idx = 0; pool_idx < pool->pool_cnt; pool_idx++)
+			{
+				mem = (struct rtusb_bulk_mem *)(pool->buf_pool + pool_idx);
+				if (mem->assigned && (mem->buf == buf) && (mem->data_dma == dma))
+				{
+					mem->assigned = 0;
+					printk("\tRecycle done\n");
+					break;
+				}
+			}
+			break;
+		}
+		pool = pool->next;
+	}
+	spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+
+	if (pool == NULL) {
+		printk("%s():Cannot found buf(0x%p, 0x%x) assigned to usb_dev(%s) in mem pool\n", 
+				__FUNCTION__, buf, dma, udev->product);
+		dump_mem_pool();
+	}
+
+	return 0;
+	
+}
+
+void  *rtusb_resource_alloc(struct usb_device *udev, int len, dma_addr_t *dma)
+{
+	struct usb_bus *dev_bus = udev->bus;
+	struct rtusb_mem_pool *pool;
+	struct rtusb_bulk_mem *mem;
+	unsigned long irqflags;
+	int pool_idx;
+
+	printk("--->%s():\n", __FUNCTION__);
+	if (!dev_bus) {
+		printk("Error, invalid bus!\n");
+		return NULL;
+	}
+	
+	printk("Request mem(len:%d) for usb_dev(%s) which attached to bus(0x%p, %s), controller=0x%p\n", 
+			len, udev->product, dev_bus, dev_bus->bus_name, dev_bus->controller);
+	
+	spin_lock_irqsave(&rtusb_mem_lock, irqflags);
+	if ((rtusb_buf_pool == NULL) || (mem_pool_stat != MEM_POOL_INITED)) {
+		printk("%s(): Invalid pool(0x%p) status(%d)\n", 
+				__FUNCTION__, rtusb_buf_pool, mem_pool_stat);
+		spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+		return NULL;
+	}
+
+	pool = rtusb_buf_pool;
+	while(pool != NULL)
+	{
+		if (dev_bus->controller == pool->dev)
+		{
+			printk("%s():Find attached controller(0x%p) at pool(0x%p)!\n", 
+					__FUNCTION__, dev_bus->controller, pool);
+			if (pool->bus != dev_bus) {
+				printk("Adjust the pool->bus as current one!\n");
+				pool->bus = dev_bus; /* write it back in case the bus is changed */
+			}
+
+			for (pool_idx = 0; pool_idx < pool->pool_cnt; pool_idx++)
+			{
+				mem = (struct rtusb_bulk_mem *)(pool->buf_pool + pool_idx);
+				if ((mem->assigned == 0) && (mem->len == len))
+				{
+					mem->assigned = 1;
+					*dma = mem->data_dma;
+					memset(mem->buf, 0, mem->len);
+					spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+					
+					printk("%s():Assign the buf(0x%p, 0x%x, len=%d) to usb_dev(%s)\n", 
+							__FUNCTION__, mem->buf, mem->data_dma, mem->len, udev->product);
+
+					dump_mem_pool();
+					return mem->buf;
+				}
+			}
+		}
+		pool = pool->next;
+	}
+	spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+
+	printk("%s():Cannot found buf assign to usb_dev(%s)!\n", __FUNCTION__, udev->product);
+	dump_mem_pool();
+
+	return NULL;
+	
+}
+
+
+int rtusb_resource_exit(void)
+{
+	struct usb_bus *bus;
+	struct rtusb_mem_pool *pool;
+	struct rtusb_bulk_mem *mem;
+	unsigned long irqflags;
+	int status, idx;
+
+	printk("--->%s()\n", __FUNCTION__);
+	dump_mem_pool();
+	
+	status = pool_stat_change(MEM_POOL_INITED, MEM_POOL_STOPING);
+	if (status != 0)
+		return -1;
+
+	//spin_lock_irqsave(&rtusb_mem_lock, irqflags);
+	while(rtusb_buf_pool != NULL) {
+		pool = rtusb_buf_pool;
+		printk("%s():Free Pre-allocated mem for bus(%s)!\n", __FUNCTION__, pool->bus->bus_name);
+		for (idx = 0; idx < pool->pool_cnt; idx++) {
+			mem = (struct rtusb_bulk_mem *)(pool->buf_pool + idx);
+			bus = pool->bus;
+			if (mem->assigned == 1)
+				printk("Warning, mem still occupied by someone?\n");
+			if (mem->buf) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
+				usb_free_coherent(bus->root_hub, mem->len, mem->buf, mem->data_dma);
+#else
+				usb_buffer_free(bus->root_hub, mem->len, mem->buf, mem->data_dma);
+#endif
+#else
+				kfree(mem->buf);
+#endif
+				printk("%s():%d:Free the buf(0x%p) with len(%d)\n", 
+						__FUNCTION__, idx, mem, mem->len);
+			}
+		}
+		rtusb_buf_pool = rtusb_buf_pool->next;
+		kfree(pool);
+	}
+	//spin_unlock_irqrestore(&rtusb_mem_lock, irqflags);
+
+	printk("%s():After free pools, dump it\n", __FUNCTION__);
+	dump_mem_pool();
+	status = pool_stat_change(MEM_POOL_STOPING, MEM_POOL_INVALID);
+	
+	return status;
+}
+
+
+int rtusb_resource_init(int txlen, int rxlen, int tx_cnt, int rx_cnt)
+{
+	struct usb_bus *bus;
+	struct rtusb_mem_pool *pool;
+	struct rtusb_bulk_mem *mem;
+	int status, idx, buf_len, pool_cnt, bus_cnt;
+
+	pool_cnt = tx_cnt + rx_cnt;
+	printk("%s()--->txlen=%d,rxlen=%d, pool_cnt=%d(t:%d,r:%d)!\n", 
+		__FUNCTION__, txlen, rxlen, pool_cnt, tx_cnt,rx_cnt);
+	
+	status = pool_stat_change(MEM_POOL_INVALID, MEM_POOL_INITING);
+	if ((status!=0) || (txlen == 0) || (rxlen == 0) || (tx_cnt == 0) || (rx_cnt == 0))
+		return -1;
+
+	/* 
+		for each bus, we need to allocate resource for it, because we cannot 
+		expect which bus will be used for our dongle.
+	*/
+	bus_cnt = 0;
+	mutex_lock(&usb_bus_list_lock);
+	list_for_each_entry(bus, &usb_bus_list, bus_list) {
+		if (bus->root_hub) {
+			/*  Currently we only alloc memory for high speed bus */
+			if (bus->root_hub->speed != USB_SPEED_HIGH)
+				continue;
+			buf_len = sizeof(struct rtusb_mem_pool) + sizeof(struct rtusb_mem_pool) * pool_cnt;
+			pool = kmalloc(buf_len, GFP_ATOMIC);
+			if (!pool) {
+				printk("%s():Allocate pool structure for bus(%s) failed\n", 
+						__FUNCTION__, bus->bus_name);
+				continue;
+			}
+
+			memset(pool, 0, buf_len);
+			pool->pool_cnt = pool_cnt;
+			pool->bus = bus;
+			pool->dev = bus->controller;
+			pool->buf_pool = (struct rtusb_bulk_mem *)(pool + 1);
+			for (idx = 0; idx < pool_cnt; idx++) {
+				mem = (struct rtusb_bulk_mem *)(pool->buf_pool + idx);
+				buf_len = (idx >= tx_cnt) ? rxlen : txlen;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
+				mem->buf = usb_alloc_coherent(bus->root_hub, buf_len, GFP_ATOMIC, &mem->data_dma);
+#else
+				mem->buf = usb_buffer_alloc(bus->root_hub, buf_len, GFP_ATOMIC, &mem->data_dma);
+#endif
+#else
+				mem->buf = kmalloc(buf_len, GFP_ATOMIC);
+#endif
+				if (mem->buf)
+					mem->len = buf_len;
+				else
+					printk("%s():Alloc membuf(idx:%d) for bus(%s) failed!\n", 
+							__FUNCTION__, idx, bus->bus_name);
+			}
+
+			if (rtusb_buf_pool)
+				pool->next = rtusb_buf_pool;
+			rtusb_buf_pool = pool;
+			
+			bus_cnt++;
+		}
+	}
+	mutex_unlock(&usb_bus_list_lock);
+
+	status = pool_stat_change(MEM_POOL_INITING, MEM_POOL_INITED);
+	dump_mem_pool();
+	
+	printk("<---%s(%d)\n", __FUNCTION__, status);
+	
+	return status;
+}
+
+#ifdef OS_ABL_SUPPORT
+EXPORT_SYMBOL(rtusb_resource_exit);
+EXPORT_SYMBOL(rtusb_resource_init);
+#endif /* OS_ABL_SUPPORT */
+#endif /* RESOURCE_BOOT_ALLOC */
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 /*
 ========================================================================
@@ -425,12 +776,28 @@ void *rausb_buffer_alloc(VOID *dev,
 							size_t size,
 							ra_dma_addr_t *dma)
 {
+#ifdef RESOURCE_BOOT_ALLOC
+	void *buf;
+	if (size > 4095) {
+		buf = rtusb_resource_alloc(dev, size, dma);
+		printk("%s():alloc usb buffer(p:0x%p, dma:0x%x, len:%d) %s!\n", 
+					__FUNCTION__, buf, *dma, size, (buf ? "done" : "fail"));
+		return buf;
+	}
+#endif /* RESOURCE_BOOT_ALLOC */
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+	dma_addr_t DmaAddr = (dma_addr_t)(*dma);
+	void *buf;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
-	return usb_alloc_coherent(dev, size, GFP_ATOMIC, dma);
+	buf = usb_alloc_coherent(dev, size, GFP_ATOMIC, &DmaAddr);
 #else
-	return usb_buffer_alloc(dev, size, GFP_ATOMIC, dma);
+	buf = usb_buffer_alloc(dev, size, GFP_ATOMIC, &DmaAddr);
 #endif
+	*dma = (ra_dma_addr_t)DmaAddr;
+	return buf;
+
 #else
 	return kmalloc(size, GFP_ATOMIC);
 #endif
@@ -460,6 +827,12 @@ void rausb_buffer_free(VOID *dev,
 							void *addr,
 							ra_dma_addr_t dma)
 {
+#ifdef RESOURCE_BOOT_ALLOC
+	if (size > 4095)
+		rtusb_resource_recycle(dev, addr, dma);
+	else
+#endif /* RESOURCE_BOOT_ALLOC */
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)
 	usb_free_coherent(dev, size, addr, dma);

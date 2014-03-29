@@ -166,6 +166,21 @@ RTMP_RF_REGS RF2850RegTable[] = {
 UCHAR	NUM_OF_2850_CHNL = (sizeof(RF2850RegTable) / sizeof(RTMP_RF_REGS));
 #endif /* defined(RT28xx) || defined(RT2883) */
 
+#ifdef RTMP_INTERNAL_TX_ALC
+/* The desired TSSI over CCK */
+CHAR desiredTSSIOverCCK[4] = {0};
+
+/* The desired TSSI over OFDM */
+CHAR desiredTSSIOverOFDM[8] = {0};
+
+/* The desired TSSI over HT */
+CHAR desiredTSSIOverHT[16] = {0};
+
+/* The desired TSSI over HT using STBC */
+CHAR desiredTSSIOverHTUsingSTBC[8] = {0};
+#endif /* RTMP_INTERNAL_TX_ALC */
+
+
 
 
 /* private function prototype */
@@ -192,13 +207,20 @@ static VOID ChipSwitchChannel(
 	IN BOOLEAN				bScan);
 
 #ifdef RTMP_INTERNAL_TX_ALC
-static VOID AsicInitDesiredTSSITable(
-	IN RTMP_ADAPTER			*pAd);
+static VOID InitDesiredTSSITableDefault(
+	IN PRTMP_ADAPTER		pAd);
 
-static VOID *AsicTxAlcTxPwrAdjOverRF(
+static VOID AsicTxAlcGetAutoAgcOffset(
 	IN PRTMP_ADAPTER		pAd,
-	IN VOID					*pTxPowerTuningEntry);
+	IN PCHAR			pDeltaPwr,
+	IN PCHAR			pTotalDeltaPwr,
+	IN PCHAR			pAgcCompensate,
+	IN PUCHAR			pBbpR49);
 #endif /* RTMP_INTERNAL_TX_ALC */
+
+static VOID AsicSetAGCInitValue(
+	IN PRTMP_ADAPTER		pAd,
+	IN UCHAR				BandWidth);
 
 static VOID AsicAntennaDefaultReset(
 	IN PRTMP_ADAPTER		pAd,
@@ -378,6 +400,7 @@ VOID RtmpChipOpsHook(
 	pChipCap->MaxNumOfRfId = 31;
 	pChipCap->MaxNumOfBbpId = 136;
 	pChipCap->SnrFormula = SNR_FORMULA1;
+	pChipCap->RfReg17WtMethod = RF_REG_WT_METHOD_NONE;
 
 #ifdef RTMP_INTERNAL_TX_ALC
 	pChipCap->TxAlcTxPowerUpperBound = 45;
@@ -386,8 +409,11 @@ VOID RtmpChipOpsHook(
 
 #ifdef RTMP_EFUSE_SUPPORT
 	pChipCap->EFUSE_USAGE_MAP_START = 0x2d0;
-	pChipCap->EFUSE_USAGE_MAP_END = 0x2fc;      
-	pChipCap->EFUSE_USAGE_MAP_SIZE = 45;
+	pChipCap->EFUSE_USAGE_MAP_END = 0x2fc;
+{     
+        pChipCap->EFUSE_USAGE_MAP_SIZE = 45;
+}
+
 	DBGPRINT(RT_DEBUG_ERROR, ("(Efuse for 3062/3562/3572) Size=0x%x [%x-%x] \n",pAd->chipCap.EFUSE_USAGE_MAP_SIZE,pAd->chipCap.EFUSE_USAGE_MAP_START,pAd->chipCap.EFUSE_USAGE_MAP_END));
 #endif /* RTMP_EFUSE_SUPPORT */
 
@@ -405,12 +431,16 @@ VOID RtmpChipOpsHook(
 	pChipOps->ChipSwitchChannel = ChipSwitchChannel;
 
 #ifdef RTMP_INTERNAL_TX_ALC
-	pChipOps->AsicInitDesiredTSSITable = AsicInitDesiredTSSITable;
-	pChipOps->AsicTxAlcTxPwrAdjOverRF = AsicTxAlcTxPwrAdjOverRF;
+	pChipOps->InitDesiredTSSITable = InitDesiredTSSITableDefault;
+	pChipOps->AsicTxAlcGetAutoAgcOffset = AsicTxAlcGetAutoAgcOffset;
 #endif /* RTMP_INTERNAL_TX_ALC */
+
+	pChipOps->RTMPSetAGCInitValue = AsicSetAGCInitValue;
 
 	pChipOps->AsicAntennaDefaultReset = AsicAntennaDefaultReset;
 	pChipOps->NetDevNickNameInit = NetDevNickNameInit;
+	/* Init value. If pChipOps->AsicResetBbpAgent==NULL, "AsicResetBbpAgent" as default. If your chipset has specific routine, please re-hook it at self init function */
+	pChipOps->AsicResetBbpAgent = NULL;
 
 #ifdef RT28xx
 	pChipOps->ChipSwitchChannel = RT28xx_ChipSwitchChannel;
@@ -418,6 +448,13 @@ VOID RtmpChipOpsHook(
 
 	/* We depends on RfICType and MACVersion to assign the corresponding operation callbacks. */
 
+
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	if (IS_RT5390(pAd))
+	{
+		RT5390_Init(pAd);
+	}
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 
 
@@ -429,7 +466,10 @@ VOID RtmpChipOpsHook(
 
 	if (IS_RT30xx(pAd))
 	{
-		RT30xx_Init(pAd);
+		if (IS_RT3390(pAd))
+			RT33xx_Init(pAd);
+		else
+			RT30xx_Init(pAd);
 	}
 #endif /* RT30xx */
 
@@ -1030,35 +1070,629 @@ static VOID ChipSwitchChannel(
 
 
 #ifdef RTMP_INTERNAL_TX_ALC
-static VOID AsicInitDesiredTSSITable(
-	IN RTMP_ADAPTER			*pAd)
+static VOID AsicTxAlcGetAutoAgcOffset(
+	IN PRTMP_ADAPTER		pAd,
+	IN PCHAR				pDeltaPwr,
+	IN PCHAR				pTotalDeltaPwr,
+	IN PCHAR				pAgcCompensate,
+	IN PUCHAR				pBbpR49)
 {
+	extern TX_POWER_TUNING_ENTRY_STRUCT *TxPowerTuningTable;
+	BBP_R49_STRUC BbpR49;
+	CHAR desiredTSSI = 0, currentTSSI = 0;
+	PTX_POWER_TUNING_ENTRY_STRUCT pTxPowerTuningEntry = NULL;
 	UCHAR RFValue = 0;
+	CHAR DeltaPwr = 0;
+	CHAR TotalDeltaPower = 0; // (non-positive number) including the transmit power controlled by the MAC and the BBP R1
 
 
-	RT30xxReadRFRegister(pAd, RF_R27, (PUCHAR)(&RFValue));
-	RFValue = (RFValue | 0x88); /* <7>: IF_Rxout_en, <3>: IF_Txout_en*/
-	RT30xxWriteRFRegister(pAd, RF_R27, RFValue);
+	BbpR49.byte = 0;
 
-	RT30xxReadRFRegister(pAd, RF_R28, (PUCHAR)(&RFValue));
-	RFValue = (RFValue & (~0x60)); /* <6:5>: tssi_atten*/
-	RT30xxWriteRFRegister(pAd, RF_R28, RFValue);
+	if (pAd->Mlme.OneSecPeriodicRound % 4 == 0)
+	{
+		desiredTSSI = GetDesiredTSSI(pAd);
+
+		if(desiredTSSI == -1) {
+			goto LabelFail;
+		}
+
+		RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R49, &BbpR49.byte);
+		currentTSSI = BbpR49.field.TSSI;
+
+		if (desiredTSSI > currentTSSI)
+		{
+			pAd->TxPowerCtrl.idxTxPowerTable++;
+		}
+
+		if (desiredTSSI < currentTSSI)
+		{
+			pAd->TxPowerCtrl.idxTxPowerTable--;
+		}
+
+		if (pAd->TxPowerCtrl.idxTxPowerTable < LOWERBOUND_TX_POWER_TUNING_ENTRY)
+		{
+			pAd->TxPowerCtrl.idxTxPowerTable = LOWERBOUND_TX_POWER_TUNING_ENTRY;
+		}
+
+		if (pAd->TxPowerCtrl.idxTxPowerTable >= UPPERBOUND_TX_POWER_TUNING_ENTRY(pAd))
+		{
+			pAd->TxPowerCtrl.idxTxPowerTable = UPPERBOUND_TX_POWER_TUNING_ENTRY(pAd);
+		}
+
+		//
+		// Valide pAd->TxPowerCtrl.idxTxPowerTable: -30 ~ 45
+		//
+
+		pTxPowerTuningEntry = &TxPowerTuningTable[pAd->TxPowerCtrl.idxTxPowerTable + TX_POWER_TUNING_ENTRY_OFFSET]; // zero-based array
+		pAd->TxPowerCtrl.RF_R12_Value = pTxPowerTuningEntry->RF_R12_Value;
+		pAd->TxPowerCtrl.MAC_PowerDelta = pTxPowerTuningEntry->MAC_PowerDelta;
+
+		//
+		// Tx power adjustment over RF
+		//
+
+		{
+			RT30xxReadRFRegister(pAd, RF_R12, (PUCHAR)(&RFValue));
+			RFValue = ((RFValue & 0xE0) | pAd->TxPowerCtrl.RF_R12_Value);
+			RT30xxWriteRFRegister(pAd, RF_R12, (UCHAR)(RFValue));
+		}
+
+		//
+		// Tx power adjustment over MAC
+		//
+		TotalDeltaPower = pAd->TxPowerCtrl.MAC_PowerDelta;
+
+		DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSI = %d, currentTSSI = %d, idxTxPowerTable = %d, {RF_R12_Value = %d, MAC_PowerDelta = %d}\n", 
+			__FUNCTION__, 
+			desiredTSSI, 
+			currentTSSI, 
+			pAd->TxPowerCtrl.idxTxPowerTable, 
+			pTxPowerTuningEntry->RF_R12_Value, 
+			pTxPowerTuningEntry->MAC_PowerDelta));
+	}
+
+LabelFail:
+	*pBbpR49 = BbpR49.byte;
+	*pDeltaPwr = DeltaPwr;
+	*pTotalDeltaPwr = TotalDeltaPower;
+}
+#endif // RTMP_INTERNAL_TX_ALC //
+
+
+static VOID AsicSetAGCInitValue(
+	IN PRTMP_ADAPTER		pAd,
+	IN UCHAR				BandWidth)
+{
+	UCHAR	R66 = 0x30;
+	
+	if (pAd->LatchRfRegs.Channel <= 14)
+	{	// BG band
+#ifdef RT30xx
+		/* Gary was verified Amazon AP and find that RT307x has BBP_R66 invalid default value */
+		if (IS_RT3070(pAd)||IS_RT3090(pAd) || IS_RT3572(pAd) || IS_RT3390(pAd) || IS_RT3593(pAd))
+		{
+			R66 = 0x1C + 2*GET_LNA_GAIN(pAd);
+			{
+				RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R66, R66);
+			}
+		}
+		else
+#endif // RT30xx //
+		{
+			R66 = 0x2E + GET_LNA_GAIN(pAd);
+			RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R66, R66);
+		}
+	}
+	else
+	{	//A band
+		{	
+			if (BandWidth == BW_20)
+			{
+				R66 = (UCHAR)(0x32 + (GET_LNA_GAIN(pAd)*5)/3);
+
+				RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R66, R66);
+			}
+#ifdef DOT11_N_SUPPORT
+			else
+			{
+				R66 = (UCHAR)(0x3A + (GET_LNA_GAIN(pAd)*5)/3);
+
+				RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R66, R66);
+			}
+#endif // DOT11_N_SUPPORT //
+		}		
+	}
+
 }
 
 
-static VOID *AsicTxAlcTxPwrAdjOverRF(
-	IN PRTMP_ADAPTER		pAd,
-	IN VOID					*pTxPowerTuningEntry)
+#ifdef ANT_DIVERSITY_SUPPORT
+VOID HWAntennaDiversityEnable(
+	IN PRTMP_ADAPTER		pAd)
 {
+#if defined(RT5350)
+	UINT8 regs[7] = { 0xC0, 0xB0, 0x23, 0x34, 0x10, 0x3B, 0x05 };
+#elif defined(RT5370) || defined(RT5390)
+	UINT8 regs[7] = { 0xBE, 0xAE, 0x20, 0x34, 0x40, 0x3B, 0x04 };
+#endif
+	UINT8 BBPValue = 0, RFValue = 0;
+
+	// RF_R29 bit[7:6] = b'11
+	RT30xxReadRFRegister(pAd, RF_R29, &RFValue);
+	RFValue |= 0xC0; //rssi_gain
+	RT30xxWriteRFRegister(pAd, RF_R29, RFValue);
+
+	// BBP_R47 bit7=1
+	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R47, &BBPValue);
+	BBPValue |= 0x80; //ADC6 on
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R47, BBPValue);
+	
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R150, regs[0]); // ENABLE_ANTSW_OFDM and RSSI_ANTSWT
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R151, regs[1]); // ENABLE_ANTSW_CCK and RSSI_LNASWTH_HM
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R152, regs[2]); // RSSI_LNASWTH_HL /*aux ant */
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R153, regs[3]); // RSSI_ANALOG_LOWTH
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R154, regs[4]); // ANTSW_PWROFFSET, ANTSW_DELAYOFFSET and auto-control BBP R152[7] (RX_DEFAULT_ANT)
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R155, regs[5]); // RSSI_OFFSET
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R253, regs[6]); // MEASURE_RSSI_OFFSET
+
+	DBGPRINT(RT_DEBUG_TRACE, ("HwAnDiv --> Enable!\n"));
+}
+#endif // ANT_DIVERSITY_SUPPORT // 
+
+
+#ifdef RTMP_INTERNAL_TX_ALC
+//
+// Initialize the desired TSSI table
+//
+// Parameters
+//	pAd: The adapter data structure
+//
+// Return Value:
+//	None
+//
+static VOID InitDesiredTSSITableDefault(
+	IN PRTMP_ADAPTER			pAd)
+{
+	UCHAR TSSIBase = 0; // The TSSI over OFDM 54Mbps
+	USHORT TSSIStepOver2dot4G = 0; // The TSSI value/step (0.5 dB/unit)
 	UCHAR RFValue = 0;
+	BBP_R49_STRUC BbpR49 = {{0}};
+	ULONG i = 0;
+	USHORT TxPower = 0, TxPowerOFDM54 = 0, temp = 0;
+	UINT32 MaxMCS;
+
+	if (pAd->TxPowerCtrl.bInternalTxALC == FALSE)
+	{
+		return;
+	}
+
+	DBGPRINT(RT_DEBUG_TRACE, ("---> %s\n", __FUNCTION__));
+
+	RT28xx_EEPROM_READ16(pAd, EEPROM_TSSI_OVER_OFDM_54, temp);
+	TSSIBase = (temp & 0x000F);
+	
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_TSSI_STEP_OVER_2DOT4G - 1), TSSIStepOver2dot4G);
+	TSSIStepOver2dot4G = (0x000F & (TSSIStepOver2dot4G >> 8));
+
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_OFDM_MCS6_MCS7 - 1), TxPowerOFDM54);
+	TxPowerOFDM54 = (0x000F & (TxPowerOFDM54 >> 8));
+
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: TSSIBase = %d, TSSIStepOver2dot4G = %d, TxPowerOFDM54 = %d\n", 
+		__FUNCTION__, 
+		TSSIBase, 
+		TSSIStepOver2dot4G, 
+		TxPowerOFDM54));
+
+	//
+	// The desired TSSI over CCK
+	//
+	RT28xx_EEPROM_READ16(pAd, EEPROM_CCK_MCS0_MCS1, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xDE = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverCCK[MCS_0] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)) + 6);
+	desiredTSSIOverCCK[MCS_1] = desiredTSSIOverCCK[MCS_0];
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_CCK_MCS2_MCS3 - 1), TxPower);
+	TxPower = ((TxPower >> 8) & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xDF = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverCCK[MCS_2] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)) + 6);
+	desiredTSSIOverCCK[MCS_3] = desiredTSSIOverCCK[MCS_2];
+
+	//
+	// Boundary verification: the desired TSSI value
+	//
+	for (i = 0; i < 4; i++) // CCK: MCS 0 ~ MCS 3
+	{
+		if (desiredTSSIOverCCK[i] < 0x00)
+		{
+			desiredTSSIOverCCK[i] = 0x00;
+		}
+		else if (desiredTSSIOverCCK[i] > 0x1F)
+		{
+			desiredTSSIOverCCK[i] = 0x1F;
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverCCK[0] = %d, desiredTSSIOverCCK[1] = %d, desiredTSSIOverCCK[2] = %d, desiredTSSIOverCCK[3] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverCCK[0], 
+		desiredTSSIOverCCK[1], 
+		desiredTSSIOverCCK[2], 
+		desiredTSSIOverCCK[3]));
+
+	//
+	// The desired TSSI over OFDM
+	//
+	RT28xx_EEPROM_READ16(pAd, EEPROM_OFDM_MCS0_MCS1, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE0 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverOFDM[MCS_0] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverOFDM[MCS_1] = desiredTSSIOverOFDM[MCS_0];
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_OFDM_MCS2_MCS3 - 1), TxPower);
+	TxPower = ((TxPower >> 8) & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE1 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverOFDM[MCS_2] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverOFDM[MCS_3] = desiredTSSIOverOFDM[MCS_2];
+	RT28xx_EEPROM_READ16(pAd, EEPROM_OFDM_MCS4_MCS5, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE2 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverOFDM[MCS_4] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverOFDM[MCS_5] = desiredTSSIOverOFDM[MCS_4];
+	desiredTSSIOverOFDM[MCS_6] = TSSIBase;
+	desiredTSSIOverOFDM[MCS_7] = TSSIBase;
+
+	//
+	// Boundary verification: the desired TSSI value
+	//
+	for (i = 0; i < 8; i++) // OFDM: MCS 0 ~ MCS 7
+	{
+		if (desiredTSSIOverOFDM[i] < 0x00)
+		{
+			desiredTSSIOverOFDM[i] = 0x00;
+		}
+		else if (desiredTSSIOverOFDM[i] > 0x1F)
+		{
+			desiredTSSIOverOFDM[i] = 0x1F;
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverOFDM[0] = %d, desiredTSSIOverOFDM[1] = %d, desiredTSSIOverOFDM[2] = %d, desiredTSSIOverOFDM[3] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverOFDM[0], 
+		desiredTSSIOverOFDM[1], 
+		desiredTSSIOverOFDM[2], 
+		desiredTSSIOverOFDM[3]));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverOFDM[4] = %d, desiredTSSIOverOFDM[5] = %d, desiredTSSIOverOFDM[6] = %d, desiredTSSIOverOFDM[7] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverOFDM[4], 
+		desiredTSSIOverOFDM[5], 
+		desiredTSSIOverOFDM[6], 
+		desiredTSSIOverOFDM[7]));
+
+	//
+	// The desired TSSI over HT
+	//
+	RT28xx_EEPROM_READ16(pAd, EEPROM_HT_MCS0_MCS1, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE4 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHT[MCS_0] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHT[MCS_1] = desiredTSSIOverHT[MCS_0];
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_HT_MCS2_MCS3 - 1), TxPower);
+	TxPower = ((TxPower >> 8) & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE5 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHT[MCS_2] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHT[MCS_3] = desiredTSSIOverHT[MCS_2];
+	RT28xx_EEPROM_READ16(pAd, EEPROM_HT_MCS4_MCS5, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE6 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHT[MCS_4] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHT[MCS_5] = desiredTSSIOverHT[MCS_4];
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_HT_MCS6_MCS7 - 1), TxPower);
+	TxPower = ((TxPower >> 8) & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xE7 = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHT[MCS_6] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHT[MCS_7] = desiredTSSIOverHT[MCS_6];
+
+	MaxMCS = 8;
+
+	if (pAd->chipCap.TxAlcMaxMCS > 8)
+	{
+		MaxMCS = 16;
+		RT28xx_EEPROM_READ16(pAd, EEPROM_HT_MCS8_MCS9, TxPower);
+		TxPower = (TxPower & 0x000F);
+		DBGPRINT(RT_DEBUG_TRACE, ("EEPROM_HT_MCS9_MCS9(0xE8) = 0x%X\n", TxPower));
+		desiredTSSIOverHT[MCS_8] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+		desiredTSSIOverHT[MCS_9] = desiredTSSIOverHT[MCS_8];
+
+		RT28xx_EEPROM_READ16(pAd, (EEPROM_HT_MCS10_MCS11-1), TxPower);
+		TxPower = ((TxPower >> 8) & 0x000F);
+		DBGPRINT(RT_DEBUG_TRACE, ("EEPROM_HT_MCS10_MCS11(0xE9) = 0x%X\n", TxPower));
+		desiredTSSIOverHT[MCS_10] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+		desiredTSSIOverHT[MCS_11] = desiredTSSIOverHT[MCS_10];
+
+		RT28xx_EEPROM_READ16(pAd, EEPROM_HT_MCS12_MCS13, TxPower);
+		TxPower = (TxPower & 0x000F);
+		DBGPRINT(RT_DEBUG_TRACE, ("EEPROM_HT_MCS12_MCS13(0xEA) = 0x%X\n", TxPower));
+		desiredTSSIOverHT[MCS_12] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+		desiredTSSIOverHT[MCS_13] = desiredTSSIOverHT[MCS_12];
+
+		RT28xx_EEPROM_READ16(pAd, (EEPROM_HT_MCS14_MCS15-1), TxPower);
+		TxPower = ((TxPower >> 8) & 0x000F);
+		DBGPRINT(RT_DEBUG_TRACE, ("EEPROM_HT_MCS14_MCS15(0xEB) = 0x%X\n", TxPower));
+		desiredTSSIOverHT[MCS_14] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+		desiredTSSIOverHT[MCS_15] = desiredTSSIOverHT[MCS_14]-1;
+	}
+
+	//
+	// Boundary verification: the desired TSSI value
+	//
+	for (i = 0; i < MaxMCS; i++) // HT: MCS 0 ~ MCS 7 or MCS 15
+	{
+		if (desiredTSSIOverHT[i] < 0x00)
+		{
+			desiredTSSIOverHT[i] = 0x00;
+		}
+		else if (desiredTSSIOverHT[i] > 0x1F)
+		{
+			desiredTSSIOverHT[i] = 0x1F;
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverHT[0] = %d, desiredTSSIOverHT[1] = %d, desiredTSSIOverHT[2] = %d, desiredTSSIOverHT[3] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverHT[0], 
+		desiredTSSIOverHT[1], 
+		desiredTSSIOverHT[2], 
+		desiredTSSIOverHT[3]));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverHT[4] = %d, desiredTSSIOverHT[5] = %d, desiredTSSIOverHT[6] = %d, desiredTSSIOverHT[7] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverHT[4], 
+		desiredTSSIOverHT[5], 
+		desiredTSSIOverHT[6], 
+		desiredTSSIOverHT[7]));
+
+	//
+	// The desired TSSI over HT using STBC
+	//
+	RT28xx_EEPROM_READ16(pAd, EEPROM_HT_USING_STBC_MCS0_MCS1, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xEC = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHTUsingSTBC[MCS_0] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHTUsingSTBC[MCS_1] = desiredTSSIOverHTUsingSTBC[MCS_0];
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_HT_USING_STBC_MCS2_MCS3 - 1), TxPower);
+	TxPower = ((TxPower >> 8) & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xED = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHTUsingSTBC[MCS_2] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHTUsingSTBC[MCS_3] = desiredTSSIOverHTUsingSTBC[MCS_2];
+	RT28xx_EEPROM_READ16(pAd, EEPROM_HT_USING_STBC_MCS4_MCS5, TxPower);
+	TxPower = (TxPower & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xEE = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHTUsingSTBC[MCS_4] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHTUsingSTBC[MCS_5] = desiredTSSIOverHTUsingSTBC[MCS_4];
+	RT28xx_EEPROM_READ16(pAd, (EEPROM_HT_USING_STBC_MCS6_MCS7 - 1), TxPower);
+	TxPower = ((TxPower >> 8) & 0x000F);
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: 0xEF = 0x%X\n", __FUNCTION__, TxPower));
+	desiredTSSIOverHTUsingSTBC[MCS_6] = (TSSIBase + ((TxPower - TxPowerOFDM54) * (TSSIStepOver2dot4G * 2)));
+	desiredTSSIOverHTUsingSTBC[MCS_7] = desiredTSSIOverHTUsingSTBC[MCS_6];
+
+	//
+	// Boundary verification: the desired TSSI value
+	//
+	for (i = 0; i < 8; i++) // HT using STBC: MCS 0 ~ MCS 7
+	{
+		if (desiredTSSIOverHTUsingSTBC[i] < 0x00)
+		{
+			desiredTSSIOverHTUsingSTBC[i] = 0x00;
+		}
+		else if (desiredTSSIOverHTUsingSTBC[i] > 0x1F)
+		{
+			desiredTSSIOverHTUsingSTBC[i] = 0x1F;
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverHTUsingSTBC[0] = %d, desiredTSSIOverHTUsingSTBC[1] = %d, desiredTSSIOverHTUsingSTBC[2] = %d, desiredTSSIOverHTUsingSTBC[3] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverHTUsingSTBC[0], 
+		desiredTSSIOverHTUsingSTBC[1], 
+		desiredTSSIOverHTUsingSTBC[2], 
+		desiredTSSIOverHTUsingSTBC[3]));
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: desiredTSSIOverHTUsingSTBC[4] = %d, desiredTSSIOverHTUsingSTBC[5] = %d, desiredTSSIOverHTUsingSTBC[6] = %d, desiredTSSIOverHTUsingSTBC[7] = %d\n", 
+		__FUNCTION__, 
+		desiredTSSIOverHTUsingSTBC[4], 
+		desiredTSSIOverHTUsingSTBC[5], 
+		desiredTSSIOverHTUsingSTBC[6], 
+		desiredTSSIOverHTUsingSTBC[7]));
+
+	{
+		RT30xxReadRFRegister(pAd, RF_R27, (PUCHAR)(&RFValue));
+		RFValue = (RFValue | 0x88); // <7>: IF_Rxout_en, <3>: IF_Txout_en
+		RT30xxWriteRFRegister(pAd, RF_R27, RFValue);
+
+		RT30xxReadRFRegister(pAd, RF_R28, (PUCHAR)(&RFValue));
+		RFValue = (RFValue & (~0x60)); // <6:5>: tssi_atten
+		RT30xxWriteRFRegister(pAd, RF_R28, RFValue);
+	}
+
+#if defined (RT3350)
+	if (IS_RT3350(pAd))
+		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R255, 0); 
+#endif /* RT3350 */
+
+	RTMP_BBP_IO_READ8_BY_REG_ID(pAd, BBP_R49, &BbpR49.byte);
+	//BbpR49.field.adc5_in_sel = 0; // (default): TSSI
+	BbpR49.field.adc5_in_sel = 1; // PSI
+	RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R49, BbpR49.byte);		
+
+	DBGPRINT(RT_DEBUG_TRACE, ("<--- %s\n", __FUNCTION__));
+}
 
 
-	RT30xxReadRFRegister(pAd, RF_R12, (PUCHAR)(&RFValue));
-	RFValue = ((RFValue & 0xE0) | pAd->TxPowerCtrl.RF_R12_Value);
-	RT30xxWriteRFRegister(pAd, RF_R12, (UCHAR)(RFValue));
-	return pTxPowerTuningEntry;
+/*
+	==========================================================================
+	Description:
+		Get the desired TSSI based on the latest packet
+
+	Arguments:
+		pAd
+
+	Return Value:
+		The desired TSSI
+	==========================================================================
+ */
+CHAR GetDesiredTSSI(
+	IN PRTMP_ADAPTER		pAd)
+{
+	PHTTRANSMIT_SETTING pLatestTxHTSetting = (PHTTRANSMIT_SETTING)(&pAd->LastTxRate);
+	UCHAR desiredTSSI = 0;
+	UCHAR MCS = 0;
+	UCHAR MaxMCS = 7;
+
+	MCS = (UCHAR)(pLatestTxHTSetting->field.MCS);
+	
+	if (pLatestTxHTSetting->field.MODE == MODE_CCK)
+	{
+		if (MCS > 3) /* boundary verification */
+		{
+			DBGPRINT(RT_DEBUG_ERROR, ("%s: incorrect MCS: MCS = %d\n", 
+				__FUNCTION__, 
+				MCS));
+			
+			MCS = 0;
+		}
+	
+		desiredTSSI = desiredTSSIOverCCK[MCS];
+	}
+	else if (pLatestTxHTSetting->field.MODE == MODE_OFDM)
+	{
+		if (MCS > 7) /* boundary verification */
+		{
+			DBGPRINT(RT_DEBUG_ERROR, ("%s: incorrect MCS: MCS = %d\n", 
+				__FUNCTION__, 
+				MCS));
+
+			MCS = 0;
+		}
+
+		desiredTSSI = desiredTSSIOverOFDM[MCS];
+	}
+	else if ((pLatestTxHTSetting->field.MODE == MODE_HTMIX) || (pLatestTxHTSetting->field.MODE == MODE_HTGREENFIELD))
+	{
+		MaxMCS = pAd->chipCap.TxAlcMaxMCS - 1;
+
+		if (MCS > MaxMCS) /* boundary verification */
+		{
+			DBGPRINT(RT_DEBUG_ERROR, ("%s: incorrect MCS: MCS = %d\n", 
+				__FUNCTION__, 
+				MCS));
+
+			MCS = 0;
+		}
+
+		if (pLatestTxHTSetting->field.STBC == 1)
+		{
+			desiredTSSI = desiredTSSIOverHT[MCS];
+		}
+		else
+		{
+			desiredTSSI = desiredTSSIOverHTUsingSTBC[MCS];
+		}
+
+		
+		/* For HT BW40 MCS 7 with/without STBC configuration, the desired TSSI value should subtract one from the formula. */
+		
+		if ((pLatestTxHTSetting->field.BW == BW_40) && (MCS == MCS_7))
+		{
+			desiredTSSI -= 1;
+		}
+	}
+
+	DBGPRINT(RT_DEBUG_INFO, ("%s: desiredTSSI = %d, Latest Tx HT setting: MODE = %d, MCS = %d, STBC = %d\n", 
+		__FUNCTION__, 
+		desiredTSSI, 
+		pLatestTxHTSetting->field.MODE, 
+		pLatestTxHTSetting->field.MCS, 
+		pLatestTxHTSetting->field.STBC));
+
+	DBGPRINT(RT_DEBUG_INFO, ("<--- %s\n", __FUNCTION__));
+
+	return desiredTSSI;
 }
 #endif /* RTMP_INTERNAL_TX_ALC */
+
+
+VOID AsicGetTxPowerOffset(
+	IN PRTMP_ADAPTER pAd,
+	IN PULONG TxPwr)
+{
+	CONFIGURATION_OF_TX_POWER_CONTROL_OVER_MAC CfgOfTxPwrCtrlOverMAC;
+
+	/* non-3593 */
+	{
+		CfgOfTxPwrCtrlOverMAC.NumOfEntries = 5; // MAC 0x1314, 0x1318, 0x131C, 0x1320 and 1324
+
+		if (pAd->CommonCfg.BBPCurrentBW == BW_40)
+		{
+			if (pAd->CommonCfg.CentralChannel > 14)
+			{
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].MACRegisterOffset = TX_PWR_CFG_0;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].RegisterValue = pAd->Tx40MPwrCfgABand[0];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].MACRegisterOffset = TX_PWR_CFG_1;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].RegisterValue = pAd->Tx40MPwrCfgABand[1];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].MACRegisterOffset = TX_PWR_CFG_2;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].RegisterValue = pAd->Tx40MPwrCfgABand[2];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].MACRegisterOffset = TX_PWR_CFG_3;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].RegisterValue = pAd->Tx40MPwrCfgABand[3];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].MACRegisterOffset = TX_PWR_CFG_4;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].RegisterValue = pAd->Tx40MPwrCfgABand[4];
+			}
+			else
+			{
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].MACRegisterOffset = TX_PWR_CFG_0;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].RegisterValue = pAd->Tx40MPwrCfgGBand[0];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].MACRegisterOffset = TX_PWR_CFG_1;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].RegisterValue = pAd->Tx40MPwrCfgGBand[1];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].MACRegisterOffset = TX_PWR_CFG_2;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].RegisterValue = pAd->Tx40MPwrCfgGBand[2];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].MACRegisterOffset = TX_PWR_CFG_3;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].RegisterValue = pAd->Tx40MPwrCfgGBand[3];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].MACRegisterOffset = TX_PWR_CFG_4;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].RegisterValue = pAd->Tx40MPwrCfgGBand[4];
+			}
+		}
+		else
+		{
+			if (pAd->CommonCfg.CentralChannel > 14)
+			{
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].MACRegisterOffset = TX_PWR_CFG_0;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].RegisterValue = pAd->Tx20MPwrCfgABand[0];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].MACRegisterOffset = TX_PWR_CFG_1;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].RegisterValue = pAd->Tx20MPwrCfgABand[1];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].MACRegisterOffset = TX_PWR_CFG_2;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].RegisterValue = pAd->Tx20MPwrCfgABand[2];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].MACRegisterOffset = TX_PWR_CFG_3;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].RegisterValue = pAd->Tx20MPwrCfgABand[3];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].MACRegisterOffset = TX_PWR_CFG_4;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].RegisterValue = pAd->Tx20MPwrCfgABand[4];
+			}
+			else
+			{
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].MACRegisterOffset = TX_PWR_CFG_0;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[0].RegisterValue = pAd->Tx20MPwrCfgGBand[0];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].MACRegisterOffset = TX_PWR_CFG_1;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[1].RegisterValue = pAd->Tx20MPwrCfgGBand[1];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].MACRegisterOffset = TX_PWR_CFG_2;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[2].RegisterValue = pAd->Tx20MPwrCfgGBand[2];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].MACRegisterOffset = TX_PWR_CFG_3;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[3].RegisterValue = pAd->Tx20MPwrCfgGBand[3];
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].MACRegisterOffset = TX_PWR_CFG_4;
+				CfgOfTxPwrCtrlOverMAC.TxPwrCtrlOverMAC[4].RegisterValue = pAd->Tx20MPwrCfgGBand[4];
+			}
+		}
+
+		NdisCopyMemory(TxPwr, (UCHAR *)&CfgOfTxPwrCtrlOverMAC, sizeof(CfgOfTxPwrCtrlOverMAC));
+	}
+
+
+}
 
 
 static VOID AsicAntennaDefaultReset(
@@ -1075,6 +1709,34 @@ static VOID AsicAntennaDefaultReset(
 	}
 	else
 #endif /* RT30xx */
+#ifdef RT33xx
+	if (IS_RT3390(pAd))
+	{
+		pAntenna->word = 0;
+		pAntenna->field.RfIcType = RFIC_3320;
+		pAntenna->field.TxPath = 1;
+		pAntenna->field.RxPath = 1;
+	}
+	else
+#endif /* RT33xx */
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+		if (IS_RT5390(pAd))
+		{
+			pAntenna->word = 0;
+			pAntenna->field.RfIcType = 0xF; /* Reserved */
+			if (IS_RT5392(pAd))
+			{
+				pAntenna->field.TxPath = 2;
+				pAntenna->field.RxPath = 2;
+			}
+			else
+			{
+			pAntenna->field.TxPath = 1;
+			pAntenna->field.RxPath = 1;
+			}
+		}
+		else
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 	{
 
 		pAntenna->word = 0;

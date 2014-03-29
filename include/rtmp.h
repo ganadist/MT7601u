@@ -76,6 +76,8 @@ typedef struct _RTMP_CHIP_CAP_ RTMP_CHIP_CAP;
 #define MAX_DATAMM_RETRY	3
 #define MGMT_USE_QUEUE_FLAG	0x80
 /*---Add by shiang for merge MiniportMMRequest() and MiniportDataMMRequest() into one function */
+/* The number of channels for per-channel Tx power offset */
+
 
 #define	MAXSEQ		(0xFFF)
 
@@ -177,9 +179,9 @@ extern UCHAR PRE_N_HT_OUI[];
 typedef struct _ATE_INFO {
 	UCHAR Mode;
 	BOOLEAN PassiveMode;
-#ifdef RT3350
-	UCHAR PABias;
-#endif				/* RT3350 */
+#if defined (RT3350) || defined (RT3352) || defined (RT5350)
+	UCHAR   PABias;
+#endif // defined (RT3350) || defined (RT3352) || defined (RT5350) //
 	CHAR TxPower0;
 	CHAR TxPower1;
 #ifdef DOT11N_SS3_SUPPORT
@@ -589,15 +591,6 @@ typedef struct _RTMP_SCATTER_GATHER_LIST {
 
 #ifdef CONFIG_STA_SUPPORT
 #define STA_EXTRA_SETTING(_pAd)
-#define STA_STORE_CONN_INFO(_pAd)
-
-#ifdef CREDENTIAL_STORE
-#undef STA_STORE_CONN_INFO
-#define STA_STORE_CONN_INFO(_pAd) \
-{ \
-	StoreConnectInfo(_pAd); \
-}
-#endif /* CREDENTIAL_STORE */
 
 #define STA_PORT_SECURED(_pAd) \
 { \
@@ -610,9 +603,7 @@ typedef struct _RTMP_SCATTER_GATHER_LIST {
 	NdisReleaseSpinLock(&(_pAd)->MacTabLock); \
 	RTMPCancelTimer(&((_pAd)->Mlme.LinkDownTimer), &Cancelled);\
 	STA_EXTRA_SETTING(_pAd); \
-	STA_STORE_CONN_INFO(_pAd); \
 }
-
 #endif /* CONFIG_STA_SUPPORT */
 
 /* */
@@ -723,6 +714,9 @@ typedef struct _COUNTER_RALINK {
 
 	ULONG TransmittedByteCount;	/* both successful and failure, used to calculate TX throughput */
 	ULONG ReceivedByteCount;	/* both CRC okay and CRC error, used to calculate RX throughput */
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	ULONG LastReceivedByteCount;
+#endif // defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) //
 	ULONG BadCQIAutoRecoveryCount;
 	ULONG PoorCQIRoamingCount;
 	ULONG MgmtRingFullCount;
@@ -935,6 +929,7 @@ typedef struct _CHANNEL_TX_POWER {
 	CHANNEL_NO_FAT_ABOVE: Extension channel above this channel is not allowed.
 	CHANNEL_NO_FAT_BELOW: Extension channel below this channel is not allowed.
  */
+#define CHANNEL_DEFAULT_PROP	0x00
 #define CHANNEL_DISABLED		0x01	/* no use */
 #define CHANNEL_PASSIVE_SCAN	0x02
 #define CHANNEL_NO_IBSS			0x04
@@ -1604,6 +1599,9 @@ typedef struct _COMMON_CONFIG {
 
 	BOOLEAN NdisRadioStateOff;	/*For HCT 12.0, set this flag to TRUE instead of called MlmeRadioOff. */
 	ABGBAND_STATE BandState;	/* For setting BBP used on B/G or A mode. */
+#ifdef ANT_DIVERSITY_SUPPORT
+	UCHAR bRxAntDiversity;	/* 0:disable, 1:enable Software Rx Antenna Diversity. */
+#endif				/* ANT_DIVERSITY_SUPPORT */
 
 	/* IEEE802.11H--DFS. */
 	RADAR_DETECT_STRUCT RadarDetect;
@@ -1710,6 +1708,7 @@ typedef struct _COMMON_CONFIG {
 #endif				/* RTMP_MAC_USB */
 
 
+
 	NDIS_SPIN_LOCK MeasureReqTabLock;
 	PMEASURE_REQ_TAB pMeasureReqTab;
 
@@ -1728,6 +1727,166 @@ typedef struct _COMMON_CONFIG {
 	UINT16 BandedgeDelta;
 #endif				/* SINGLE_SKU */
 
+#if defined(DFS_SUPPORT) || defined(CARRIER_DETECTION_SUPPORT)
+#if defined(RTMP_RBUS_SUPPORT) || defined(DFS_INTERRUPT_SUPPORT)
+	/* Radar and carrier detection in 2880-SW-MCU */
+	UCHAR McuRadarCmd;	/* RADAR_DETECTION==1 or CARRIER_DETECTION==2, use bit map */
+	UCHAR McuRadarEvent;	/* signal between Driver and 2880-SW-MCU */
+	UCHAR McuRadarProtection;
+	UCHAR McuRadarState;	/* WAIT_CTS_BEING_SENT / DO_DETECTION / FREE_FOR_TX */
+	UCHAR McuCarrierState;
+
+	/* old value */
+	ULONG OldRtsRetryLimit;
+	UCHAR _R65;
+	UCHAR _R66;
+	UCHAR _R69;
+	UCHAR _R70;
+	UCHAR _R73;
+	UCHAR R65;
+	UCHAR R66;
+	UCHAR DFS_R66;
+#endif				/* defined(RTMP_RBUS_SUPPORT) || defined(DFS_INTERRUPT_SUPPORT) */
+
+#ifdef DFS_HARDWARE_SUPPORT
+	ULONG MCURadarRegion;
+	UCHAR DeltaDelay;
+	UCHAR RadarReEnable;
+	USHORT PollTime;
+	USHORT ChEnable;
+	INT DfsRssiHigh;
+	INT DfsRssiLow;
+	INT DfsRssiHighFromCfg;
+	INT DfsRssiLowFromCfg;
+	BOOLEAN DfsRssiHighCfgValid;
+	BOOLEAN DfsRssiLowCfgValid;
+	NewDFSDebug DfsDebug;
+	NewDFSDebugPort FCC_5[NEW_DFS_FCC_5_ENT_NUM];
+	UCHAR fcc_5_idx;
+	UCHAR fcc_5_last_idx;
+	USHORT fcc_5_threshold;	/* to check the width of long pulse radar */
+	ULONG fcc_5_counter;
+	UCHAR use_tasklet;
+	UCHAR DFSParamFromConfig;
+	NewDFSParam NewDFSTableEntry[16];
+#ifdef DFS_DEBUG
+	/* Roger debug */
+	UCHAR DebugPort[384];
+	UCHAR DebugPortPrint;	/* 0 = stop, 1 = log req, 2 = loging, 3 = log done */
+	ULONG TotalEntries[4];
+
+	ULONG T_Matched_2;
+	ULONG T_Matched_3;
+	ULONG T_Matched_4;
+	ULONG T_Matched_5;
+	UCHAR BBP127Repeat;
+
+	ULONG CounterStored[5];
+	ULONG CounterStored2[5];
+	ULONG CounterStored3;
+	NewDFSDebugPort CE_DebugCh0[NEW_DFS_DBG_PORT_ENT_NUM];
+	NewDFSMPeriod CE_TCh0[NEW_DFS_MPERIOD_ENT_NUM];
+#endif
+
+	/* CE Staggered radar / weather radar */
+	NewDFSDebugPort DFS_W[NEW_DFS_MAX_CHANNEL][NEW_DFS_DBG_PORT_ENT_NUM];
+	USHORT dfs_w_idx[NEW_DFS_MAX_CHANNEL];
+	USHORT dfs_w_last_idx[NEW_DFS_MAX_CHANNEL];
+	ULONG dfs_w_counter;
+
+	NewDFSMPeriod DFS_T[NEW_DFS_MAX_CHANNEL][NEW_DFS_MPERIOD_ENT_NUM];	/* period table */
+	USHORT dfs_t_idx[NEW_DFS_MAX_CHANNEL];
+
+	USHORT dfs_width_diff_ch1_Shift;
+	USHORT dfs_width_diff_ch2_Shift;
+	USHORT dfs_width_diff_Shift;
+	USHORT dfs_period_err;
+	ULONG dfs_max_period;	/* Max possible Period */
+	USHORT dfs_width_diff;
+	USHORT dfs_width_ch0_err_L;
+	USHORT dfs_width_ch0_err_H;
+	UCHAR dfs_check_loop;
+	UCHAR dfs_declare_thres;
+	UCHAR radarDeclared;
+	UCHAR Ch0Overflow;
+	UCHAR ce_staggered_check;
+	UCHAR hw_dfs_disabled;
+
+	UINT sw_idx[NEW_DFS_MAX_CHANNEL];
+	UINT hw_idx[NEW_DFS_MAX_CHANNEL];
+	UINT pr_idx[NEW_DFS_MAX_CHANNEL];
+
+	/* Hardware detection re-check */
+	ULONG re_check_jiffies[NEW_DFS_MAX_CHANNEL];
+	ULONG re_check_Width[NEW_DFS_MAX_CHANNEL];
+	ULONG re_check_Period[NEW_DFS_MAX_CHANNEL];
+
+	/* false detection filter */
+	UCHAR BUM_time;		/* Bandwidth Usage monitor time */
+	ULONG idle_time;
+	ULONG busy_time;
+	int rssi;
+	UCHAR ch_busy;
+	UCHAR ch_busy_idle_ratio;
+	UCHAR BusyIdleFromCfg;
+	BOOLEAN BusyIdleCfgValid;
+
+	/* Dfs: Radar event expiration parameter */
+	ULONG RadarEventExpire[4];
+
+#define CH_BUSY_NEGATIVE_MASK 0xe0000000	/* this mask is used when use shift operation instead of division on negative integer. */
+#define CH_BUSY_SAMPLE_POWER 3
+#define CH_BUSY_SAMPLE (1 << CH_BUSY_SAMPLE_POWER)
+#define CH_BUSY_MASK  (CH_BUSY_SAMPLE - 1)
+	UCHAR print_ch_busy_sta;
+	ULONG ch_busy_sta[CH_BUSY_SAMPLE];
+	ULONG ch_idle_sta[CH_BUSY_SAMPLE];
+	UCHAR ch_busy_sta_index;
+	int ch_busy_sum;
+	int ch_idle_sum;
+
+#define MAX_FDF_NUMBER 5	/* max false-detection-filter number */
+	UCHAR fdf_num;
+	USHORT ch_busy_threshold[MAX_FDF_NUMBER];
+	int rssi_threshold[MAX_FDF_NUMBER];
+
+	/* Support after dfs_func >= 2 */
+	UCHAR Symmetric_Round;
+	UCHAR VGA_Mask;
+	UCHAR Packet_End_Mask;
+	UCHAR Rx_PE_Mask;
+	UCHAR SymRoundFromCfg;
+	UCHAR SymRoundCfgValid;
+#endif				/* DFS_HARDWARE_SUPPORT */
+
+	/* DFS patch for long pulse */
+	UCHAR W56_debug;
+	ULONG W56_idx;
+	ULONG W56_1s;
+	ULONG W56_4s[4];
+	ULONG W56_total;
+	ULONG W56_hw_1;
+	ULONG W56_hw_2;
+	ULONG W56_hw_sum;
+	UCHAR RadarElectNum;
+
+	/*UCHAR BlockCh[MAX_NUM_OF_CHANNELS]; */
+	/*USHORT ChRemainTime[MAX_NUM_OF_CHANNELS]; */
+	/*UCHAR BlockChNum; */
+
+	UCHAR McuRadarDebug;
+
+	/* Radar detection */
+	UCHAR McuRadarTick;
+	UCHAR McuRadarPeriod;
+	UCHAR McuRadarDetectPeriod;
+	UCHAR McuRadarCtsProtect;
+	UCHAR McuRadarDetectCount;
+	ULONG RadarTimeStampHigh;
+	ULONG RadarTimeStampLow;
+	/*BOOLEAN               bDFSIndoor; */
+
+#endif				/* DFS_SUPPORT */
 
 #ifdef CARRIER_DETECTION_SUPPORT
 	/* Carrier detection */
@@ -1766,6 +1925,10 @@ typedef struct _COMMON_CONFIG {
 
 
 
+#ifdef RTMP_TEMPERATURE_COMPENSATION
+	/* Temperature compensation, 0: Disabled, 1: Method 1, 2: Method 2 */
+	ULONG TempComp;
+#endif /* RTMP_TEMPERATURE_COMPENSATION */
 } COMMON_CONFIG, *PCOMMON_CONFIG;
 
 /* DebugFlag definitions */
@@ -1787,24 +1950,6 @@ typedef struct _COMMON_CONFIG {
 #define DBF_UNUSED8000				0x8000	/* unused */
 
 #ifdef CONFIG_STA_SUPPORT
-#ifdef CREDENTIAL_STORE
-typedef struct _STA_CONNECT_INFO {
-	BOOLEAN Changeable;	
-	BOOLEAN IEEE8021X;
-	CHAR Ssid[MAX_LEN_OF_SSID]; // NOT NULL-terminated
-	UCHAR SsidLen; // the actual ssid length in used
-	NDIS_802_11_AUTHENTICATION_MODE AuthMode; // This should match to whatever microsoft defined
-	NDIS_802_11_WEP_STATUS WepStatus;
-	UCHAR DefaultKeyId;
-	UCHAR PMK[LEN_PMK]; // WPA PSK mode PMK
-	UCHAR WpaPassPhrase[64]; // WPA PSK pass phrase
-	UINT WpaPassPhraseLen; // the length of WPA PSK pass phrase
-	UINT8 WpaState;	
-	CIPHER_KEY SharedKey[1][4]; // STA always use SharedKey[BSS0][0..3]
-	NDIS_SPIN_LOCK Lock;
-} STA_CONNECT_INFO, *P_STA_CONNECT_INFO;
-#endif /* CREDENTIAL_STORE */
-
 /* Modified by Wu Xi-Kun 4/21/2006 */
 /* STA configuration and status */
 typedef struct _STA_ADMIN_CONFIG {
@@ -2025,6 +2170,10 @@ typedef struct _STA_ADMIN_CONFIG {
 
 
 
+#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
+	BOOLEAN				AdaptiveFreq;  /* Todo: iwpriv and profile support. */
+#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
+
 } STA_ADMIN_CONFIG, *PSTA_ADMIN_CONFIG;
 
 /* This data structure keep the current active BSS/IBSS's configuration that this STA */
@@ -2196,9 +2345,6 @@ typedef struct _MAC_TABLE_ENTRY {
 	UINT32 ContinueTxFailCnt;
 	UINT32 CurrTxRateStableTime;	/* # of second in current TX rate */
 	UCHAR TxRateUpPenalty;	/* extra # of second penalty due to last unstable condition */
-#ifdef WDS_SUPPORT
-	BOOLEAN LockEntryTx;	/* TRUE = block to WDS Entry traffic, FALSE = not. */
-#endif				/* WDS_SUPPORT */
 	ULONG TimeStamp_toTxRing;
 
 /*==================================================== */
@@ -2375,15 +2521,39 @@ typedef struct _RtmpDiagStrcut_ {	/* Diagnosis Related element */
 #endif /* DBG_DIAGNOSE */
 
 #ifdef RTMP_INTERNAL_TX_ALC
+/*
+	The number of channels for per-channel Tx power offset
+*/
+#define NUM_OF_CH_FOR_PER_CH_TX_PWR_OFFSET	14
+
 /* */
 /* The Tx power control using the internal ALC */
 /* */
 typedef struct _TX_POWER_CONTROL {
 	BOOLEAN bInternalTxALC;	/* Internal Tx ALC */
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	BOOLEAN bExtendedTssiMode; /* The extended TSSI mode (each channel has different Tx power if needed) */
+	CHAR PerChTxPwrOffset[NUM_OF_CH_FOR_PER_CH_TX_PWR_OFFSET + 1]; /* Per-channel Tx power offset */
+
+	
+	/* RT5392 temperature compensation */
+	/* lookup table, 33 elements (-7, -6....0, 1, 2...25) */
+	INT LookupTable[33];
+
+	/* Reference temperature, from EEPROM */
+	INT RefTempG;
+
+	/* Index offset, -7....25. */
+	INT LookupTableIndex;
+	
+	CHAR idxTxPowerTable2; /* The index of the Tx power table */
+
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 	CHAR idxTxPowerTable;	/* The index of the Tx power table */
 
-	CHAR RF_R12_Value;	/* RF R12[4:0]: Tx0 ALC */
+	CHAR RF_R12_Value;	/* RF R12[4:0]: Tx0 ALC   3390: RF R12[4:0]: Tx0 ALC, 5390: RF R49[5:0]: Tx0 ALC*/
+
 	CHAR MAC_PowerDelta;	/* Tx power control over MAC 0x1314~0x1324 */
 } TX_POWER_CONTROL, *PTX_POWER_CONTROL;
 #endif /* RTMP_INTERNAL_TX_ALC */
@@ -2499,6 +2669,12 @@ struct _RTMP_ADAPTER {
 
 	RTMP_CHIP_OP chipOps;
 	RTMP_CHIP_CAP chipCap;
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	USHORT					SameRxByteCount;
+	UCHAR				BbpResetCount;
+#endif // defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) //
+
+
 
 #ifdef CONFIG_STA_SUPPORT
 	USHORT ThisTbttNumToNextWakeUp;
@@ -2545,6 +2721,8 @@ struct _RTMP_ADAPTER {
 
 	/*======Semaphores (event) */
 	RTMP_OS_SEM UsbVendorReq_semaphore;
+	RTMP_OS_SEM UsbVendorReq_semaphore2;
+
 	PVOID UsbVendorReqBuf;
 /*	wait_queue_head_t		*wait; */
 	VOID *wait;
@@ -2802,11 +2980,6 @@ struct _RTMP_ADAPTER {
 	BOOLEAN			bWriteDat;
 #endif /* PROFILE_STORE */
 
-#ifdef CREDENTIAL_STORE
-	STA_CONNECT_INFO StaCtIf;
-#endif /* CREDENTIAL_STORE */
-
-
 
 	/* MAT related parameters */
 
@@ -2936,6 +3109,7 @@ struct _RTMP_ADAPTER {
 
 	struct wificonf WIFItestbed;
 
+	UCHAR		TssiGain;
 #ifdef RALINK_ATE
 	ATE_INFO ate;
 #ifdef RTMP_MAC_USB
@@ -3060,8 +3234,9 @@ struct _RTMP_ADAPTER {
 #endif /* OS_ABL_SUPPORT */
 
 
-	UCHAR PreRFXCodeValue;	/* latch for RF (Freq Cal) value */
+
 };
+
 
 #ifdef RTMP_INTERNAL_TX_ALC
 /* The Tx power tuning entry */
@@ -3079,6 +3254,143 @@ typedef struct _TX_POWER_TUNING_ENTRY_STRUCT {
 /* The upper-bound of the Tx power tuning entry */
 #define UPPERBOUND_TX_POWER_TUNING_ENTRY(__pAd)		((__pAd)->chipCap.TxAlcTxPowerUpperBound)
 
+
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+
+/* The offset of the Tx power tuning entry (zero-based array) for 5390 */
+
+#define TX_POWER_TUNING_ENTRY_OFFSET_OVER_5390		30
+
+
+/* The lower-bound of the Tx power tuning entry for 5390 */
+
+#define LOWERBOUND_TX_POWER_TUNING_ENTRY_OVER_5390	-30
+
+
+/* The upper-bound of the Tx power tuning entry for 5390 */
+
+#define UPPERBOUND_TX_POWER_TUNING_ENTRY_OVER_5390	69 // zero-based array
+
+/* Temperature compensation lookup table */
+
+#define TEMPERATURE_COMPENSATION_LOOKUP_TABLE_OFFSET 7
+
+/* The lower/upper power delta index for the TSSI rate table */
+
+#define LOWER_POWER_DELTA_INDEX	0
+#define UPPER_POWER_DELTA_INDEX		24
+
+/* The offset of the TSSI rate table */
+
+#define TSSI_RATIO_TABLE_OFFSET	12
+
+
+/* Get the power delta bound */
+
+#define GET_TSSI_RATE_TABLE_INDEX(x) (((x) > UPPER_POWER_DELTA_INDEX) ? (UPPER_POWER_DELTA_INDEX) : (((x) < LOWER_POWER_DELTA_INDEX) ? (LOWER_POWER_DELTA_INDEX) : ((x))))
+
+/* 802.11b CCK TSSI information */
+
+typedef union _CCK_TSSI_INFO
+{
+#ifdef RT_BIG_ENDIAN
+	struct
+	{
+		UCHAR	Reserved:1;
+		UCHAR	ShortPreamble:1;
+		UCHAR	Rate:2;
+		UCHAR	Tx40MSel:2;
+		UCHAR	TxType:2;
+	} field;
+#else
+	struct
+	{
+		UCHAR	TxType:2;
+		UCHAR	Tx40MSel:2;
+		UCHAR	Rate:2;
+		UCHAR	ShortPreamble:1;
+		UCHAR	Reserved:1;
+	} field;
+#endif /* RT_BIG_ENDIAN */
+
+	UCHAR	value;
+} CCK_TSSI_INFO, *PCCK_TSSI_INFO;
+
+
+/* 802.11a/g OFDM TSSI information */
+
+typedef union _OFDM_TSSI_INFO
+{
+#ifdef RT_BIG_ENDIAN
+	struct
+	{
+		UCHAR	Rate:4;
+		UCHAR	Tx40MSel:2;
+		UCHAR	TxType:2;
+	} field;
+#else
+	struct
+	{
+		UCHAR	TxType:2;
+		UCHAR	Tx40MSel:2;
+		UCHAR	Rate:4;
+	} field;
+#endif /* RT_BIG_ENDIAN */
+
+	UCHAR	value;
+} OFDM_TSSI_INFO, *POFDM_TSSI_INFO;
+
+
+/* 802.11n HT TSSI information */
+
+typedef union _HT_TSSI_INFO
+{
+	union
+	{
+#ifdef RT_BIG_ENDIAN
+		struct
+		{
+			UCHAR	SGI:1;
+			UCHAR	STBC:2;
+			UCHAR	Aggregation:1;
+			UCHAR	Tx40MSel:2;
+			UCHAR	TxType:2;
+		} field;
+#else	
+		struct
+		{
+			UCHAR	TxType:2;
+			UCHAR	Tx40MSel:2;
+			UCHAR	Aggregation:1;
+			UCHAR	STBC:2;
+			UCHAR	SGI:1;
+		} field;
+#endif /* RT_BIG_ENDIAN */
+
+		UCHAR	value;
+	} PartA;
+
+	union
+	{
+#ifdef RT_BIG_ENDIAN
+		struct
+		{
+			UCHAR	BW:1;
+			UCHAR	MCS:7;
+		} field;
+#else	
+		struct
+		{
+			UCHAR	MCS:7;
+			UCHAR	BW:1;
+		} field;
+#endif /* RT_BIG_ENDIAN */
+
+		UCHAR	value;
+	} PartB;
+} HT_TSSI_INFO, *PHT_TSSI_INFO;
+
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 #endif /* RTMP_INTERNAL_TX_ALC */
 
 #ifdef TONE_RADAR_DETECT_SUPPORT
@@ -3675,6 +3987,11 @@ VOID	RTMPReleaseTimer(
 VOID RTMPEnableRxTx(
 	IN PRTMP_ADAPTER	pAd);
 
+
+VOID AntCfgInit(
+IN  PRTMP_ADAPTER   pAd);
+
+
 /* */
 /* prototype in action.c */
 /* */
@@ -4084,11 +4401,11 @@ VOID AsicAntennaSelect(
 	IN  PRTMP_ADAPTER   pAd,
 	IN  UCHAR           Channel);
 
-#ifdef CONFIG_STA_SUPPORT
 
 VOID AsicResetBBPAgent(
 	IN PRTMP_ADAPTER pAd);
 
+#ifdef CONFIG_STA_SUPPORT
 VOID AsicSleepThenAutoWakeup(
 	IN  PRTMP_ADAPTER   pAd, 
 	IN  USHORT TbttNumToNextWakeUp);
@@ -4221,6 +4538,14 @@ BOOLEAN AsicSendCommandToMcu(
 	IN UCHAR         Token,
 	IN UCHAR         Arg0,
 	IN UCHAR         Arg1);
+
+BOOLEAN AsicSendCommandToMcuBBP(
+	IN PRTMP_ADAPTER pAd,
+	IN UCHAR		 Command,
+	IN UCHAR		 Token,
+	IN UCHAR		 Arg0,
+	IN UCHAR		 Arg1,
+	IN BOOLEAN		FlgIsNeedLocked);
 
 
 
@@ -5197,6 +5522,13 @@ VOID AsicUpdateAutoFallBackTable(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PUCHAR			pTxRate);
 
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	
+VOID AsicCheckForHwRecovery(
+	IN PRTMP_ADAPTER	pAd) ;
+#endif // defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) //
+
+
 VOID  MlmePeriodicExec(
 	IN PVOID SystemSpecific1, 
 	IN PVOID FunctionContext, 
@@ -5475,7 +5807,45 @@ VOID RT30xxSetRxAnt(
 VOID PostBBPInitialization(
 	IN PRTMP_ADAPTER	pAd);
 #endif /* RT30xx */
+#ifdef RT33xx
+VOID RT33xxLoadRFNormalModeSetup(
+	IN PRTMP_ADAPTER 	pAd);
 
+VOID RT33xxLoadRFSleepModeSetup(
+	IN PRTMP_ADAPTER 	pAd);
+
+VOID RT33xxReverseRFSleepModeSetup(
+	IN PRTMP_ADAPTER 	pAd,
+	IN BOOLEAN			FlgIsInitState);
+
+#ifdef RT3370
+VOID NICInitRT3370RFRegisters(
+	IN RTMP_ADAPTER *pAd);
+#endif /* RT3070 */
+
+
+VOID RT33xxHaltAction(
+	IN PRTMP_ADAPTER 	pAd);
+
+VOID RT33xxSetRxAnt(
+	IN PRTMP_ADAPTER	pAd,
+	IN UCHAR			Ant);
+
+#endif /* RT33xx */
+
+
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+VOID NICInitRT5390RFRegisters(
+	IN PRTMP_ADAPTER pAd);
+
+ NTSTATUS	RT5392WriteBBPR66(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	UCHAR			Value);
+
+VOID RT5390SetRxAnt(
+	IN PRTMP_ADAPTER	pAd,
+	IN UCHAR			Ant);
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 
 VOID AsicEvaluateRxAnt(
@@ -5511,6 +5881,7 @@ BOOLEAN RTMPAutoRateSwitchCheck(
 NDIS_STATUS MlmeInit(
 	IN  PRTMP_ADAPTER   pAd);
 
+#ifdef CONFIG_STA_SUPPORT
 #ifdef RTMP_FREQ_CALIBRATION_SUPPORT
 /* */
 /* Initialize the frequency calibration */
@@ -5523,6 +5894,7 @@ NDIS_STATUS MlmeInit(
 /* */
 VOID InitFrequencyCalibration(
 	IN PRTMP_ADAPTER pAd);
+
 
 /* */
 /* To stop the frequency calibration algorithm */
@@ -5558,37 +5930,28 @@ VOID FrequencyCalibration(
 /* Return Value: */
 /*	The frequency offset */
 /* */
-UCHAR GetFrequencyOffset(
+CHAR GetFrequencyOffset(
 	IN PRTMP_ADAPTER pAd, 
 	IN PRXWI_STRUC pRxWI);
 #endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
+#endif /* CONFIG_STA_SUPPORT */
 
 
-#ifdef RTMP_INTERNAL_TX_ALC
-/* */
-/* Initialize the desired TSSI table */
-/* */
-/* Parameters */
-/*	pAd: The adapter data structure */
-/* */
-/* Return Value: */
-/*	None */
-/* */
-VOID InitDesiredTSSITable(
-	IN PRTMP_ADAPTER pAd);
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)	
+#ifdef RTMP_INTERNAL_TX_ALC	
 
-/* */
-/* Get the desired TSSI based on the latest packet */
-/* */
-/* Parameters */
-/*	pAd: The adapter data structure */
-/* */
-/* Return Value: */
-/*	The desired TSSI */
-/* */
-CHAR GetDesiredTSSI(
-	IN PRTMP_ADAPTER pAd);
+BOOLEAN GetDesiredTssiAndCurrentTssi(
+	IN PRTMP_ADAPTER pAd, 
+	IN OUT PCHAR pDesiredTssi, 
+	IN OUT PCHAR pCurrentTssi);
+
 #endif /* RTMP_INTERNAL_TX_ALC */
+#ifdef RTMP_TEMPERATURE_COMPENSATION
+VOID InitLookupTable(
+	IN PRTMP_ADAPTER pAd);
+#endif /* RTMP_TEMPERATURE_COMPENSATION */
+
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 VOID MlmeHandler(
 	IN  PRTMP_ADAPTER   pAd);
@@ -5787,6 +6150,12 @@ VOID CntlChannelWidth(
 VOID APAsicEvaluateRxAnt(
 	IN PRTMP_ADAPTER	pAd);
 
+#ifdef ANT_DIVERSITY_SUPPORT
+VOID	APAsicAntennaAvg(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	UCHAR	              AntSelect,
+	IN	SHORT	              *RssiAvg);
+#endif /* ANT_DIVERSITY_SUPPORT */
 
 VOID APAsicRxAntEvalTimeout(
 	IN PRTMP_ADAPTER	pAd);
@@ -6391,10 +6760,10 @@ UINT deaggregate_AMSDU_announce(
 		if (RX_BLK_TEST_FLAG(_pRxBlk, fRX_INFRA))                              	\
 		{                                                                       \
 			_pDA = _pRxBlk->pHeader->Addr1;                                     \
-			if (RX_BLK_TEST_FLAG(_pRxBlk, fRX_DLS))									\
-				_pSA = _pRxBlk->pHeader->Addr2;										\
-			else																	\
-				_pSA = _pRxBlk->pHeader->Addr3;                                     \
+		if (RX_BLK_TEST_FLAG(_pRxBlk, fRX_DLS))									\
+			_pSA = _pRxBlk->pHeader->Addr2;										\
+		else																	\
+			_pSA = _pRxBlk->pHeader->Addr3;                                     \
 		}                                                                       \
 		else                                                                    \
 		{                                                                       \
@@ -6615,14 +6984,6 @@ void tbtt_tasklet(unsigned long data);
 
 	
 	
-
-#ifdef CREDENTIAL_STORE
-NDIS_STATUS RecoverConnectInfo(
-	IN  RTMP_ADAPTER *pAd);
-
-NDIS_STATUS StoreConnectInfo(	
-	IN  RTMP_ADAPTER *pAd);
-#endif /* CREDENTIAL_STORE */
 
 VOID AsicTurnOffRFClk(
 	IN PRTMP_ADAPTER    pAd, 
@@ -7338,6 +7699,7 @@ void  getRate(
     OUT ULONG* fLastTxRxRate);
 
 
+
 void RTMP_IndicateMediaState(	
 	IN	PRTMP_ADAPTER		pAd,
 	IN  NDIS_MEDIA_STATE	media_state);
@@ -7374,5 +7736,14 @@ INT RTMP_COM_IoctlHandle(
 
 
 
+INT	Set_Antenna_Proc(
+	IN	PRTMP_ADAPTER	pAd, 
+	IN	PSTRING			arg);
+
+#ifdef RT5350
+INT Set_Hw_Antenna_Div_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg);
+#endif // RT5350 //
 #endif  /* __RTMP_H__ */
 

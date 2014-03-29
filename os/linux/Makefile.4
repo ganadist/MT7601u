@@ -155,7 +155,61 @@ endif
 
 
 
+#ifdef RT3370
+ifeq ($(CHIPSET),3370)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/common/cmm_mac_usb.o\
+	$(RT28xx_DIR)/common/rtusb_io.o\
+	$(RT28xx_DIR)/common/rtusb_data.o\
+	$(RT28xx_DIR)/common/cmm_data_usb.o\
+	$(RT28xx_DIR)/common/rtusb_bulk.o\
+	$(RT28xx_DIR)/common/ee_prom.o\
+	$(RT28xx_DIR)/common/ee_efuse.o\
+	$(RT28xx_DIR)/common/rtmp_mcu.o\
+	$(RT28xx_DIR)/common/rt_rf.o\
+	$(RT28xx_DIR)/os/linux/rt_usb.o\
+	$(RT28xx_DIR)/chips/rt3070.o\
+	$(RT28xx_DIR)/chips/rt30xx.o\
+	$(RT28xx_DIR)/chips/rt33xx.o\
+	$(RT28xx_DIR)/chips/rt3370.o
 
+ifeq ($(OSABL),NO)
+RT28XX_STA_OBJ += \
+	$(RT28xx_DIR)/common/rtusb_dev_id.o\
+	$(RT28xx_DIR)/os/linux/rt_usb_util.o\
+	$(RT28xx_DIR)/os/linux/usb_main_dev.o
+endif
+endif
+#endif // RT3370 //
+
+
+#ifdef RT5370
+ifeq ($(CHIPSET),5370)
+RT28XX_STA_OBJ += \
+        $(RT28xx_DIR)/common/cmm_mac_usb.o\
+        $(RT28xx_DIR)/common/rtusb_io.o\
+        $(RT28xx_DIR)/common/rtusb_data.o\
+        $(RT28xx_DIR)/common/cmm_data_usb.o\
+        $(RT28xx_DIR)/common/rtusb_bulk.o\
+        $(RT28xx_DIR)/common/ee_prom.o\
+        $(RT28xx_DIR)/common/ee_efuse.o\
+        $(RT28xx_DIR)/common/rtmp_mcu.o\
+        $(RT28xx_DIR)/common/rt_rf.o\
+	$(RT28xx_DIR)/os/linux/rt_usb.o\
+        $(RT28xx_DIR)/chips/rt3070.o\
+        $(RT28xx_DIR)/chips/rt30xx.o\
+        $(RT28xx_DIR)/chips/rt33xx.o\
+        $(RT28xx_DIR)/chips/rt3370.o\
+	$(RT28xx_DIR)/chips/rt5390.o
+
+ifeq ($(OSABL),NO)
+RT28XX_STA_OBJ += \
+        $(RT28xx_DIR)/common/rtusb_dev_id.o\
+        $(RT28xx_DIR)/os/linux/rt_usb_util.o\
+        $(RT28xx_DIR)/os/linux/usb_main_dev.o
+endif
+endif
+#endif // RT5370 //
 
 ifeq ($(HAS_ATE),y)
 RT28XX_STA_OBJ += $(RT28xx_DIR)/common/rt_ate.o

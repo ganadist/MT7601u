@@ -48,10 +48,10 @@ static struct {
 	{"CountryRegionABand",			Set_CountryRegionABand_Proc},      
 	{"SSID",						Set_SSID_Proc}, 
 	{"WirelessMode",				Set_WirelessMode_Proc},       
-	{"TxBurst",						Set_TxBurst_Proc},
-	{"TxPreamble",					Set_TxPreamble_Proc},
-	{"TxPower",						Set_TxPower_Proc},
-	{"Channel",						Set_Channel_Proc},            
+	{"TxBurst",					Set_TxBurst_Proc},
+	{"TxPreamble",				Set_TxPreamble_Proc},
+	{"TxPower",					Set_TxPower_Proc},
+	{"Channel",					Set_Channel_Proc},            
 	{"BGProtection",				Set_BGProtection_Proc},
 	{"RTSThreshold",				Set_RTSThreshold_Proc},       
 	{"FragThreshold",				Set_FragThreshold_Proc},      
@@ -72,7 +72,7 @@ static struct {
 	{"HtMimoPs",		        	Set_HtMimoPs_Proc},
 	{"HtDisallowTKIP",				Set_HtDisallowTKIP_Proc},
 #ifdef DOT11N_DRAFT3
-	{"HtBssCoex",					Set_HT_BssCoex_Proc},
+	{"HtBssCoex",				Set_HT_BssCoex_Proc},
 #endif /* DOT11N_DRAFT3 */
 #endif /* DOT11_N_SUPPORT */
 	
@@ -106,11 +106,16 @@ static struct {
 	{"ATESA",						Set_ATE_SA_Proc},
 	{"ATEBSSID",					Set_ATE_BSSID_Proc},
 	{"ATECHANNEL",					Set_ATE_CHANNEL_Proc},
-/*2010/01/27:Rorscha add to support INTERNAL_TX_ALC<-- */
 #ifdef RTMP_INTERNAL_TX_ALC
 	{"ATETSSICBA",					Set_ATE_TSSI_CALIBRATION_Proc},
+	{"ATETSSICBAEX",					Set_ATE_TSSI_CALIBRATION_EX_Proc},
 #endif /* RTMP_INTERNAL_TX_ALC */
-/*2010/01/27:Rorscha add to support INTERNAL_TX_ALC--> */
+#ifdef RTMP_TEMPERATURE_COMPENSATION
+	{"ATEREADEXTSSI",				Set_ATE_READ_EXTERNAL_TSSI_Proc},
+#endif /* RTMP_TEMPERATURE_COMPENSATION */
+#ifdef HW_ANTENNA_DIVERSITY_SUPPORT
+	{"ATEANTDIV",					Set_ATE_DIV_ANTENNA_Proc},
+#endif // HW_ANTENNA_DIVERSITY_SUPPORT //
 	{"ATETXPOW0",					Set_ATE_TX_POWER0_Proc},
 	{"ATETXPOW1",					Set_ATE_TX_POWER1_Proc},
 #ifdef DOT11N_SS3_SUPPORT
@@ -141,7 +146,7 @@ static struct {
 	{"ATEIPG",						Set_ATE_IPG_Proc},
 	{"ATEPAYLOAD",					Set_ATE_Payload_Proc},
 #ifdef TXBF_SUPPORT
-	{"ATETXBF",						Set_ATE_TX_BF_Proc},
+	{"ATETXBF",					Set_ATE_TX_BF_Proc},
 #endif /* TXBF_SUPPORT */
 	{"ATESHOW",						Set_ATE_Show_Proc},
 	{"ATEHELP",						Set_ATE_Help_Proc},
@@ -187,13 +192,18 @@ static struct {
 #ifdef RTMP_EFUSE_SUPPORT
 	{"efuseFreeNumber",				set_eFuseGetFreeBlockCount_Proc},
 	{"efuseDump",					set_eFusedump_Proc},
-	{"efuseLoadFromBin",			set_eFuseLoadFromBin_Proc},
+	{"efuseLoadFromBin",				set_eFuseLoadFromBin_Proc},
 #ifdef RALINK_ATE
-	{"efuseBufferModeWriteBack",	set_eFuseBufferModeWriteBack_Proc},
+	{"efuseBufferModeWriteBack",		set_eFuseBufferModeWriteBack_Proc},
 #endif /* RALINK_ATE */
 #endif /* RTMP_EFUSE_SUPPORT */
+	{"ant",					Set_Antenna_Proc},
 #endif /* RT30xx */
-/*2008/09/11:KH add to support efuse--> */
+
+#ifdef RT5350
+    {"HwAntDiv",                Set_Hw_Antenna_Div_Proc},
+#endif // RT5350 //
+
 	{"BeaconLostTime",				Set_BeaconLostTime_Proc},
 	{"AutoRoaming",					Set_AutoRoaming_Proc},
 	{"SiteSurvey",					Set_SiteSurvey_Proc},
@@ -209,7 +219,7 @@ static struct {
 	{"AdhocN",						Set_AdhocN_Proc},
 
 #ifdef AGS_SUPPORT
-	{"Ags",							Show_AGS_Proc},
+	{"Ags",						Show_AGS_Proc},
 #endif /* AGS_SUPPORT */
 	{NULL,}
 };
@@ -321,14 +331,15 @@ INT Set_SSID_Proc(
         pAd->StaCfg.bScanReqIsFromWebUI = FALSE;
 		pAd->bConfigChanged = TRUE;
         pAd->StaCfg.bNotFirstScan = FALSE;     
-        
-        MlmeEnqueue(pAd, 
-                    MLME_CNTL_STATE_MACHINE, 
-                    OID_802_11_SSID,
-                    sizeof(NDIS_802_11_SSID),
-                    (VOID *)pSsid, 0);
 
-        StateMachineTouched = TRUE;
+	MlmeEnqueue(pAd, 
+		MLME_CNTL_STATE_MACHINE, 
+		OID_802_11_SSID,
+		sizeof(NDIS_802_11_SSID),
+		(VOID *)pSsid, 0);
+
+	StateMachineTouched = TRUE;	
+
 		if (Ssid.SsidLength == MAX_LEN_OF_SSID)
 			hex_dump("Set_SSID_Proc::Ssid", Ssid.Ssid, Ssid.SsidLength);
 		else
@@ -3143,7 +3154,7 @@ INT RTMPQueryInformation(
     BOOLEAN                             RadioState;
     STRING								driverVersion[8];
     OID_SET_HT_PHYMODE			        *pHTPhyMode = NULL;
-    HTTRANSMIT_SETTING					HTPhyMode;
+    HTTRANSMIT_SETTING	HTPhyMode;
 	
 
 #ifdef SNMP_SUPPORT	
@@ -3396,6 +3407,14 @@ INT RTMPQueryInformation(
 					ulInfo = (pAd->StaCfg.LastSNR0 * 3 + 8) >> 4;
 				}
 				else
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+/* Maybe someday SNR_FORMULA3 should open to other chipsets. */
+				if (pAd->chipCap.SnrFormula == SNR_FORMULA3)
+				{
+					ulInfo = pAd->StaCfg.LastSNR0 * 3 / 16 ; /* * 0.1881 */
+				}
+				else					
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 				{
 					ulInfo = ((0xeb	- pAd->StaCfg.LastSNR0) * 3) /	16 ;
 				}
@@ -3415,6 +3434,14 @@ INT RTMPQueryInformation(
 					ulInfo = (pAd->StaCfg.LastSNR1 * 3 + 8) >> 4;
 				}
 				else
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+/* Maybe someday SNR_FORMULA3 should open to other chipsets. */
+				if (pAd->chipCap.SnrFormula == SNR_FORMULA3)
+				{
+					ulInfo = pAd->StaCfg.LastSNR1 * 3 / 16 ; /* * 0.1881 */
+				}
+				else
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 				{
 					ulInfo = ((0xeb	- pAd->StaCfg.LastSNR1) * 3) /	16 ;
 				}
@@ -4267,7 +4294,7 @@ next:
 		{
 			pBuf = pBufMac;
 			for(IdAddr=AddrStart; IdAddr<=AddrEnd; IdAddr+=4, pBuf++)
-			RTMP_IO_READ32(pAd, IdAddr, pBuf);
+				RTMP_IO_READ32(pAd, IdAddr, pBuf);
 			RtmpDrvAllMacPrint(pAd, pBufMac, AddrStart, AddrEnd, 4);
 			os_free_mem(NULL, pBufMac);
 		}
@@ -4545,6 +4572,10 @@ VOID RTMPIoctlRF(
 	
 
 	maxRFIdx = pAd->chipCap.MaxNumOfRfId;
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	if ( IS_RT5390(pAd))
+		maxRFIdx = 63;
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 
 /*	mpool = (CHAR *) kmalloc(sizeof(CHAR)*(2048+256+12), MEM_ALLOC_FLAG); */
@@ -5112,13 +5143,21 @@ RtmpIoctl_rt_ioctl_siwfreq(
 {
 	RT_CMD_STA_IOCTL_FREQ *pIoctlFreq = (RT_CMD_STA_IOCTL_FREQ *)pData;
 	int 	chan = -1;
+	ULONG	freq;
+	
+	if ( pIoctlFreq->m > 100000000 )
+		freq = pIoctlFreq->m / 100000;
+	else if ( pIoctlFreq->m > 100000 )
+		freq = pIoctlFreq->m / 100;
+	else
+		freq = pIoctlFreq->m;
 
 
-	if((pIoctlFreq->e == 0) && (pIoctlFreq->m <= 1000))
+	if((pIoctlFreq->e == 0) && (freq <= 1000))
 		chan = pIoctlFreq->m;	/* Setting by channel number */
 	else
 	{
-		MAP_KHZ_TO_CHANNEL_ID( (pIoctlFreq->m /100) , chan); /* Setting by frequency - search the table , like 2.412G, 2.422G, */
+		MAP_KHZ_TO_CHANNEL_ID( freq , chan); /* Setting by frequency - search the table , like 2.412G, 2.422G, */
 	}
 
     if (ChannelSanity(pAd, chan) == TRUE)
@@ -5415,23 +5454,23 @@ RtmpIoctl_rt_ioctl_siwscan(
 #ifdef WPA_SUPPLICANT_SUPPORT
 		if (pConfig->FlgScanThisSsid)
 		{
-			NDIS_802_11_SSID          Ssid;
-			Ssid.SsidLength = pConfig->SsidLen;
-			DBGPRINT(RT_DEBUG_TRACE, ("rt_ioctl_siwscan:: req.essid_len-%d, essid-%s\n", pConfig->SsidLen, pConfig->pSsid));
-			NdisZeroMemory(&Ssid.Ssid, NDIS_802_11_LENGTH_SSID);
-			NdisMoveMemory(Ssid.Ssid, pConfig->pSsid, Ssid.SsidLength);
-			StaSiteSurvey(pAd, &Ssid, SCAN_ACTIVE);
+				NDIS_802_11_SSID          Ssid;
+				Ssid.SsidLength = pConfig->SsidLen;
+				DBGPRINT(RT_DEBUG_TRACE, ("rt_ioctl_siwscan:: req.essid_len-%d, essid-%s\n", pConfig->SsidLen, pConfig->pSsid));
+				NdisZeroMemory(&Ssid.Ssid, NDIS_802_11_LENGTH_SSID);
+				NdisMoveMemory(Ssid.Ssid, pConfig->pSsid, Ssid.SsidLength);
+				StaSiteSurvey(pAd, &Ssid, SCAN_ACTIVE);
 		}
 		else
 #endif /* WPA_SUPPLICANT_SUPPORT */
-       if (pAd->RalinkCounters.LastOneSecTotalTxCount > 30)
-       {
-             DBGPRINT(RT_DEBUG_TRACE, ("!!! Link UP, ignore this set::OID_802_11_BSSID_LIST_SCAN\n"));
-             Status = NDIS_STATUS_SUCCESS;
-             break;
-       }
-       else
-			StaSiteSurvey(pAd, NULL, SCAN_ACTIVE);
+               if (pAd->RalinkCounters.LastOneSecTotalTxCount > 30)
+               {
+                         DBGPRINT(RT_DEBUG_TRACE, ("!!! Link UP, ignore this set::OID_802_11_BSSID_LIST_SCAN\n"));
+                         Status = NDIS_STATUS_SUCCESS;
+                         break;
+               }
+               else
+		StaSiteSurvey(pAd, NULL, SCAN_ACTIVE);
 	}while(0);
 
 	pConfig->Status = Status;
@@ -7175,7 +7214,7 @@ RtmpIoctl_rt_private_get_statistics(
     sprintf(extra+strlen(extra), "WpaSupplicantUP                 = %d\n\n", pAd->StaCfg.WpaSupplicantUP);
 #endif /* WPA_SUPPLICANT_SUPPORT */
 
-	
+
 
 	return NDIS_STATUS_SUCCESS;
 }
@@ -7201,11 +7240,11 @@ Note:
 ========================================================================
 */
 INT RTMP_STA_IoctlHandle(
-	IN  VOID					*pAdSrc,
-	IN  RTMP_IOCTL_INPUT_STRUCT	*pRequest,
-	IN  INT						Command,
-	IN  USHORT					Subcmd,
-	IN  VOID					*pData,
+	IN	VOID					*pAdSrc,
+	IN	RTMP_IOCTL_INPUT_STRUCT	*pRequest,
+	IN	INT						Command,
+	IN	USHORT					Subcmd,
+	IN	VOID					*pData,
 	IN  ULONG					Data,
 	IN  USHORT                  priv_flags)
 {

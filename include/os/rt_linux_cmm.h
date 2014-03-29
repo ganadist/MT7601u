@@ -276,6 +276,19 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 }
 
 /* sample, use semaphore lock to replace IRQ lock, 2007/11/15 */
+#ifdef MULTI_CORE_SUPPORT
+
+#define RTMP_IRQ_LOCK(__lock, __irqflags)			\
+{													\
+	__irqflags = 0;									\
+	spin_lock_irqsave((spinlock_t *)(__lock), __irqflags);			\
+}
+
+#define RTMP_IRQ_UNLOCK(__lock, __irqflag)			\
+{													\
+	spin_unlock_irqrestore((spinlock_t *)(__lock), __irqflag);			\
+}
+#else
 #define RTMP_IRQ_LOCK(__lock, __irqflags)		\
 {												\
 	__irqflags = 0;								\
@@ -286,7 +299,7 @@ RTMP_DECLARE_DRV_OPS_FUNCTION(3070);
 {												\
 	RtmpOsSpinUnLockBh(__lock);					\
 }
-
+#endif // MULTI_CORE_SUPPORT //
 #define RTMP_INT_LOCK(__Lock, __Flag)	RtmpOsIntLock(__Lock, &__Flag)
 #define RTMP_INT_UNLOCK					RtmpOsIntUnLock
 
@@ -371,6 +384,15 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 
 #define RTMP_OS_PCI_VENDOR_ID			pRtmpPciConfig->ConfigVendorID
 
+/*
+	Declare dma_addr_t here, can not define it in rt_drv.h
+
+	If you define it in include/os/rt_drv.h, then the size in DRIVER module
+	will be 64-bit, but in UTIL/NET modules, it maybe 32-bit.
+	This will cause size mismatch problem when OS_ABL = yes.
+*/
+#define ra_dma_addr_t					unsigned long long
+
 #else
 
 #ifdef RTMP_USB_SUPPORT
@@ -380,18 +402,11 @@ extern RTMP_USB_CONFIG *pRtmpUsbConfig;
 
 #define RTMP_OS_PCI_VENDOR_ID			PCI_VENDOR_ID
 
+#define ra_dma_addr_t					dma_addr_t
+
 #endif /* OS_ABL_SUPPORT */
 
 #define PCI_MAP_SINGLE					RtmpDrvPciMapSingle
-
-/*
-	Declare dma_addr_t here, can not define it in rt_drv.h
-
-	If you define it in include/os/rt_drv.h, then the size in DRIVER module
-	will be 64-bit, but in UTIL/NET modules, it maybe 32-bit.
-	This will cause size mismatch problem when OS_ABL = yes.
-*/
-#define ra_dma_addr_t					long long
 
 
 /***********************************************************************************

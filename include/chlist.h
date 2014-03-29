@@ -35,6 +35,17 @@
 #define BAND_24G        1
 #define BAND_BOTH       2
 
+typedef struct _CH_DESC {
+	UCHAR FirstChannel;
+	UCHAR NumOfCh;
+	UCHAR ChannelProp;
+}CH_DESC, *PCH_DESC;
+
+typedef struct _COUNTRY_REGION_CH_DESC {
+	UCHAR RegionIndex;
+	PCH_DESC pChDesc;
+}COUNTRY_REGION_CH_DESC, *PCOUNTRY_REGION_CH_DESC;
+
 #ifdef EXT_BUILD_CHANNEL_LIST
 #define ODOR			0
 #define IDOR			1
@@ -103,6 +114,21 @@ VOID RTMP_MapChannelID2KHZ(
 VOID RTMP_MapKHZ2ChannelID(
 	IN ULONG Freq,
 	OUT INT *pCh);
+
+UCHAR GetChannel_5GHZ(
+	IN PCH_DESC pChDesc, 
+	IN UCHAR index);
+
+UCHAR GetChannel_2GHZ(
+	IN PCH_DESC pChDesc, 
+	IN UCHAR index);
+
+UCHAR GetChannelFlag(
+	IN PCH_DESC pChDesc, 
+	IN UCHAR index);
+
+UINT16 TotalChNum(
+	IN PCH_DESC pChDesc);
 	
 #endif /* __CHLIST_H__ */
 

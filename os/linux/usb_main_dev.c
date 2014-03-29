@@ -32,16 +32,19 @@
 #include "rt_os_util.h"
 #include "rt_os_net.h"
 
+
 /* Following information will be show when you run 'modinfo' */
 /* *** If you have a solution for the bug in current version of driver, please mail to me. */
 /* Otherwise post to forum in ralinktech's web site(www.ralinktech.com) and let all users help you. *** */
 MODULE_AUTHOR("Paul Lin <paul_lin@ralinktech.com>");
 MODULE_DESCRIPTION("RT2870 Wireless Lan Linux Driver");
+MODULE_LICENSE("GPL");
 #ifdef CONFIG_STA_SUPPORT
 #ifdef MODULE_VERSION
 MODULE_VERSION(STA_DRIVER_VERSION);
 #endif
 #endif /* CONFIG_STA_SUPPORT */
+
 
 extern USB_DEVICE_ID rtusb_dev_id[];
 extern INT const rtusb_usb_id_len;
@@ -451,6 +454,19 @@ static int rt2870_resume(
 INT __init rtusb_init(void)
 {
 	printk("rtusb init %s --->\n", RTMP_DRV_NAME);
+
+#ifdef RESOURCE_BOOT_ALLOC
+{
+	int status;
+	status = rtusb_resource_init(rtusb_tx_buf_len, rtusb_rx_buf_len, rtusb_tx_buf_cnt, rtusb_rx_buf_cnt);
+	if (status)
+	{
+		printk("resource allocate failed, don't register driver!\n");
+		return -1;
+	}
+}
+#endif /* RESOURCE_BOOT_ALLOC */
+
 	return usb_register(&rtusb_driver);
 }
 
@@ -458,6 +474,11 @@ INT __init rtusb_init(void)
 VOID __exit rtusb_exit(void)
 {
 	usb_deregister(&rtusb_driver);	
+	
+#ifdef RESOURCE_BOOT_ALLOC
+	rtusb_resource_exit();
+#endif /* RESOURCE_BOOT_ALLOC */	
+
 	printk("<--- rtusb exit\n");
 }
 
@@ -573,7 +594,7 @@ static int rt2870_probe(
 	
 
 	DBGPRINT(RT_DEBUG_TRACE, ("===>rt2870_probe()!\n"));
-
+	
 #ifdef CONFIG_PM
 #ifdef USB_SUPPORT_SELECTIVE_SUSPEND
 

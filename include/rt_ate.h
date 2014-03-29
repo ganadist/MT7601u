@@ -98,6 +98,9 @@ typedef struct ate_racfghdr {
 #define RACFG_CMD_ATE_RF_READ_BULK			0x0119
 #define RACFG_CMD_ATE_RF_WRITE_BULK			0x011a
 #define RACFG_CMD_ATE_SET_TX_POWER2			0x011b
+#if defined (RT3883) || defined (RT3352) || defined (RT5350)
+#define RACFG_CMD_ATE_RUN_CPUBUSY	0x0202
+#endif /* defined (RT3883) || defined (RT3352) || defined (RT5350) */
 
 /* QA RACFG Command for ate test from localhost */
 #define RACFG_CMD_ATE_SHOW_PARAM 0xff00
@@ -110,7 +113,7 @@ typedef struct __ATE_EX_PARAM
 	char TxPower1;
 #ifdef DOT11N_SS3_SUPPORT
 	char TxPower2;
-#endif /* #ifdef DOT11N_SS3_SUPPORT */
+#endif /* DOT11N_SS3_SUPPORT */
 	char TxAntennaSel;
 	char RxAntennaSel;
 	unsigned char DA[MAC_ADDR_LEN];
@@ -182,7 +185,7 @@ VOID ATE_QA_Statistics(
 	IN PHEADER_802_11		pHeader);
 	
 INT RtmpDoAte(
-	IN	PRTMP_ADAPTER	pAdapter, 
+	IN	PRTMP_ADAPTER	pAd, 
 	IN	RTMP_IOCTL_INPUT_STRUCT	*wrq,
 	IN	PSTRING	wrq_name);
 
@@ -247,7 +250,27 @@ INT	Set_ATE_CHANNEL_Proc(
 INT Set_ATE_TSSI_CALIBRATION_Proc(
 	IN	PRTMP_ADAPTER	pAd,
 	IN	PSTRING			arg);
+
+INT Set_ATE_TSSI_CALIBRATION_EX_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg);
 #endif /* RTMP_INTERNAL_TX_ALC */
+
+#ifdef RTMP_TEMPERATURE_COMPENSATION
+INT Set_ATE_READ_EXTERNAL_TSSI_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg);
+#endif /* RTMP_TEMPERATURE_COMPENSATION */
+
+#ifdef HW_ANTENNA_DIVERSITY_SUPPORT
+INT Set_ATE_DIV_ANTENNA_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg);
+
+INT Set_ATE_DIV_ANTENNA_CALIBRATION_Proc(
+	IN	PRTMP_ADAPTER	pAd,
+	IN	PSTRING			arg);
+#endif /* HW_ANTENNA_DIVERSITY_SUPPORT */
 
 INT	Set_ATE_TX_POWER0_Proc(
 	IN	PRTMP_ADAPTER	pAd, 
@@ -376,4 +399,17 @@ VOID ATESampleRssi(
 	IN PRTMP_ADAPTER	pAd,
 	IN PRXWI_STRUC		pRxWI);	
 
+#ifdef RT33xx
+INT Set_ATE_TX_EVM_CALIBRATION_Show_Proc(
+ IN PRTMP_ADAPTER pAd,
+ IN PSTRING   arg);
+ 
+INT Set_ATE_TX_EVM_CALIBRATION_Proc(
+ IN PRTMP_ADAPTER pAd,
+ IN PSTRING   arg);
+ 
+INT Set_ATE_TX_EVM_CALIBRATION_Fill_Proc(
+ IN PRTMP_ADAPTER pAd,
+ IN PSTRING   arg);
+#endif /* RT33xx */
 #endif /* __RT_ATE_H__ */

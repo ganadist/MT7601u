@@ -27,58 +27,14 @@
 
 #include "rt_config.h"
 
-/* 2.4 Ghz channel plan index in the TxPower arrays.*/
-#define	BG_BAND_REGION_0_START	0			/* 1,2,3,4,5,6,7,8,9,10,11	*/
-#define	BG_BAND_REGION_0_SIZE	11
-#define	BG_BAND_REGION_1_START	0			/* 1,2,3,4,5,6,7,8,9,10,11,12,13*/
-#define	BG_BAND_REGION_1_SIZE	13
-#define	BG_BAND_REGION_2_START	9			/* 10,11*/
-#define	BG_BAND_REGION_2_SIZE	2
-#define	BG_BAND_REGION_3_START	9			/* 10,11,12,13*/
-#define	BG_BAND_REGION_3_SIZE	4
-#define	BG_BAND_REGION_4_START	13			/* 14*/
-#define	BG_BAND_REGION_4_SIZE	1
-#define	BG_BAND_REGION_5_START	0			/* 1,2,3,4,5,6,7,8,9,10,11,12,13,14 */
-#define	BG_BAND_REGION_5_SIZE	14
-#define	BG_BAND_REGION_6_START	2			/* 3,4,5,6,7,8,9*/
-#define	BG_BAND_REGION_6_SIZE	7
-#define	BG_BAND_REGION_7_START	4			/* 5,6,7,8,9,10,11,12,13*/
-#define	BG_BAND_REGION_7_SIZE	9
-#define	BG_BAND_REGION_31_START	0			/* 1,2,3,4,5,6,7,8,9,10,11,12,13,14 */
-#define	BG_BAND_REGION_31_SIZE	14
-#define	BG_BAND_REGION_32_START	0			/* 1,2,3,4,5,6,7,8,9,10,11,12,13*/
-#define	BG_BAND_REGION_32_SIZE	13
-#define	BG_BAND_REGION_33_START	0			/* 1,2,3,4,5,6,7,8,9,10,11,12,13,14*/
-#define	BG_BAND_REGION_33_SIZE	14
-
-/* 5 Ghz channel plan index in the TxPower arrays.*/
-UCHAR A_BAND_REGION_0_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 149, 153, 157, 161, 165};
-UCHAR A_BAND_REGION_1_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140};
-UCHAR A_BAND_REGION_2_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64};
-UCHAR A_BAND_REGION_3_CHANNEL_LIST[]={52, 56, 60, 64, 149, 153, 157, 161};
-UCHAR A_BAND_REGION_4_CHANNEL_LIST[]={149, 153, 157, 161, 165};
-UCHAR A_BAND_REGION_5_CHANNEL_LIST[]={149, 153, 157, 161};
-UCHAR A_BAND_REGION_6_CHANNEL_LIST[]={36, 40, 44, 48};
-UCHAR A_BAND_REGION_7_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161, 165, 169, 173};
-UCHAR A_BAND_REGION_8_CHANNEL_LIST[]={52, 56, 60, 64};
-UCHAR A_BAND_REGION_9_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 132, 136, 140, 149, 153, 157, 161, 165};
-UCHAR A_BAND_REGION_10_CHANNEL_LIST[]={36, 40, 44, 48, 149, 153, 157, 161, 165};
-UCHAR A_BAND_REGION_11_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 149, 153, 157, 161};
-UCHAR A_BAND_REGION_12_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140};
-UCHAR A_BAND_REGION_13_CHANNEL_LIST[]={52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161};
-UCHAR A_BAND_REGION_14_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 136, 140, 149, 153, 157, 161, 165};
-UCHAR A_BAND_REGION_15_CHANNEL_LIST[]={149, 153, 157, 161, 165, 169, 173};
-UCHAR A_BAND_REGION_16_CHANNEL_LIST[]={52, 56, 60, 64, 149, 153, 157, 161, 165};
-UCHAR A_BAND_REGION_17_CHANNEL_LIST[]={36, 40, 44, 48, 149, 153, 157, 161};
-UCHAR A_BAND_REGION_18_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 132, 136, 140};
-UCHAR A_BAND_REGION_19_CHANNEL_LIST[]={56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161};
-UCHAR A_BAND_REGION_20_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 149, 153, 157, 161};
-UCHAR A_BAND_REGION_21_CHANNEL_LIST[]={36, 40, 44, 48, 52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140, 149, 153, 157, 161};
-
-
 /*BaSizeArray follows the 802.11n definition as MaxRxFactor.  2^(13+factor) bytes. When factor =0, it's about Ba buffer size =8.*/
 UCHAR BaSizeArray[4] = {8,16,32,64};
 
+
+extern COUNTRY_REGION_CH_DESC Country_Region_ChDesc_2GHZ[];
+extern UINT16 const Country_Region_GroupNum_2GHZ;
+extern COUNTRY_REGION_CH_DESC Country_Region_ChDesc_5GHZ[];
+extern UINT16 const Country_Region_GroupNum_5GHZ;
 
 /* 
 	==========================================================================
@@ -96,7 +52,10 @@ VOID BuildChannelList(
 	IN PRTMP_ADAPTER pAd)
 {
 	UCHAR i, j, index=0, num=0;
-	PUCHAR	pChannelList = NULL;
+	PCH_DESC pChDesc = NULL;
+	BOOLEAN bRegionFound = FALSE;
+	PUCHAR pChannelList;
+	PUCHAR pChannelListFlag;
 
 	NdisZeroMemory(pAd->ChannelList, MAX_NUM_OF_CHANNELS * sizeof(CHANNEL_TX_POWER));
 
@@ -107,62 +66,68 @@ VOID BuildChannelList(
 #endif /* DOT11_N_SUPPORT */
 	)
 	{
-		switch (pAd->CommonCfg.CountryRegion  & 0x7f)
+		for (i = 0; i < Country_Region_GroupNum_2GHZ; i++)
 		{
-			case REGION_0_BG_BAND:	/* 1 -11*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_0_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_0_SIZE);
-				index += BG_BAND_REGION_0_SIZE;
+			if ((pAd->CommonCfg.CountryRegion & 0x7f) ==
+				Country_Region_ChDesc_2GHZ[i].RegionIndex)
+			{
+				pChDesc = Country_Region_ChDesc_2GHZ[i].pChDesc;
+				num = TotalChNum(pChDesc);
+				bRegionFound = TRUE;
 				break;
-			case REGION_1_BG_BAND:	/* 1 - 13*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_1_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_1_SIZE);
-				index += BG_BAND_REGION_1_SIZE;
-				break;
-			case REGION_2_BG_BAND:	/* 10 - 11*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_2_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_2_SIZE);
-				index += BG_BAND_REGION_2_SIZE;
-				break;
-			case REGION_3_BG_BAND:	/* 10 - 13*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_3_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_3_SIZE);
-				index += BG_BAND_REGION_3_SIZE;
-				break;
-			case REGION_4_BG_BAND:	/* 14*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_4_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_4_SIZE);
-				index += BG_BAND_REGION_4_SIZE;
-				break;
-			case REGION_5_BG_BAND:	/* 1 - 14*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_5_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_5_SIZE);
-				index += BG_BAND_REGION_5_SIZE;
-				break;
-			case REGION_6_BG_BAND:	/* 3 - 9*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_6_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_6_SIZE);
-				index += BG_BAND_REGION_6_SIZE;
-				break;
-			case REGION_7_BG_BAND:  /* 5 - 13*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_7_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_7_SIZE);
-				index += BG_BAND_REGION_7_SIZE;
-				break;
-			case REGION_31_BG_BAND:	/* 1 - 14*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_31_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_31_SIZE);
-				pAd->ChannelList[11].Flags |= CHANNEL_PASSIVE_SCAN;
-				pAd->ChannelList[12].Flags |= CHANNEL_PASSIVE_SCAN;
-				pAd->ChannelList[13].Flags |= CHANNEL_PASSIVE_SCAN;
-				index += BG_BAND_REGION_31_SIZE;
-				break;
-			case REGION_32_BG_BAND:	/* 1 - 11 active scan, 12 - 13 passive scan*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_32_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_32_SIZE);
-				pAd->ChannelList[11].Flags |= CHANNEL_PASSIVE_SCAN;
-				pAd->ChannelList[12].Flags |= CHANNEL_PASSIVE_SCAN;
-				index += BG_BAND_REGION_32_SIZE;
-				break;
-			case REGION_33_BG_BAND:	/* 1 - 14 all active scan, 14 allow B mode only*/
-				NdisMoveMemory(&pAd->ChannelList[index], &pAd->TxPower[BG_BAND_REGION_33_START], sizeof(CHANNEL_TX_POWER) * BG_BAND_REGION_33_SIZE);
-				index += BG_BAND_REGION_33_SIZE;
-				break;
-			default:            /* Error. should never happen*/
-				break;
-		}   
-		for (i=0; i<index; i++)
-			pAd->ChannelList[i].MaxTxPwr = 20;
+			}
+		}
+
+		if (!bRegionFound)
+		{
+			DBGPRINT(RT_DEBUG_ERROR,("CountryRegion=%d not support", pAd->CommonCfg.CountryRegion));
+			return;		
+		}
+
+		if (num > 0)
+		{
+			os_alloc_mem(NULL, (UCHAR **)&pChannelList, num * sizeof(UCHAR));
+
+			if (!pChannelList)
+			{
+				DBGPRINT(RT_DEBUG_ERROR,("%s:Allocate memory for ChannelList failed\n", __FUNCTION__));
+				return;
+			}
+
+			os_alloc_mem(NULL, (UCHAR **)&pChannelListFlag, num * sizeof(UCHAR));
+
+			if (!pChannelListFlag)
+			{
+				DBGPRINT(RT_DEBUG_ERROR,("%s:Allocate memory for ChannelListFlag failed\n", __FUNCTION__));
+				os_free_mem(NULL, pChannelList);
+				return;	
+			}
+
+			for (i = 0; i < num; i++)
+			{
+				pChannelList[i] = GetChannel_2GHZ(pChDesc, i);
+				pChannelListFlag[i] = GetChannelFlag(pChDesc, i);
+			}
+
+			for (i = 0; i < num; i++)
+			{
+				for (j = 0; j < MAX_NUM_OF_CHANNELS; j++)
+				{
+					if (pChannelList[i] == pAd->TxPower[j].Channel)
+						NdisMoveMemory(&pAd->ChannelList[index+i], &pAd->TxPower[j], sizeof(CHANNEL_TX_POWER));
+						pAd->ChannelList[index + i].Flags = pChannelListFlag[i];
+				}
+
+				pAd->ChannelList[index+i].MaxTxPwr = 20;
+			}
+
+			index += num;
+
+			os_free_mem(NULL, pChannelList);
+			os_free_mem(NULL, pChannelListFlag);
+		}
+		bRegionFound = FALSE;
+		num = 0;
 	}
 
 	if ((pAd->CommonCfg.PhyMode == PHY_11A) || (pAd->CommonCfg.PhyMode == PHY_11ABG_MIXED) 
@@ -172,127 +137,78 @@ VOID BuildChannelList(
 #endif /* DOT11_N_SUPPORT */
 	)
 	{
-		switch (pAd->CommonCfg.CountryRegionForABand & 0x7f)
+		for (i = 0; i < Country_Region_GroupNum_5GHZ; i++)
 		{
-			case REGION_0_A_BAND:
-				num = sizeof(A_BAND_REGION_0_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_0_CHANNEL_LIST;
+			if ((pAd->CommonCfg.CountryRegionForABand & 0x7f) ==
+				Country_Region_ChDesc_5GHZ[i].RegionIndex)
+			{
+				pChDesc = Country_Region_ChDesc_5GHZ[i].pChDesc;
+				num = TotalChNum(pChDesc);
+				bRegionFound = TRUE;
 				break;
-			case REGION_1_A_BAND:
-				num = sizeof(A_BAND_REGION_1_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_1_CHANNEL_LIST;
-				break;
-			case REGION_2_A_BAND:
-				num = sizeof(A_BAND_REGION_2_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_2_CHANNEL_LIST;
-				break;
-			case REGION_3_A_BAND:
-				num = sizeof(A_BAND_REGION_3_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_3_CHANNEL_LIST;
-				break;
-			case REGION_4_A_BAND:
-				num = sizeof(A_BAND_REGION_4_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_4_CHANNEL_LIST;
-				break;
-			case REGION_5_A_BAND:
-				num = sizeof(A_BAND_REGION_5_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_5_CHANNEL_LIST;
-				break;
-			case REGION_6_A_BAND:
-				num = sizeof(A_BAND_REGION_6_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_6_CHANNEL_LIST;
-				break;
-			case REGION_7_A_BAND:
-				num = sizeof(A_BAND_REGION_7_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_7_CHANNEL_LIST;
-				break;
-			case REGION_8_A_BAND:
-				num = sizeof(A_BAND_REGION_8_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_8_CHANNEL_LIST;
-				break;
-			case REGION_9_A_BAND:
-				num = sizeof(A_BAND_REGION_9_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_9_CHANNEL_LIST;
-				break;
-			case REGION_10_A_BAND:
-				num = sizeof(A_BAND_REGION_10_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_10_CHANNEL_LIST;
-				break;
-			case REGION_11_A_BAND:
-				num = sizeof(A_BAND_REGION_11_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_11_CHANNEL_LIST;
-				break;	
-			case REGION_12_A_BAND:
-				num = sizeof(A_BAND_REGION_12_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_12_CHANNEL_LIST;
-				break;
-			case REGION_13_A_BAND:
-				num = sizeof(A_BAND_REGION_13_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_13_CHANNEL_LIST;
-				break;
-			case REGION_14_A_BAND:
-				num = sizeof(A_BAND_REGION_14_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_14_CHANNEL_LIST;
-				break;
-			case REGION_15_A_BAND:
-				num = sizeof(A_BAND_REGION_15_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_15_CHANNEL_LIST;
-				break;
-			case REGION_16_A_BAND:
-				num = sizeof(A_BAND_REGION_16_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_16_CHANNEL_LIST;
-				break;
-			case REGION_17_A_BAND:
-				num = sizeof(A_BAND_REGION_17_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_17_CHANNEL_LIST;
-				break;
-			case REGION_18_A_BAND:
-				num = sizeof(A_BAND_REGION_18_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_18_CHANNEL_LIST;
-				break;
-			case REGION_19_A_BAND:
-				num = sizeof(A_BAND_REGION_19_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_19_CHANNEL_LIST;
-				break;
-			case REGION_20_A_BAND:
-				num = sizeof(A_BAND_REGION_20_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_20_CHANNEL_LIST;
-				break;
-			case REGION_21_A_BAND:
-				num = sizeof(A_BAND_REGION_21_CHANNEL_LIST)/sizeof(UCHAR);
-				pChannelList = A_BAND_REGION_21_CHANNEL_LIST;
-				break;
-			default:            /* Error. should never happen*/
-				DBGPRINT(RT_DEBUG_WARN,("countryregion=%d not support", pAd->CommonCfg.CountryRegionForABand));
-				break;
+			}
 		}
 
-		if (num != 0)
+		if (!bRegionFound)
+		{
+			DBGPRINT(RT_DEBUG_ERROR,("CountryRegionABand=%d not support", pAd->CommonCfg.CountryRegionForABand));
+			return;
+		}
+
+		if (num > 0)
 		{
 			UCHAR RadarCh[15]={52, 56, 60, 64, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136, 140};
-			PUCHAR ChannelList;
-			ChannelList=pChannelList;
+			os_alloc_mem(NULL, (UCHAR **)&pChannelList, num * sizeof(UCHAR));
+
+			if (!pChannelList)
+			{
+				DBGPRINT(RT_DEBUG_ERROR,("%s:Allocate memory for ChannelList failed\n", __FUNCTION__));
+				return;
+			}
+
+			os_alloc_mem(NULL, (UCHAR **)&pChannelListFlag, num * sizeof(UCHAR));
+
+			if (!pChannelListFlag)
+			{
+				DBGPRINT(RT_DEBUG_ERROR,("%s:Allocate memory for ChannelListFlag failed\n", __FUNCTION__));
+				os_free_mem(NULL, pChannelList);
+				return;
+			}
+
+			for (i = 0; i < num; i++)
+			{
+				pChannelList[i] = GetChannel_5GHZ(pChDesc, i);
+				pChannelListFlag[i] = GetChannelFlag(pChDesc, i);
+			}
+
 			for (i=0; i<num; i++)
 			{
 				for (j=0; j<MAX_NUM_OF_CHANNELS; j++)
 				{
-					if (ChannelList[i] == pAd->TxPower[j].Channel)
+					if (pChannelList[i] == pAd->TxPower[j].Channel)
 						NdisMoveMemory(&pAd->ChannelList[index+i], &pAd->TxPower[j], sizeof(CHANNEL_TX_POWER));
-					}
+						pAd->ChannelList[index + i].Flags = pChannelListFlag[i];
+				}
+
 				for (j=0; j<15; j++)
 				{
-					if (ChannelList[i] == RadarCh[j])
+					if (pChannelList[i] == RadarCh[j])
 						pAd->ChannelList[index+i].DfsReq = TRUE;
 				}
 				pAd->ChannelList[index+i].MaxTxPwr = 20;
 			}
 			index += num;
+
+			os_free_mem(NULL, pChannelList);
+			os_free_mem(NULL, pChannelListFlag);
 		}
 	}
 
 	pAd->ChannelListNum = index;	
 	DBGPRINT(RT_DEBUG_TRACE,("country code=%d/%d, RFIC=%d, PHY mode=%d, support %d channels\n", 
 		pAd->CommonCfg.CountryRegion, pAd->CommonCfg.CountryRegionForABand, pAd->RfIcType, pAd->CommonCfg.PhyMode, pAd->ChannelListNum));
+
+
 #ifdef DBG	
 	for (i=0;i<pAd->ChannelListNum;i++)
 	{
@@ -454,8 +370,22 @@ CHAR	ConvertToSnr(
 	IN PRTMP_ADAPTER	pAd,
 	IN UCHAR				Snr)	
 {
-	return ((0xeb - Snr) * 3) / 16 ;
-
+	if (pAd->chipCap.SnrFormula == SNR_FORMULA2)
+	{
+		return (Snr * 3 + 8) >> 4;
+	}
+	else
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+/* Maybe someday SNR_FORMULA3 should open to other chipsets. */
+	if (pAd->chipCap.SnrFormula == SNR_FORMULA3)
+	{
+		return (Snr * 3 / 16 ); /* * 0.1881 */
+	}
+	else
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
+	{
+		return ((0xeb	- Snr) * 3) /	16 ;
+	}
 }
 
 #if defined(AP_SCAN_SUPPORT) || defined(CONFIG_STA_SUPPORT)
@@ -500,12 +430,13 @@ VOID ScanNextChannel(
 
 	if ((pAd->MlmeAux.Channel == 0) || ScanPending) 
 	{
-		if ((pAd->CommonCfg.BBPCurrentBW == BW_40)
+		if ((pAd->CommonCfg.BBPCurrentBW == BW_40) &&
+			((OpMode == OPMODE_AP)
 #ifdef CONFIG_STA_SUPPORT
-			&& (INFRA_ON(pAd) || ADHOC_ON(pAd)
-				|| (pAd->OpMode == OPMODE_AP))
-#endif /* CONFIG_STA_SUPPORT */
+				|| (INFRA_ON(pAd) || ADHOC_ON(pAd)
 			)
+#endif /* CONFIG_STA_SUPPORT */
+			))
 		{
 			AsicSwitchChannel(pAd, pAd->CommonCfg.CentralChannel, FALSE);
 			AsicLockChannel(pAd, pAd->CommonCfg.CentralChannel);
@@ -523,7 +454,7 @@ VOID ScanNextChannel(
 		}
 		
 #ifdef CONFIG_STA_SUPPORT
-		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+		if (OpMode == OPMODE_STA)
 		{
 
 			/*
@@ -575,12 +506,6 @@ VOID ScanNextChannel(
 				Status = MLME_SUCCESS;
 				MlmeEnqueue(pAd, MLME_CNTL_STATE_MACHINE, MT2_SCAN_CONF, 2, &Status, 0);
 
-				{
-					RTMPSendWirelessEvent(pAd, IW_SCAN_COMPLETED_EVENT_FLAG, NULL, BSS0, 0);
-#ifdef WPA_SUPPLICANT_SUPPORT
-					RtmpOSWrielessEventSend(pAd->net_dev, RT_WLAN_EVENT_SCAN, -1, NULL, NULL, 0);
-#endif /* WPA_SUPPLICANT_SUPPORT */
-				}
 			}
 
 #ifdef LINUX
@@ -596,8 +521,7 @@ VOID ScanNextChannel(
 #ifdef RTMP_MAC_USB
 #ifdef CONFIG_STA_SUPPORT
 	else if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST) &&
-		(pAd->OpMode == OPMODE_STA)
-	)
+		(OpMode == OPMODE_STA))
 	{
 		pAd->Mlme.SyncMachine.CurrState = SYNC_IDLE;
 		MlmeCntlConfirm(pAd, MT2_SCAN_CONF, MLME_FAIL_NO_RESOURCE);
@@ -607,7 +531,7 @@ VOID ScanNextChannel(
 	else 
 	{
 #ifdef CONFIG_STA_SUPPORT
-		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+		if (OpMode == OPMODE_STA)
 		{
 			/* BBP and RF are not accessible in PS mode, we has to wake them up first*/
 			if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_DOZE))
@@ -623,7 +547,7 @@ VOID ScanNextChannel(
 		AsicLockChannel(pAd, pAd->MlmeAux.Channel);
 
 #ifdef CONFIG_STA_SUPPORT
-		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+		if (OpMode == OPMODE_STA)
 		{
 			if (pAd->MlmeAux.Channel > 14)
 			{
@@ -646,10 +570,9 @@ VOID ScanNextChannel(
 
 #endif /* CONFIG_STA_SUPPORT */
 
+		/* Check if channel if passive scan under current regulatory domain */
 		if (CHAN_PropertyCheck(pAd, pAd->MlmeAux.Channel, CHANNEL_PASSIVE_SCAN) == TRUE)
-		{
 			ScanType = SCAN_PASSIVE;
-		}
 
 		/* We need to shorten active scan time in order for WZC connect issue*/
 		/* Chnage the channel scan time for CISCO stuff based on its IAPP announcement*/
@@ -669,10 +592,16 @@ VOID ScanNextChannel(
 				{
 					if (pAd->MlmeAux.Channel > 14)
 					{
+						if (OpMode == OPMODE_AP)
+							RTMPSetTimer(&pAd->MlmeAux.APScanTimer, ScanTimeIn5gChannel);
+						else
 						RTMPSetTimer(&pAd->MlmeAux.ScanTimer, ScanTimeIn5gChannel);
 					}
 					else
 					{
+						if (OpMode == OPMODE_AP)
+							RTMPSetTimer(&pAd->MlmeAux.APScanTimer, MIN_CHANNEL_TIME);
+						else	
 						RTMPSetTimer(&pAd->MlmeAux.ScanTimer, MIN_CHANNEL_TIME);
 					}
 				}
@@ -680,6 +609,9 @@ VOID ScanNextChannel(
 			else
 			{
 				{
+					if (OpMode == OPMODE_AP)
+						RTMPSetTimer(&pAd->MlmeAux.APScanTimer, MAX_CHANNEL_TIME);
+					else
 					RTMPSetTimer(&pAd->MlmeAux.ScanTimer, MAX_CHANNEL_TIME);
 				}
 			}
@@ -698,7 +630,7 @@ VOID ScanNextChannel(
 			{
 				DBGPRINT(RT_DEBUG_TRACE, ("SYNC - ScanNextChannel() allocate memory fail\n"));
 #ifdef CONFIG_STA_SUPPORT
-				IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+				if (OpMode == OPMODE_STA)
 				{
 					pAd->Mlme.SyncMachine.CurrState = SYNC_IDLE;
 					Status = MLME_FAIL_NO_RESOURCE;
@@ -849,8 +781,7 @@ VOID ScanNextChannel(
 
 
 #ifdef WPA_SUPPLICANT_SUPPORT
-			if (
-			(pAd->OpMode == OPMODE_STA) &&
+			if ((OpMode == OPMODE_STA) &&
 				(pAd->StaCfg.WpaSupplicantUP != WPA_SUPPLICANT_DISABLE) &&
 				(pAd->StaCfg.WpsProbeReqIeLen != 0))
 			{
@@ -868,13 +799,14 @@ VOID ScanNextChannel(
 			MiniportMMRequest(pAd, 0, pOutBuffer, FrameLen);
 
 #ifdef CONFIG_STA_SUPPORT
-			IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+			if (OpMode == OPMODE_STA)
 			{
 				
-				/* To prevent data lost.*/
-				/* Send an NULL data with turned PSM bit on to current associated AP when SCAN in the channel where*/
-				/*  associated AP located.*/
-				
+				/*
+					To prevent data lost.
+					Send an NULL data with turned PSM bit on to current associated AP when SCAN in the channel where
+					associated AP located.
+				*/
 				if (OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED) && 
 					(INFRA_ON(pAd)) &&
 					(pAd->CommonCfg.Channel == pAd->MlmeAux.Channel))
@@ -893,10 +825,9 @@ VOID ScanNextChannel(
 		/* For SCAN_CISCO_PASSIVE, do nothing and silently wait for beacon or other probe reponse*/
 		
 #ifdef CONFIG_STA_SUPPORT
-		IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
+		if (OpMode == OPMODE_STA)
 			pAd->Mlme.SyncMachine.CurrState = SCAN_LISTEN;
 #endif /* CONFIG_STA_SUPPORT */
-
 	}
 }
 #endif

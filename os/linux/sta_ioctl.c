@@ -671,6 +671,14 @@ int rt_ioctl_giwscan(struct net_device *dev,
         return -ENETDOWN;
 	}
 
+#ifdef REFUSE_SCAN_QUERY_WHILE_SCANING
+	if (RTMP_STA_IoctlHandle(pAd, NULL, CMD_RTPRIV_IOCTL_STA_SCAN_SANITY_CHECK, 0,
+							NULL, 0, dev->priv_flags) != NDIS_STATUS_SUCCESS)
+	{
+		DBGPRINT(RT_DEBUG_TRACE, ("rt_ioctl_giwscan:: Still scanning\n"));
+		return -EAGAIN;
+	}
+#endif /* REFUSE_SCAN_QUERY_WHILE_SCANING */
 
 
 	pIoctlScan->priv_flags = dev->priv_flags;
@@ -1939,6 +1947,8 @@ int rt_ioctl_siwgenie(struct net_device *dev,
 	if (RTMP_STA_IoctlHandle(pAd, NULL, CMD_RTPRIV_IOCTL_STA_SIOCSIWGENIE, 0,
 						extra, wrqu->data.length, dev->priv_flags) != NDIS_STATUS_SUCCESS)
 		return -EINVAL;
+	else
+		return 0;
 #endif /* WPA_SUPPLICANT_SUPPORT */
 
 	return -EOPNOTSUPP;

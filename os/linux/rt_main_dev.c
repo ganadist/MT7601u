@@ -253,7 +253,9 @@ int rt28xx_open(VOID *dev)
 #endif /* CONFIG_PM */
 #endif /* CONFIG_STA_SUPPORT */
 
-
+	/* sanity check */
+	if (sizeof(ra_dma_addr_t) < sizeof(dma_addr_t))
+		DBGPRINT(RT_DEBUG_ERROR, ("Fatal error for DMA address size!!!\n"));
  
 	GET_PAD_FROM_NET_DEV(pAd, net_dev);	
 
@@ -379,19 +381,12 @@ so we must clear fkag here;
 	/* the function can not be moved to RT2860_probe() even register_netdev()
 	   is changed as register_netdevice().
 	   Or in some PC, kernel will panic (Fedora 4) */
-#ifndef P2P_APCLI_SUPPORT
 	RT28xx_MBSS_Init(pAd, net_dev);
-#endif /* P2P_APCLI_SUPPORT */
 #endif /* MBSS_SUPPORT */
 
-#ifdef WDS_SUPPORT
-	RT28xx_WDS_Init(pAd, net_dev);
-#endif /* WDS_SUPPORT */
 
 #ifdef APCLI_SUPPORT
-#ifndef P2P_APCLI_SUPPORT
 	RT28xx_ApCli_Init(pAd, net_dev);
-#endif /* P2P_APCLI_SUPPORT */
 #endif /* APCLI_SUPPORT */
 
 

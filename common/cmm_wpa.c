@@ -1071,19 +1071,19 @@ VOID PeerPairMsg3Action(
 	/* Update WpaState*/
 	pEntry->WpaState = AS_PTKINITDONE;	 	
 
-	/* Update pairwise key		*/
 
+	/* Update pairwise key		*/
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
 		{
-			NdisMoveMemory(pAd->StaCfg.PTK, pEntry->PTK, LEN_PTK);
-			WPAInstallPairwiseKey(pAd, 
-								  BSS0, 
-								  pEntry, 
-								  FALSE);
-			NdisMoveMemory(&pAd->SharedKey[BSS0][0], &pEntry->PairwiseKey, sizeof(CIPHER_KEY));
-		}
+		NdisMoveMemory(pAd->StaCfg.PTK, pEntry->PTK, LEN_PTK);
+		WPAInstallPairwiseKey(pAd, 
+							  BSS0, 
+							  pEntry, 
+							  FALSE);
+		NdisMoveMemory(&pAd->SharedKey[BSS0][0], &pEntry->PairwiseKey, sizeof(CIPHER_KEY));
+	}
 	}
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -1181,7 +1181,8 @@ VOID PeerPairMsg4Action(
 
 			/* send wireless event - for set key done WPA2*/
 				RTMPSendWirelessEvent(pAd, IW_SET_KEY_DONE_WPA2_EVENT_FLAG, pEntry->Addr, pEntry->apidx, 0); 
-	 
+	
+ 
 	        DBGPRINT(RT_DEBUG_OFF, ("AP SETKEYS DONE - WPA2, AuthMode(%d)=%s, WepStatus(%d)=%s, GroupWepStatus(%d)=%s\n\n", 
 									pEntry->AuthMode, GetAuthMode(pEntry->AuthMode), 
 									pEntry->WepStatus, GetEncryptType(pEntry->WepStatus), 
@@ -2466,10 +2467,9 @@ VOID RTMPMakeRSNIE(
 			UINT	apcliIfidx = 0;
 
 			/* Only support WPAPSK or WPA2PSK for AP-Client mode */
-			if ((AuthMode != Ndis802_11AuthModeWPAPSK) && 
-				(AuthMode != Ndis802_11AuthModeWPA2PSK))
-		    	return;
-
+				if ((AuthMode != Ndis802_11AuthModeWPAPSK) && 
+					(AuthMode != Ndis802_11AuthModeWPA2PSK))
+			    	return;
 			DBGPRINT(RT_DEBUG_TRACE,("==> RTMPMakeRSNIE(ApCli)\n"));
 	
 			apcliIfidx = apidx - MIN_NET_DEVICE_FOR_APCLI;

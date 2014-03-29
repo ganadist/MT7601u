@@ -1391,6 +1391,28 @@ typedef	union	_EDCA_AC_CFG_STRUC	{
 #define TX_PWR_CFG_8		0x13D8
 #define TX_PWR_CFG_9		0x13DC
 
+#ifdef RT_BIG_ENDIAN
+typedef	union	_TX_PWR_CFG_STRUC	{
+	struct	{
+	    ULONG       Byte3:8;     
+	    ULONG       Byte2:8;     
+	    ULONG       Byte1:8;     
+	    ULONG       Byte0:8;     
+	}	field;
+	ULONG			word;
+}	TX_PWR_CFG_STRUC, *PTX_PWR_CFG_STRUC;
+#else
+typedef	union	_TX_PWR_CFG_STRUC	{
+	struct	{
+	    ULONG       Byte0:8;     
+	    ULONG       Byte1:8;     
+	    ULONG       Byte2:8;     
+	    ULONG       Byte3:8;     
+	}	field;
+	ULONG			word;
+}	TX_PWR_CFG_STRUC, *PTX_PWR_CFG_STRUC;
+#endif
+
 #define TX_PIN_CFG		0x1328		 
 #define TX_BAND_CFG	0x132c		/* 0x1 use upper 20MHz. 0 juse lower 20MHz */
 #define TX_SW_CFG0		0x1330
@@ -2797,6 +2819,27 @@ typedef union _RF_CSR_CFG_EXT_STRUC
 } RF_CSR_CFG_EXT_STRUC, *PRF_CSR_CFG_EXT_STRUC;
 #endif
 
+
+#ifdef RT_BIG_ENDIAN
+typedef	union	_EEPROM_WORD_STRUC	{
+	struct	
+	{
+		UCHAR	Byte1;				// High Byte
+		UCHAR	Byte0;				// Low Byte
+	}	field;
+	USHORT	word;
+}	EEPROM_WORD_STRUC, *PEEPROM_WORD_STRUC;
+#else
+typedef	union	_EEPROM_WORD_STRUC	{
+	struct	
+	{
+		UCHAR	Byte0;				// Low Byte
+		UCHAR	Byte1;				// High Byte
+	}	field;
+	USHORT	word;
+}	EEPROM_WORD_STRUC, *PEEPROM_WORD_STRUC;
+#endif
+
 /* */
 /* Other on-chip shared memory space, base = 0x2000 */
 /* */
@@ -2942,8 +2985,22 @@ typedef union _RF_CSR_CFG_EXT_STRUC
 		}																	\
 	} while(0)
 	
-/* 	
-	Disable irq to make sure the shared memory status(Mac Reg : 0x0400, bit-19)
+/*
+	When you swtich shr_mem to high, you can not access MCU, just like
+		H2M_MAILBOX_CSR			0x7010
+		H2M_MAILBOX_CID			0x7014
+		H2M_MAILBOX_STATUS		0x701c
+		H2M_INT_SRC				0x7024
+		H2M_BBP_AGENT			0x7028
+*/
+
+#ifdef RTMP_MAC_USB
+#define RTMP_MAC_SHR_MSEL_PROTECT_LOCK(__pAd, __IrqFlags) __IrqFlags = __IrqFlags;
+#define RTMP_MAC_SHR_MSEL_PROTECT_UNLOCK(__pAd, __IrqFlags)	__IrqFlags = __IrqFlags;
+#endif /* RTMP_MAC_USB */
+
+#ifdef RTMP_MAC_USB
+ 	/*Disable irq to make sure the shared memory status(Mac Reg : 0x0400, bit-19)
 	doesn't been changed.
 	Becasue the PRE-TBTT interrupt would change this status. */	
 #define	RTMP_MAC_SHR_MSEL_LOCK(_pAd, _shr_msel, _irqFlag)					\
@@ -2952,8 +3009,6 @@ typedef union _RF_CSR_CFG_EXT_STRUC
 		{																	\
 		UINT32			__regValue;					\
 											\
-		RTMP_INT_LOCK(&_pAd->ShrMemLock, _irqFlag);						\
-		_pAd->ShrMSel = _shr_msel;						\
 		RTMP_IO_READ32(_pAd, PBF_SYS_CTRL, &__regValue);					\
 		if (_shr_msel == HIGHER_SHRMEM)										\
 		{									\
@@ -2963,17 +3018,16 @@ typedef union _RF_CSR_CFG_EXT_STRUC
 		{									\
 			RTMP_IO_WRITE32(_pAd, PBF_SYS_CTRL, __regValue & ~(1 << 19));	\
 		}									\
-		}																	\
+		}										\
 	} while(0)
 
-
+	
 #define	RTMP_MAC_SHR_MSEL_UNLOCK(_pAd, _shr_msel, _irqFlag)					\
 	do{										\
 		if (_pAd->chipCap.FlgIsSupSpecBcnBuf == TRUE)						\
 		{																	\
 		UINT32			__regValue;					\
 											\
-		_pAd->ShrMSel = _shr_msel;						\
 		RTMP_IO_READ32(_pAd, PBF_SYS_CTRL, &__regValue);					\
 		if (_shr_msel == HIGHER_SHRMEM)										\
 		{									\
@@ -2983,9 +3037,14 @@ typedef union _RF_CSR_CFG_EXT_STRUC
 		{									\
 			RTMP_IO_WRITE32(_pAd, PBF_SYS_CTRL, __regValue & ~(1 << 19));	\
 		}									\
-		RTMP_INT_UNLOCK(&_pAd->ShrMemLock, _irqFlag);						\
-		}																	\
+		}										\
 	} while(0)
+#endif /* RTMP_MAC_USB */
+
+#else
+
+#define RTMP_MAC_SHR_MSEL_PROTECT_LOCK(__pAd, __IrqFlags)	__IrqFlags = __IrqFlags;
+#define RTMP_MAC_SHR_MSEL_PROTECT_UNLOCK(__pAd, __IrqFlags) __IrqFlags = __IrqFlags;
 
 #endif /* SPECIFIC_BCN_BUF_SUPPORT */
 

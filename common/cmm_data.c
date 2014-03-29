@@ -101,8 +101,9 @@ NDIS_STATUS MiniportMMRequest(
 		/* Reset is in progress, stop immediately*/
 		if (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_RESET_IN_PROGRESS) ||
 			 RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_HALT_IN_PROGRESS | fRTMP_ADAPTER_NIC_NOT_EXIST)||
-			 !RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP))
-		{
+			 !RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_START_UP)
+				)
+		 {
 			Status = NDIS_STATUS_FAILURE;
 			break;
 		}
@@ -350,6 +351,11 @@ NDIS_STATUS MlmeHardTransmitMgmtRing(
 
 
 
+	if ((pHeader_802_11->FC.Type == BTYPE_DATA) &&
+		(pHeader_802_11->FC.SubType == SUBTYPE_QOS_NULL))
+	{
+		printk("%s:: QoS NULL and PHY = %d.  MCS = %d.\n", __FUNCTION__, pAd->CommonCfg.MlmeTransmit.field.MODE, pAd->CommonCfg.MlmeTransmit.field.MCS);
+	}
 
 	bInsertTimestamp = FALSE;
 	if (pHeader_802_11->FC.Type == BTYPE_CNTL) /* must be PS-POLL*/
@@ -429,6 +435,14 @@ NDIS_STATUS MlmeHardTransmitMgmtRing(
 	}
 	else
 	{
+		if (
+			((pHeader_802_11->FC.Type == BTYPE_DATA) &&
+		(pHeader_802_11->FC.SubType == SUBTYPE_QOS_NULL)))
+		{
+			printk("%s:: Using Low Rate to send QOS NULL!!\n", __FUNCTION__);
+			pMacEntry->MaxHTPhyMode.field.MODE = 1;
+			pMacEntry->MaxHTPhyMode.field.MCS = MCS_RATE_54;
+		}
 		/* dont use low rate to send QoS Null data frame */
 		RTMPWriteTxWI(pAd, pFirstTxWI, FALSE, FALSE,
 					bInsertTimestamp, FALSE, bAckRequired, FALSE,
@@ -961,7 +975,7 @@ VOID RTMPDeQueuePacket(
 		}
 
 		RTMP_STOP_DEQUEUE(pAd, QueIdx, IrqFlags);
-		
+
 #ifdef RTMP_MAC_USB
 		if (!hasTxDesc)
 			RTUSBKickBulkOut(pAd);
@@ -1141,8 +1155,11 @@ VOID RTMPWriteTxWI(
 #endif /* DOT11N_DRAFT3 */
 #endif /* DOT11_N_SUPPORT */
 	
+	/* P2P test case 6.1.12 */
+		{
 	pTxWI->MCS = pTransmit->field.MCS;
 	pTxWI->PHYMODE = pTransmit->field.MODE;
+		}
 	pTxWI->CFACK = CfAck;
 
 #ifdef DOT11_N_SUPPORT
@@ -1798,14 +1815,6 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 					break;
 				}
 #endif // APCLI_SUPPORT //
-#ifdef WDS_SUPPORT
-				if (IS_ENTRY_WDS(pEntry))
-				{
-					COPY_MAC_ADDR(pEntry->HdrAddr2, pAd->ApCfg.MBSSID[MAIN_MBSSID].Bssid);
-					COPY_MAC_ADDR(pEntry->HdrAddr3, pAd->ApCfg.MBSSID[MAIN_MBSSID].Bssid);
-					break;
-				}
-#endif // WDS_SUPPORT //
 #ifdef CONFIG_STA_SUPPORT
 				if (OpMode == OPMODE_STA)
 				{
@@ -1825,9 +1834,6 @@ MAC_TABLE_ENTRY *MacTableInsertEntry(
 			pEntry->NoDataIdleCount = 0;
 			pEntry->AssocDeadLine = MAC_TABLE_ASSOC_TIMEOUT;
 			pEntry->ContinueTxFailCnt = 0;
-#ifdef WDS_SUPPORT
-			pEntry->LockEntryTx = FALSE;
-#endif /* WDS_SUPPORT */
 			pEntry->TimeStamp_toTxRing = 0;
 			InitializeQueueHeader(&pEntry->PsQueue);
 
@@ -2257,6 +2263,7 @@ BOOLEAN RTMPCheckEtherType(
 		*pQueIdx		 = QID_AC_BE;
 	}
 
+
 	return TRUE;
 	
 }
@@ -2385,9 +2392,7 @@ VOID Indicate_Legacy_Packet(
 	/* 2. remove LLC*/
 	/* 		a. pointer pRxBlk->pData to payload*/
 	/*      b. modify pRxBlk->DataSize*/
-
 #ifdef CONFIG_STA_SUPPORT
-	
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 		RTMP_802_11_REMOVE_LLC_AND_CONVERT_TO_802_3(pRxBlk, Header802_3);
 #endif /* CONFIG_STA_SUPPORT */
@@ -2689,10 +2694,10 @@ VOID Indicate_EAPOL_Packet(
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
 	{
 		{
-			pEntry = &pAd->MacTab.Content[BSSID_WCID];
-			STARxEAPOLFrameIndicate(pAd, pEntry, pRxBlk, FromWhichBSSID);
-			return;
-		}
+		pEntry = &pAd->MacTab.Content[BSSID_WCID];
+		STARxEAPOLFrameIndicate(pAd, pEntry, pRxBlk, FromWhichBSSID);
+		return;
+	}
 	}
 #endif /* CONFIG_STA_SUPPORT */
 

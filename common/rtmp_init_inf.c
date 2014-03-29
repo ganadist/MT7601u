@@ -73,9 +73,6 @@ VOID RtmpDrvOpsInit(
 #ifdef MBSS_SUPPORT
 	pDrvOps->MBSS_PacketSend = MBSS_PacketSend;
 #endif /* MBSS_SUPPORT */
-#ifdef WDS_SUPPORT
-	pDrvOps->WDS_PacketSend = WDS_PacketSend;
-#endif /* WDS_SUPPORT */
 #ifdef APCLI_SUPPORT
 	pDrvOps->APC_PacketSend = APC_PacketSend;
 #endif /* APCLI_SUPPORT */
@@ -170,7 +167,6 @@ int rt28xx_init(
 	} while (index++ < 100);
 	DBGPRINT(RT_DEBUG_TRACE, ("MAC_CSR0  [ Ver:Rev=0x%08x]\n", pAd->MACVersion));
 
-
 	RtmpChipOpsHook(pAd);
 
 	if (MAX_LEN_OF_MAC_TABLE > MAX_AVAILABLE_CLIENT_WCID(pAd))
@@ -182,7 +178,6 @@ int rt28xx_init(
 
 	/* Disable DMA*/
 	RT28XXDMADisable(pAd);
-
 
 	/* Load 8051 firmware*/
 	Status = NICLoadFirmware(pAd);
@@ -278,10 +273,6 @@ int rt28xx_init(
 	pAd->RfIcType = RFIC_UNKNOWN;
 	Status = RTMPReadParametersHook(pAd);
 
-#ifdef CREDENTIAL_STORE	
-	RecoverConnectInfo(pAd);
-#endif /* CREDENTIAL_STORE */
-
 	DBGPRINT(RT_DEBUG_OFF, ("1. Phy Mode = %d\n", pAd->CommonCfg.PhyMode));
 	if (Status != NDIS_STATUS_SUCCESS)
 	{
@@ -328,7 +319,7 @@ int rt28xx_init(
 	DBGPRINT(RT_DEBUG_OFF, ("3. Phy Mode = %d\n", pAd->CommonCfg.PhyMode));
 
 	NICInitAsicFromEEPROM(pAd); /*rt2860b*/
-	
+#ifdef CONFIG_STA_SUPPORT	
 #ifdef RTMP_FREQ_CALIBRATION_SUPPORT
 /*	if (IS_RT3593(pAd))*/
 /*	{*/
@@ -338,13 +329,27 @@ int rt28xx_init(
 		RTMP_CHIP_ASIC_FREQ_CAL_INIT(pAd);
 /*	}*/
 #endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
+#endif /* CONFIG_STA_SUPPORT */
 
 #ifdef RTMP_INTERNAL_TX_ALC
 	
 	/* Initialize the desired TSSI table*/
 	
-	InitDesiredTSSITable(pAd);
+	RTMP_CHIP_ASIC_TSSI_TABLE_INIT(pAd);
 #endif /* RTMP_INTERNAL_TX_ALC */
+
+#ifdef RTMP_TEMPERATURE_COMPENSATION
+	
+	/* Temperature compensation, initialize the lookup table */
+	
+	DBGPRINT(RT_DEBUG_ERROR, ("IS_RT5392 = %d, bAutoTxAgcG = %d\n", IS_RT5392(pAd), pAd->bAutoTxAgcG));
+	if (IS_RT5392(pAd) && pAd->bAutoTxAgcG && pAd->CommonCfg.TempComp != 0)
+	{
+		InitLookupTable(pAd);
+	}
+#endif /* RTMP_TEMPERATURE_COMPENSATION */
+
+
 
 	/* Set PHY to appropriate mode*/
 	TmpPhy = pAd->CommonCfg.PhyMode;
@@ -426,7 +431,6 @@ int rt28xx_init(
 #endif /* RTMP_MAC_USB */
 	}/* end of else*/
 
-
 	/* Set up the Mac address*/
 #ifdef CONFIG_STA_SUPPORT
 	RtmpOSNetDevAddrSet(pAd->OpMode, pAd->net_dev, &pAd->CurrentAddress[0], (PUCHAR)(pAd->StaCfg.dev_name));
@@ -457,7 +461,9 @@ int rt28xx_init(
 
 
 
-	RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_INITIALIZATION, NULL, 0);
+
+	RTMP_CHIP_SPECIFIC(pAd, RTMP_CHIP_SPEC_STATE_INIT,
+						RTMP_CHIP_SPEC_INITIALIZATION, NULL, 0);
 
 
 	DBGPRINT_S(Status, ("<==== rt28xx_init, Status=%x\n", Status));
@@ -558,6 +564,9 @@ VOID RTMPDrvOpen(
 		MlmeAutoReconnectLastSSID(pAd);
 #endif /* CONFIG_STA_SUPPORT */
 
+
+
+
 }
 
 
@@ -591,7 +600,7 @@ VOID RTMPDrvClose(
 #ifdef RTMP_MAC_USB
 		RTMP_SET_FLAG(pAd, fRTMP_ADAPTER_REMOVE_IN_PROGRESS);
 #endif /* RTMP_MAC_USB */
-		
+
 	}
 #endif /* CONFIG_STA_SUPPORT */
 
@@ -599,9 +608,6 @@ VOID RTMPDrvClose(
 
 
 
-#ifdef WDS_SUPPORT
-	WdsDown(pAd);
-#endif /* WDS_SUPPORT */
 
 	for (i = 0 ; i < NUM_OF_TX_RING; i++)
 	{
@@ -1008,8 +1014,8 @@ INT write_dat_file_thread (
 
 	/* Update ssid, auth mode and encr type to DAT file */
 	WriteConfToDatFile(pAd);
-		
-	RtmpOSTaskNotifyToExit(pTask);
+	
+		RtmpOSTaskNotifyToExit(pTask);
 	
 	return 0;
 }

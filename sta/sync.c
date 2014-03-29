@@ -399,7 +399,7 @@ VOID MlmeJoinReqAction(
 	{
 		RTMPZeroMemory(pAd->MlmeAux.Ssid, MAX_LEN_OF_SSID);
 		NdisMoveMemory(pAd->MlmeAux.Ssid, pBss->Ssid, pBss->SsidLen);	
-		pAd->MlmeAux.SsidLen = pBss->SsidLen;
+	pAd->MlmeAux.SsidLen = pBss->SsidLen;
 	}
 	
 	pAd->MlmeAux.BssType = pBss->BssType;
@@ -1603,20 +1603,20 @@ VOID PeerBeacon(
 				UCHAR			MaxSupportedRateIn500Kbps = 0;
 				UCHAR			idx;
 				MAC_TABLE_ENTRY *pEntry;
-
+	
 				/* supported rates array may not be sorted. sort it and find the maximum rate */
 			    for (idx=0; idx<SupRateLen; idx++)
 				{
 			        if (MaxSupportedRateIn500Kbps < (SupRate[idx] & 0x7f)) 
 			            MaxSupportedRateIn500Kbps = SupRate[idx] & 0x7f;
-				}
+						}
 				
 				for (idx=0; idx<ExtRateLen; idx++)
 			    {
-			       	if (MaxSupportedRateIn500Kbps < (ExtRate[idx] & 0x7f)) 
-			           	MaxSupportedRateIn500Kbps = ExtRate[idx] & 0x7f;
-				}
-
+			        if (MaxSupportedRateIn500Kbps < (ExtRate[idx] & 0x7f)) 
+			            MaxSupportedRateIn500Kbps = ExtRate[idx] & 0x7f;
+					}
+						
 				/* look up the existing table */
 				pEntry = MacTableLookup(pAd, Addr2);
 
@@ -1653,17 +1653,15 @@ VOID PeerBeacon(
 						(Elem->Wcid == RESERVED_WCID))
 					{
 						idx = pAd->StaCfg.DefaultKeyId;
-						RTMP_SET_WCID_SEC_INFO(pAd, BSS0, idx, 
-											   pAd->SharedKey[BSS0][idx].CipherAlg,
-											   pEntry->Aid,
-											   SHAREDKEYTABLE);
+							RTMP_SET_WCID_SEC_INFO(pAd, BSS0, idx, 
+												   pAd->SharedKey[BSS0][idx].CipherAlg,
+												   pEntry->Aid,
+												   SHAREDKEYTABLE);
 					}
 				}
 
 				if (pEntry && IS_ENTRY_CLIENT(pEntry))
-				{
 					pEntry->LastBeaconRxTime = Now;
-				}
 
 				/* At least another peer in this IBSS, declare MediaState as CONNECTED */
 				if (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED))

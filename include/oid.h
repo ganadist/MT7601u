@@ -31,6 +31,7 @@
 /*#include <linux/wireless.h> */
 
 
+
 /* new types for Media Specific Indications */
 /* Extension channel offset */
 #define EXTCHA_NONE			0
@@ -601,6 +602,7 @@ typedef struct GNU_PACKED _NDIS_WLAN_BSSID_EX {
 	NDIS_802_11_RATES_EX SupportedRates;
 	ULONG IELength;
 	UCHAR IEs[1];
+
 } NDIS_WLAN_BSSID_EX, *PNDIS_WLAN_BSSID_EX;
 
 typedef struct GNU_PACKED _NDIS_802_11_BSSID_LIST_EX {
@@ -776,10 +778,10 @@ typedef struct _NDIS_802_11_CAPABILITY {
 /* //dot11Phy(4) */
 #define OID_802_11_CURRENTCHANNEL				0x0712
 
-/*dot11mac */
-#define RT_OID_802_11_MAC_ADDRESS				0x0713
 #endif /* SNMP_SUPPORT */
 
+/*dot11mac */
+#define RT_OID_802_11_MAC_ADDRESS				0x0713
 #define OID_802_11_BUILD_CHANNEL_EX				0x0714
 #define OID_802_11_GET_CH_LIST					0x0715
 #define OID_802_11_GET_COUNTRY_CODE				0x0716
@@ -1198,6 +1200,14 @@ typedef struct _WSC_PROFILE {
 	UINT ApplyProfileIdx;	/* add by johnli, fix WPS test plan 5.1.1 */
 	WSC_CREDENTIAL Profile[8];	/* Support up to 8 profiles */
 } WSC_PROFILE, *PWSC_PROFILE;
+
+
+
+
+#define RT_P2P_DEVICE_FIND                                0x0109
+#define RT_P2P_CONNECTED                                  0x010A
+#define RT_P2P_DISCONNECTED                               0x010B
+#define RT_P2P_CONNECTED_TIMEOUT	                  0x010C
 
 
 

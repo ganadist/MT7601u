@@ -2520,7 +2520,7 @@ VOID DlsTimeoutAction(
 		return;
 
 	pAd = (PRTMP_ADAPTER)pDLS->pAd;
-	
+
 	DBGPRINT(RT_DEBUG_TRACE,
 		 ("DlsTimeout - Tear down DLS links (%02x:%02x:%02x:%02x:%02x:%02x)\n",
 		  pDLS->MacAddr[0], pDLS->MacAddr[1], pDLS->MacAddr[2],

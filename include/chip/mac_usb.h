@@ -262,6 +262,34 @@ typedef struct _RX_CONTEXT
 	ra_dma_addr_t			data_dma;		/* urb dma on linux */
 }	RX_CONTEXT, *PRX_CONTEXT;
 
+#ifdef RT_BIG_ENDIAN
+typedef union _TX_ATTENUATION_CTRL_STRUC
+{
+	struct
+	{
+		ULONG	Reserve1:20;
+		ULONG	PCIE_PHY_TX_ATTEN_EN:1;
+		ULONG	PCIE_PHY_TX_ATTEN_VALUE:3;
+		ULONG	Reserve2:7;
+		ULONG	RF_ISOLATION_ENABLE:1;
+	} field;
+
+	ULONG	word;
+} TX_ATTENUATION_CTRL_STRUC, *PTX_ATTENUATION_CTRL_STRUC;
+#else
+typedef union _TX_ATTENUATION_CTRL_STRUC {
+	struct
+	{
+		ULONG	RF_ISOLATION_ENABLE:1;
+		ULONG	Reserve2:7;
+		ULONG	PCIE_PHY_TX_ATTEN_VALUE:3;
+		ULONG	PCIE_PHY_TX_ATTEN_EN:1;
+		ULONG	Reserve1:20;		
+	} field;
+	
+	ULONG	word;
+} TX_ATTENUATION_CTRL_STRUC, *PTX_ATTENUATION_CTRL_STRUC;
+#endif
 
 
 /******************************************************************************

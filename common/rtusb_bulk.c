@@ -195,7 +195,8 @@ VOID	RTUSBBulkOutDataPacket(
 	}
 	pAd->BulkOutPending[BulkOutPipeId] = TRUE;
 	
-	if (!OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED)
+	if (((!OPSTATUS_TEST_FLAG(pAd, fOP_AP_STATUS_MEDIA_STATE_CONNECTED)) &&
+		( !OPSTATUS_TEST_FLAG(pAd, fOP_STATUS_MEDIA_STATE_CONNECTED)))
 		)
 	{
 		pAd->BulkOutPending[BulkOutPipeId] = FALSE;

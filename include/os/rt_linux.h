@@ -128,7 +128,7 @@ typedef struct usb_ctrlrequest devctrlrequest;
 
 #ifdef RTMP_MAC_USB
 #define STA_PROFILE_PATH			"/etc/Wireless/RT2870STA/RT2870STA.dat"
-#define STA_DRIVER_VERSION			"2.5.0.1"
+#define STA_DRIVER_VERSION			"2.5.0.3"
 #ifdef MULTIPLE_CARD_SUPPORT
 #define CARD_INFO_PATH			"/etc/Wireless/RT2870STA/RT2870STACard.dat"
 #endif /* MULTIPLE_CARD_SUPPORT */
@@ -317,6 +317,19 @@ typedef spinlock_t			OS_NDIS_SPIN_LOCK;
 
 
 /* sample, use semaphore lock to replace IRQ lock, 2007/11/15 */
+#ifdef MULTI_CORE_SUPPORT
+
+#define OS_IRQ_LOCK(__lock, __irqflags)			\
+{													\
+	__irqflags = 0;									\
+	spin_lock_irqsave((spinlock_t *)(__lock), __irqflags);			\
+}
+
+#define OS_IRQ_UNLOCK(__lock, __irqflag)			\
+{													\
+	spin_unlock_irqrestore((spinlock_t *)(__lock), __irqflag);			\
+}
+#else
 #define OS_IRQ_LOCK(__lock, __irqflags)			\
 {												\
 	__irqflags = 0;								\
@@ -327,7 +340,7 @@ typedef spinlock_t			OS_NDIS_SPIN_LOCK;
 {												\
 	spin_unlock_bh((spinlock_t *)(__lock));		\
 }
-
+#endif // MULTI_CORE_SUPPORT //
 #define OS_INT_LOCK(__lock, __irqflags)			\
 {												\
 	spin_lock_irqsave((spinlock_t *)__lock, __irqflags);	\
@@ -1147,7 +1160,7 @@ typedef struct usb_device_id USB_DEVICE_ID;
 #define RTUSB_URB_ALLOC_BUFFER(_dev, _size, _dma)	usb_alloc_coherent(_dev, _size, GFP_ATOMIC, _dma)
 #define RTUSB_URB_FREE_BUFFER(_dev, _size, _addr, _dma)	usb_free_coherent(_dev, _size, _addr, _dma)
 #else
-#define RTUSB_URB_ALLOC_BUFFER(_dev, _size, _dma)		usb_buffer_alloc(_dev, _size, GFP_ATOMIC, _dma)
+#define RTUSB_URB_ALLOC_BUFFER(_dev, _size, _dma)	usb_buffer_alloc(_dev, _size, GFP_ATOMIC, _dma)
 #define RTUSB_URB_FREE_BUFFER(_dev, _size, _addr, _dma)	usb_buffer_free(_dev, _size, _addr, _dma)
 #endif
 #else
@@ -1418,6 +1431,16 @@ extern int rausb_control_msg(VOID *dev,
 
 /*#endif // RTMP_USB_SUPPORT */
 
+#ifdef RESOURCE_BOOT_ALLOC
+extern int rtusb_tx_buf_len;
+extern int rtusb_rx_buf_len;
+extern int rtusb_tx_buf_cnt;
+extern int rtusb_rx_buf_cnt;
+
+extern int rtusb_resource_exit(void);
+extern int rtusb_resource_init(int txlen, int rxlen, int tx_cnt, int rx_cnt);
+#endif /* RESOURCE_BOOT_ALLOC */
+
 #ifdef RALINK_ATE
 /******************************************************************************
 
@@ -1429,6 +1452,7 @@ extern int rausb_control_msg(VOID *dev,
 
 #ifdef RTMP_MAC_USB
 #ifdef CONFIG_STA_SUPPORT
+#undef EEPROM_BIN_FILE_NAME /* Avoid APSTA mode re-define issue */
 #define EEPROM_BIN_FILE_NAME  "/etc/Wireless/RT2870STA/e2p.bin"
 #endif /* CONFIG_STA_SUPPORT */
 #endif /* RTMP_MAC_USB */

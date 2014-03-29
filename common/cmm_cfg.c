@@ -897,27 +897,8 @@ INT RTMP_COM_IoctlHandle(
 		case CMD_RTPRIV_IOCTL_INF_P2P_CHECK:
 			if (Data != INT_P2P)
 				return NDIS_STATUS_FAILURE;
-			break;
+			break;			
 
-#ifdef WDS_SUPPORT
-		case CMD_RTPRIV_IOCTL_WDS_INIT:
-			WDS_Init(pAd, pData);
-			break;
-
-		case CMD_RTPRIV_IOCTL_WDS_REMOVE:
-			WDS_Remove(pAd);
-			break;
-
-		case CMD_RTPRIV_IOCTL_WDS_STATS_GET:
-			if (Data == INT_WDS)
-			{
-				if (WDS_StatsGet(pAd, pData) != TRUE)
-					return NDIS_STATUS_FAILURE;
-			}
-			else
-				return NDIS_STATUS_FAILURE;
-			break;
-#endif /* WDS_SUPPORT */
 
 #ifdef RALINK_ATE
 #ifdef RALINK_QA

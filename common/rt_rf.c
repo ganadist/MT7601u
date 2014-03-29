@@ -51,9 +51,48 @@ NDIS_STATUS RT30xxWriteRFRegister(
 {
 	RF_CSR_CFG_STRUC	rfcsr = { { 0 } };
 	UINT				i = 0;
+#if defined(RT3593) || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	RF_CSR_CFG_EXT_STRUC RfCsrCfgExt = { { 0 } };
+#endif /* RT3593 || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 
 
+#if defined(RT3593) || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	if (IS_RT3593(pAd) || IS_RT5390(pAd))
+	{
+		ASSERT((regID <= 63)); /* R0~R63*/
+
+		do
+		{
+			RTMP_IO_READ32(pAd, RF_CSR_CFG, &RfCsrCfgExt.word);
+
+			if (!RfCsrCfgExt.field.RF_CSR_KICK)
+			{
+				break;
+			}
+			
+			i++;
+		}
+		
+		while ((i < MAX_BUSY_COUNT) && (!RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
+			; /* Do nothing*/
+
+		if ((i == MAX_BUSY_COUNT) || (RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST)))
+		{
+			DBGPRINT_RAW(RT_DEBUG_ERROR, ("Retry count exhausted or device removed!!!\n"));
+			return STATUS_UNSUCCESSFUL;
+		}
+
+		RfCsrCfgExt.field.RF_CSR_WR = 1;
+		RfCsrCfgExt.field.RF_CSR_KICK = 1;
+		RfCsrCfgExt.field.TESTCSR_RFACC_REGNUM = regID; /* R0~R63*/
+		RfCsrCfgExt.field.RF_CSR_DATA = value;
+		
+		RTMP_IO_WRITE32(pAd, RF_CSR_CFG, RfCsrCfgExt.word);
+
+	}
+	else
+#endif /* RT3593  || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 	{
 		ASSERT((regID <= pAd->chipCap.MaxNumOfRfId)); /* R0~R31 or R63*/
 
@@ -73,12 +112,43 @@ NDIS_STATUS RT30xxWriteRFRegister(
 			return STATUS_UNSUCCESSFUL;
 		}
 
-		rfcsr.field.RF_CSR_WR = 1;
-		rfcsr.field.RF_CSR_KICK = 1;
-		rfcsr.field.TESTCSR_RFACC_REGNUM = regID; /* R0~R31*/
-		rfcsr.field.RF_CSR_DATA = value;
-		
-		RTMP_IO_WRITE32(pAd, RF_CSR_CFG, rfcsr.word);
+		if ((pAd->chipCap.RfReg17WtMethod == RF_REG_WT_METHOD_STEP_ON) &&
+			(regID == RF_R17))
+		{
+			UINT32 IdRf;
+			UCHAR RfValue;
+
+			RT30xxReadRFRegister(pAd, RF_R17, &RfValue);
+
+			rfcsr.field.RF_CSR_WR = 1;
+			rfcsr.field.RF_CSR_KICK = 1;
+			rfcsr.field.TESTCSR_RFACC_REGNUM = regID; /* R0~R31*/
+
+			if (RfValue <= value)
+			{
+				for(IdRf=RfValue; IdRf<=value; IdRf++)
+				{
+					rfcsr.field.RF_CSR_DATA = IdRf;
+					RTMP_IO_WRITE32(pAd, RF_CSR_CFG, rfcsr.word);
+				}
+			}
+			else
+			{
+				for(IdRf=RfValue; IdRf>=value; IdRf--)
+				{
+					rfcsr.field.RF_CSR_DATA = IdRf;
+					RTMP_IO_WRITE32(pAd, RF_CSR_CFG, rfcsr.word);
+				}
+			}
+		}
+		else
+		{
+			rfcsr.field.RF_CSR_WR = 1;
+			rfcsr.field.RF_CSR_KICK = 1;
+			rfcsr.field.TESTCSR_RFACC_REGNUM = regID; /* R0~R31*/
+			rfcsr.field.RF_CSR_DATA = value;
+			RTMP_IO_WRITE32(pAd, RF_CSR_CFG, rfcsr.word);
+		}
 	}
 
 	return NDIS_STATUS_SUCCESS;
@@ -108,9 +178,65 @@ NDIS_STATUS RT30xxReadRFRegister(
 	RF_CSR_CFG_STRUC	rfcsr = { { 0 } };
 	UINT				i=0, k=0;
 
+#if defined(RT3593) || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	RF_CSR_CFG_EXT_STRUC RfCsrCfgExt = { { 0 } };
+#endif /* RT3593 || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 
 
 
+#if defined(RT3593) || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+	if (IS_RT3593(pAd) || IS_RT5390(pAd))
+	{
+		ASSERT((regID <= 63)); /* R0~R63*/
+		
+		for (i = 0; i < MAX_BUSY_COUNT; i++)
+		{
+			if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
+				return STATUS_UNSUCCESSFUL;
+			
+			RTMP_IO_READ32(pAd, RF_CSR_CFG, &RfCsrCfgExt.word);
+
+			if (RfCsrCfgExt.field.RF_CSR_KICK == BUSY)
+			{
+				continue;
+			}
+			
+			RfCsrCfgExt.word = 0;
+			RfCsrCfgExt.field.RF_CSR_WR = 0;
+			RfCsrCfgExt.field.RF_CSR_KICK = 1;
+			RfCsrCfgExt.field.TESTCSR_RFACC_REGNUM = regID; /* R0~R63*/
+			
+			RTMP_IO_WRITE32(pAd, RF_CSR_CFG, RfCsrCfgExt.word);
+			
+			for (k = 0; k < MAX_BUSY_COUNT; k++)
+			{
+				if(RTMP_TEST_FLAG(pAd, fRTMP_ADAPTER_NIC_NOT_EXIST))
+					return STATUS_UNSUCCESSFUL;
+				
+				RTMP_IO_READ32(pAd, RF_CSR_CFG, &RfCsrCfgExt.word);
+
+				if (RfCsrCfgExt.field.RF_CSR_KICK == IDLE)
+				{
+					break;
+				}
+			}
+			
+			if ((RfCsrCfgExt.field.RF_CSR_KICK == IDLE) && 
+			     (RfCsrCfgExt.field.TESTCSR_RFACC_REGNUM == regID))
+			{
+				*pValue = (UCHAR)(RfCsrCfgExt.field.RF_CSR_DATA);
+				break;
+			}
+		}
+
+		if (RfCsrCfgExt.field.RF_CSR_KICK == BUSY)
+		{																	
+			DBGPRINT_ERR(("RF read R%d = 0x%X fail, i[%d], k[%d]\n", regID, (UINT32)RfCsrCfgExt.word, i, k));
+			return STATUS_UNSUCCESSFUL;
+		}
+	}
+	else
+#endif /* defined(RT3593) || defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
 	{
 		ASSERT((regID <= pAd->chipCap.MaxNumOfRfId)); /* R0~R63*/
 
@@ -158,7 +284,6 @@ VOID NICInitRFRegisters(
 	if (pAd->chipOps.AsicRfInit)
 		pAd->chipOps.AsicRfInit(pAd);
 }
-
 
 #endif /* RTMP_RF_RW_SUPPORT */
 

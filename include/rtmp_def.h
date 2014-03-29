@@ -453,6 +453,8 @@
 #define MAX_VIE_LEN                     1024	/* New for WPA cipher suite variable IE sizes. */
 #define MAX_SUPPORT_MCS             32
 #define MAX_NUM_OF_BBP_LATCH             256
+#undef MAX_NUM_OF_BBP_LATCH
+#define MAX_NUM_OF_BBP_LATCH             255
 /*============================================================ */
 /* ASIC WCID Table definition. */
 /*============================================================ */
@@ -1322,7 +1324,7 @@
 #define REGION_19_A_BAND                  19
 #define REGION_20_A_BAND                  20
 #define REGION_21_A_BAND                  21
-#define REGION_MAXIMUM_A_BAND             21
+#define REGION_MAXIMUM_A_BAND             37
 
 /* The security mode definition in MAC register */
 #define CIPHER_NONE                 0
@@ -1640,6 +1642,16 @@
 #define	WPA_SUPPLICANT_ENABLE_WPS			0x80
 
 /* definition for Antenna Diversity flag */
+typedef enum {
+	ANT_DIVERSITY_DISABLE,
+	ANT_DIVERSITY_ENABLE ,
+	ANT_FIX_ANT0,
+	ANT_FIX_ANT1,
+	ANT_SW_DIVERSITY_ENABLE,
+	ANT_HW_DIVERSITY_ENABLE,
+	ANT_DIVERSITY_DEFAULT
+}ANT_DIVERSITY_TYPE;
+
 
 
 

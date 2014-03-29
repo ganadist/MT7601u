@@ -38,6 +38,19 @@ UCHAR    NUM_BIT8[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
 char*   CipherName[] = {"none","wep64","wep128","TKIP","AES","CKIP64","CKIP128","CKIP152","SMS4"};
 #endif
 
+#ifdef RESOURCE_BOOT_ALLOC
+int rtusb_tx_buf_len = sizeof(HTTX_BUFFER);
+int rtusb_rx_buf_len = MAX_RXBULK_SIZE;
+int rtusb_tx_buf_cnt = 4;
+int rtusb_rx_buf_cnt = RX_RING_SIZE;
+
+#ifdef OS_ABL_SUPPORT
+EXPORT_SYMBOL(rtusb_tx_buf_len);
+EXPORT_SYMBOL(rtusb_rx_buf_len);
+EXPORT_SYMBOL(rtusb_tx_buf_cnt);
+EXPORT_SYMBOL(rtusb_rx_buf_cnt);
+#endif /* OS_ABL_SUPPORT */
+#endif /* RESOURCE_BOOT_ALLOC */
 
 /* BBP register initialization set*/
 
@@ -119,7 +132,7 @@ RTMP_REG_PAIR	MACRegTable[] =	{
 /*	{TX_RTY_CFG,			0x6bb80101},	 sample*/
 	{TX_RTY_CFG,			0x47d01f0f},	/* Jan, 2006/11/16, Set TxWI->ACK =0 in Probe Rsp Modify for 2860E ,2007-08-03*/
 	
-	{AUTO_RSP_CFG,			0x00000053},	/* Initial Auto_Responder, because QA will turn off Auto-Responder*/
+	{AUTO_RSP_CFG,			0x00000013},	/* Initial Auto_Responder, because QA will turn off Auto-Responder*/
 	{CCK_PROT_CFG,			0x05740003 /*0x01740003*/},	/* Initial Auto_Responder, because QA will turn off Auto-Responder. And RTS threshold is enabled. */
 	{OFDM_PROT_CFG,			0x05740003 /*0x01740003*/},	/* Initial Auto_Responder, because QA will turn off Auto-Responder. And RTS threshold is enabled. */
 #ifdef RTMP_MAC_USB
@@ -128,10 +141,10 @@ RTMP_REG_PAIR	MACRegTable[] =	{
 	{WPDMA_GLO_CFG,			0x00000030},
 #endif /* RTMP_MAC_USB */
 	{GF20_PROT_CFG,			0x01744004},    /* set 19:18 --> Short NAV for MIMO PS*/
-	{GF40_PROT_CFG,			0x03F44084},
-	{MM20_PROT_CFG,			0x01744004},
+	{GF40_PROT_CFG,			0x03F44084},    
+	{MM20_PROT_CFG,			0x01744004},    
 	{TXOP_CTRL_CFG,			0x0000583f, /*0x0000243f*/ /*0x000024bf*/},	/*Extension channel backoff.*/
-	{TX_RTS_CFG,			0x00092b20},
+	{TX_RTS_CFG,			0x00092b20},	
 
 	{EXP_ACK_TIME,			0x002400ca},	/* default value */
 	{TXOP_HLDR_ET, 			0x00000002},
@@ -288,6 +301,8 @@ NDIS_STATUS	RTMPAllocAdapterBlock(
 
 		NdisAllocateSpinLock(pAd, &pAd->irq_lock);
 		NdisAllocateSpinLock(pAd, &TimerSemLock);
+#ifdef SPECIFIC_BCN_BUF_SUPPORT
+#endif // SPECIFIC_BCN_BUF_SUPPORT //
 
 
 #ifdef RALINK_ATE
@@ -598,6 +613,8 @@ VOID	RTMPReadChannelPwr(
 	UINT32					i, choffset;
 	EEPROM_TX_PWR_STRUC	    Power;
 	EEPROM_TX_PWR_STRUC	    Power2;
+#ifdef RT33xx
+#endif /* RT33xx */
 
 	/* Read Tx power value for all channels*/
 	/* Value from 1 - 0x7f. Default value is 24.*/
@@ -607,21 +624,96 @@ VOID	RTMPReadChannelPwr(
 	/* 0. 11b/g, ch1 - ch 14*/
 	for (i = 0; i < 7; i++)
 	{
+#ifdef RT30xx
+#if defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392)
+		if (IS_RT5390(pAd))
 		{
+			 RT28xx_EEPROM_READ16(pAd, EEPROM_G_TX_PWR_OFFSET + i * 2,Power.word);
+			if (IS_RT5392(pAd))
+			{
+				RT28xx_EEPROM_READ16(pAd, EEPROM_G_TX2_PWR_OFFSET + i * 2,Power2.word);
+			}
+			pAd->TxPower[i * 2].Channel = i * 2 + 1;
+			pAd->TxPower[i * 2 + 1].Channel = i * 2 + 2;
+	
+			if ((Power.field.Byte0 > 0x27) || (Power.field.Byte0 < 0))
+			{
+				pAd->TxPower[i * 2].Power = DEFAULT_RF_TX_POWER;
+			}
+			else
+			{
+				pAd->TxPower[i * 2].Power = Power.field.Byte0;
+			}
+	
+			if ((Power.field.Byte1 > 0x27) || (Power.field.Byte1 < 0))
+			{
+				pAd->TxPower[i * 2 + 1].Power = DEFAULT_RF_TX_POWER;
+			}
+			else
+			{
+				pAd->TxPower[i * 2 + 1].Power = Power.field.Byte1;
+			}
+	
+			if (IS_RT5392(pAd))
+			{
+				if ((Power2.field.Byte0 > 0x27) || (Power2.field.Byte0 < 0))
+				{
+					pAd->TxPower[i * 2].Power2 = DEFAULT_RF_TX_POWER;
+				}
+				else
+				{
+					pAd->TxPower[i * 2].Power2 = Power2.field.Byte0;
+				}
+		
+				if ((Power2.field.Byte1 > 0x27) || (Power2.field.Byte1 < 0))
+				{
+					pAd->TxPower[i * 2 + 1].Power2 = DEFAULT_RF_TX_POWER;
+				}
+				else
+				{
+					pAd->TxPower[i * 2 + 1].Power2 = Power2.field.Byte1;
+				}
+			}
+			
+			DBGPRINT(RT_DEBUG_TRACE, ("%s: TxPower[%d].Power = 0x%02X, TxPower[%d].Power = 0x%02X\n", 
+				__FUNCTION__, 
+				i * 2, 
+				pAd->TxPower[i * 2].Power, 
+				i * 2 + 1, 
+				pAd->TxPower[i * 2 + 1].Power));
+			
+			if (IS_RT5392(pAd))
+			{
+				DBGPRINT(RT_DEBUG_TRACE, ("%s: TxPower[%d].Power2 = 0x%02X, TxPower[%d].Power2 = 0x%02X\n", 
+					__FUNCTION__, 
+					i * 2, 
+					pAd->TxPower[i * 2].Power2, 
+					i * 2 + 1, 
+					pAd->TxPower[i * 2 + 1].Power2));
+			}
+		}
+		else
+#endif /* defined(RT5370) || defined(RT5372) || defined(RT5390) || defined(RT5392) */
+#endif /* RT30xx */
+		{ /* RT3070 and RT3370 */
 			RT28xx_EEPROM_READ16(pAd, EEPROM_G_TX_PWR_OFFSET + i * 2, Power.word);
 			RT28xx_EEPROM_READ16(pAd, EEPROM_G_TX2_PWR_OFFSET + i * 2, Power2.word);
 			pAd->TxPower[i * 2].Channel = i * 2 + 1;
 			pAd->TxPower[i * 2 + 1].Channel = i * 2 + 2;
 
+			pAd->TxPower[i * 2].Power = Power.field.Byte0;
+			if(!IS_RT3390(pAd))  // 3370 has different Tx power range
+			{
 			if ((Power.field.Byte0 > 31) || (Power.field.Byte0 < 0))
 				pAd->TxPower[i * 2].Power = DEFAULT_RF_TX_POWER;
-			else
-				pAd->TxPower[i * 2].Power = Power.field.Byte0;
+			}				
 
+			pAd->TxPower[i * 2 + 1].Power = Power.field.Byte1;
+			if(!IS_RT3390(pAd)) // 3370 has different Tx power range
+			{
 			if ((Power.field.Byte1 > 31) || (Power.field.Byte1 < 0))
 				pAd->TxPower[i * 2 + 1].Power = DEFAULT_RF_TX_POWER;
-			else
-				pAd->TxPower[i * 2 + 1].Power = Power.field.Byte1;
+			}				
 
 			if ((Power2.field.Byte0 > 31) || (Power2.field.Byte0 < 0))
 				pAd->TxPower[i * 2].Power2 = DEFAULT_RF_TX_POWER;
@@ -1024,6 +1116,14 @@ VOID	NICReadEEPROMParameters(
 
 	RtmpChipOpsHook(pAd);
 
+#ifdef TXRX_SW_ANTDIV_SUPPORT
+	if( ((Antenna.word & 0xF000) != 0xF000) && (Antenna.word & 0x2000))  /* EEPROM 0x34[15:12] = 0xF is invalid, 0x2~0x3 is TX/RX SW AntDiv */
+	{																	  
+		pAd->chipCap.bTxRxSwAntDiv = TRUE;
+		DBGPRINT(RT_DEBUG_OFF, ("\x1b[mAntenna word %X/%d, AntDiv %d\x1b[m\n", 
+					pAd->Antenna.word, pAd->Antenna.field.BoardType, pAd->NicConfig2.field.AntDiversity));
+	}
+#endif /* TXRX_SW_ANTDIV_SUPPORT */
 	
 	/* Reset PhyMode if we don't support 802.11a*/
 	/* Only RFIC_2850 & RFIC_2750 support 802.11a*/
@@ -1222,7 +1322,7 @@ VOID	NICReadEEPROMParameters(
 	/* Note: RT30xX default value is 0x00 and will program to RF_R17 only when this value is not zero.*/
 	/*       RT359X default value is 0x02*/
 	
-	if (IS_RT30xx(pAd) || IS_RT3572(pAd)  || IS_RT3593(pAd))
+	if (IS_RT30xx(pAd) || IS_RT3572(pAd)  || IS_RT3593(pAd)  || IS_RT5390(pAd))
 	{
 		RT28xx_EEPROM_READ16(pAd, EEPROM_TXMIXER_GAIN_2_4G, value);
 		pAd->TxMixerGain24G = 0;
@@ -1278,8 +1378,16 @@ VOID	NICReadEEPROMParameters(
 	    pAd->TxPowerCtrl.bInternalTxALC = FALSE;
 	}
 
+	DBGPRINT(RT_DEBUG_TRACE, ("TXALC> bInternalTxALC = %d\n",
+			pAd->TxPowerCtrl.bInternalTxALC));
 #endif /* RTMP_INTERNAL_TX_ALC */
 
+
+		DBGPRINT(RT_DEBUG_TRACE, ("%s: pAd->Antenna.field.BoardType = %d, IS_MINI_CARD(pAd) = %d, IS_RT5390U(pAd) = %d\n", 
+		__FUNCTION__,
+		pAd->Antenna.field.BoardType,
+		IS_MINI_CARD(pAd),
+		IS_RT5390U(pAd)));
 	DBGPRINT(RT_DEBUG_TRACE, ("<-- NICReadEEPROMParameters\n"));
 }
 
@@ -1310,6 +1418,9 @@ VOID	NICInitAsicFromEEPROM(
 	UCHAR	BBPR1 = 0; 
 #endif /* CONFIG_STA_SUPPORT */
 	USHORT					i;
+#ifdef RALINK_ATE
+	USHORT	value;
+#endif /* RALINK_ATE */
 	EEPROM_NIC_CONFIG2_STRUC    NicConfig2;
 	UCHAR	BBPR3 = 0;
 #ifdef RT30xx
@@ -1337,10 +1448,20 @@ VOID	NICInitAsicFromEEPROM(
 	RTMPInitLEDMode(pAd);	
 #endif /* LED_CONTROL_SUPPORT */
 
+	/* finally set primary ant */
+	AntCfgInit(pAd);
+
 #ifdef RTMP_RF_RW_SUPPORT
 	/*Init RT30xx RFRegisters after read RFIC type from EEPROM*/
 	NICInitRFRegisters(pAd);
 #endif /* RTMP_RF_RW_SUPPORT */
+
+#ifdef ANT_DIVERSITY_SUPPORT
+	if ((pAd->CommonCfg.bRxAntDiversity == ANT_HW_DIVERSITY_ENABLE) &&
+			(pAd->chipOps.HwAntEnable))
+		pAd->chipOps.HwAntEnable(pAd);
+#endif
+
 
 #ifdef CONFIG_STA_SUPPORT
 	IF_DEV_CONFIG_OPMODE_ON_STA(pAd)
@@ -1403,7 +1524,7 @@ VOID	NICInitAsicFromEEPROM(
 	    The old chipset don't have this, add new feature flag RTMP_INTERNAL_ALC.
 	 */
 
-	/* Internal Tx ALC*/
+	/* Internal Tx ALC */
 #ifdef RT3350
 	if (IS_RT3350(pAd) &&
 		(((NicConfig2.field.DynamicTxAgcControl == 1) && 
@@ -1414,8 +1535,13 @@ VOID	NICInitAsicFromEEPROM(
 	else
 #endif // RT3350 //
 	if (((NicConfig2.field.DynamicTxAgcControl == 1) && 
-            (NicConfig2.field.bInternalTxALC == 1)) || (!IS_RT3390(pAd)))
+            (NicConfig2.field.bInternalTxALC == 1)) || (!IS_RT3390(pAd) && !IS_RT5390(pAd)))
 	{
+		/*
+			If both DynamicTxAgcControl and bInternalTxALC are enabled,
+			it is a wrong configuration.
+			If the chipset does not support internal ALC, we shall disable it.
+		*/
 		pAd->TxPowerCtrl.bInternalTxALC = FALSE;
 	}
 	else
@@ -1430,12 +1556,42 @@ VOID	NICInitAsicFromEEPROM(
 		}
 	}
 
+	
+	/* Old 5390 NIC always disables the internal ALC */
+	
+	if (pAd->MACVersion == 0x53900501)
+	{
+		pAd->TxPowerCtrl.bInternalTxALC = FALSE;
+	}
+
 	DBGPRINT(RT_DEBUG_TRACE, ("%s: pAd->TxPowerCtrl.bInternalTxALC = %d\n", 
 		__FUNCTION__, 
 		pAd->TxPowerCtrl.bInternalTxALC));
 #endif /* RTMP_INTERNAL_TX_ALC */
 
+#ifdef RALINK_ATE
+	RT28xx_EEPROM_READ16(pAd, EEPROM_TSSI_GAIN_AND_ATTENUATION, value);
+	value = (value & 0x00FF);	
 	
+	if (IS_RT5390(pAd))
+	{
+		pAd->TssiGain = 0x02;	 /* RT5390 uses 2 as TSSI gain/attenuation default value */
+	}
+	else
+	{
+		pAd->TssiGain = 0x03; /* RT5392 uses 3 as TSSI gain/attenuation default value */
+	}	
+	
+	if ((value != 0x00) && (value != 0xFF))
+	{
+		pAd->TssiGain =  (UCHAR) (value & 0x000F);
+	}
+	
+	DBGPRINT(RT_DEBUG_TRACE, ("%s: EEPROM_TSSI_GAIN_AND_ATTENUATION = 0x%X, pAd->TssiGain=0x%x\n", 
+				__FUNCTION__, 
+				value, 
+				pAd->TssiGain));
+#endif // RALINK_ATE //
 	/* Since BBP has been progamed, to make sure BBP setting will be */
 	/* upate inside of AsicAntennaSelect, so reset to UNKNOWN_BAND!!*/
 	
@@ -1481,7 +1637,7 @@ VOID	NICInitAsicFromEEPROM(
 
 #ifdef RT30xx
 	/* Initialize RT3070 serial MAC registers which is different from RT2870 serial*/
-	if (IS_RT3090(pAd) || IS_RT3390(pAd) || IS_RT3593(pAd))
+	if (IS_RT3090(pAd) || IS_RT3390(pAd) || IS_RT3593(pAd) || IS_RT5390(pAd))
 	{
 		/* enable DC filter*/
 		if ((pAd->MACVersion & 0xffff) >= 0x0211)
@@ -1599,22 +1755,21 @@ VOID	NICInitAsicFromEEPROM(
 	}
 #endif /* RT30xx */
 
-
+#ifdef CONFIG_STA_SUPPORT
 #ifdef RTMP_FREQ_CALIBRATION_SUPPORT
-/*	if (IS_RT3593(pAd))*/
-/*	{*/
 		/*
-			
+			Only for RT3593, RT5390 (Maybe add other chip in the future)
 			Sometimes the frequency will be shift, we need to adjust it.
 		*/
+		if (pAd->StaCfg.AdaptiveFreq == TRUE) /*Todo: iwpriv and profile support.*/
 		pAd->FreqCalibrationCtrl.bEnableFrequencyCalibration = TRUE;
 
 		DBGPRINT(RT_DEBUG_TRACE, ("%s: pAd->FreqCalibrationCtrl.bEnableFrequencyCalibration = %d\n", 
 			__FUNCTION__, 
 			pAd->FreqCalibrationCtrl.bEnableFrequencyCalibration));
-/*	}*/
-#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
 
+#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
+#endif /* CONFIG_STA_SUPPORT */
 	DBGPRINT(RT_DEBUG_TRACE, ("TxPath = %d, RxPath = %d, RFIC=%d\n", 
 				pAd->Antenna.field.TxPath, pAd->Antenna.field.RxPath, pAd->RfIcType));
 	DBGPRINT(RT_DEBUG_TRACE, ("<-- NICInitAsicFromEEPROM\n"));
@@ -1807,6 +1962,10 @@ NDIS_STATUS	NICInitializeAsic(
 		{
 			MACRegTable[Index].Value = 0x00000400;
 		}
+		else if ((MACRegTable[Index].Register == TX_SW_CFG0) && (IS_RT5390(pAd)))
+		{
+			MACRegTable[Index].Value = 0x00000404; /* Gary, 2010-6-9 */
+		}
 #endif /* RT30xx */
 		RTMP_IO_WRITE32(pAd, (USHORT)MACRegTable[Index].Register, MACRegTable[Index].Value);
 	}
@@ -1903,15 +2062,15 @@ NDIS_STATUS	NICInitializeAsic(
 	/* for rt2860E and after, init BBP_R84 with 0x19. This is for extension channel overlapping IOT.*/
 	/* RT3090 should not program BBP R84 to 0x19, otherwise TX will block.*/
 	/*3070/71/72,3090,3090A( are included in RT30xx),3572,3390*/
-#if !defined(CONFIG_RALINK_RT5350)
+#if !defined(RT5350)
 	if (((pAd->MACVersion & 0xffff) != 0x0101) &&
-		!(IS_RT30xx(pAd)|| IS_RT3572(pAd)))
+		!(IS_RT30xx(pAd)|| IS_RT3572(pAd) || IS_RT5390(pAd)))
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R84, 0x19);
 #endif /* RT5350 */
 
 #ifdef RT30xx
 	/* RF power sequence setup*/
-	if (IS_RT30xx(pAd) || IS_RT3572(pAd))
+	if (IS_RT30xx(pAd) || IS_RT3572(pAd) || IS_RT5390(pAd))
 	{	/*update for RT3070/71/72/90/91/92,3572,3390.*/
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R79, 0x13);		
 		RTMP_BBP_IO_WRITE8_BY_REG_ID(pAd, BBP_R80, 0x05);	
@@ -2010,7 +2169,7 @@ NDIS_STATUS	NICInitializeAsic(
 
 		for (apidx = 0; apidx < HW_BEACON_MAX_COUNT(pAd); apidx++)
 		{
-			for (i = 0; i < HW_BEACON_OFFSET>>2; i+=4)
+			for (i = 0; i < HW_BEACON_OFFSET; i+=4)
 				RTMP_IO_WRITE32(pAd, pAd->BeaconOffset[apidx] + i, 0x00); 
 		}
 		
@@ -2141,19 +2300,6 @@ VOID NICUpdateFifoStaCounters(
 #endif /* DOT11_N_SUPPORT */
 
 
-#ifdef WDS_SUPPORT
-						/* fix WDS Jam issue*/
-						if(IS_ENTRY_WDS(pEntry)
-							&& (pEntry->LockEntryTx == FALSE)
-							&& (pEntry->ContinueTxFailCnt >= pAd->ApCfg.EntryLifeCheck))
-						{ 
-							DBGPRINT(RT_DEBUG_TRACE, ("Entry %02x:%02x:%02x:%02x:%02x:%02x Blocked!! (Fail Cnt = %d)\n",
-								pEntry->Addr[0],pEntry->Addr[1],pEntry->Addr[2],pEntry->Addr[3],
-								pEntry->Addr[4],pEntry->Addr[5],pEntry->ContinueTxFailCnt ));
-
-							pEntry->LockEntryTx = TRUE;
-						}
-#endif /* WDS_SUPPORT */
 					}
 
 					/*pEntry->FIFOCount = 0;*/
@@ -2177,9 +2323,6 @@ VOID NICUpdateFifoStaCounters(
 				/* update NoDataIdleCount when sucessful send packet to STA.*/
 				pEntry->NoDataIdleCount = 0;
 				pEntry->ContinueTxFailCnt = 0;
-#ifdef WDS_SUPPORT
-				pEntry->LockEntryTx = FALSE;
-#endif /* WDS_SUPPORT */
 			}
 
 			succMCS = StaFifo.field.SuccessRate & 0x7F;
@@ -2975,6 +3118,9 @@ VOID	UserCfgInit(
 		pAd->StaCfg.bAutoTxRateSwitch = TRUE;
 		pAd->StaCfg.DesiredTransmitSetting.field.MCS = MCS_AUTO;
 		pAd->StaCfg.bAutoConnectIfNoSSID = FALSE;
+#ifdef RTMP_FREQ_CALIBRATION_SUPPORT
+		pAd->StaCfg.AdaptiveFreq = TRUE; //Todo: iwpriv and profile support.
+#endif /* RTMP_FREQ_CALIBRATION_SUPPORT */
 	}
 
 #ifdef EXT_BUILD_CHANNEL_LIST
@@ -3132,6 +3278,7 @@ VOID	UserCfgInit(
 	NdisMoveMemory(pAd->ate.Addr3, pAd->ate.Addr1, ETH_LENGTH_OF_ADDRESS);
 
 	pAd->ate.bRxFER = 0;
+	pAd->ate.bQAEnabled = FALSE;
 	pAd->ate.bQATxStart = FALSE;
 	pAd->ate.bQARxStart = FALSE;
 	pAd->ate.bAutoTxAlc = FALSE;
@@ -3158,6 +3305,16 @@ VOID	UserCfgInit(
 	RTMP_SET_PSFLAG(pAd, fRTMP_PS_CAN_GO_SLEEP);
 #endif /* PCIE_PS_SUPPORT */
 #endif /* CONFIG_STA_SUPPORT */
+#ifdef ANT_DIVERSITY_SUPPORT
+		pAd->RxAnt.Pair1PrimaryRxAnt = 0;
+		pAd->RxAnt.Pair1SecondaryRxAnt = 1;
+
+		pAd->RxAnt.EvaluatePeriod = 0;
+		pAd->RxAnt.RcvPktNumWhenEvaluate = 0;
+#ifdef CONFIG_STA_SUPPORT
+		pAd->RxAnt.Pair1AvgRssi[0] = pAd->RxAnt.Pair1AvgRssi[1] = 0;
+#endif /* CONFIG_STA_SUPPORT */
+#endif /* ANT_DIVERSITY_SUPPORT */
 
 
 #if defined(AP_SCAN_SUPPORT) || defined(CONFIG_STA_SUPPORT)
@@ -3685,6 +3842,7 @@ INT RtmpRaDevCtrlInit(
 
 #ifdef RTMP_MAC_USB
 	RTMP_SEM_EVENT_INIT(&(pAd->UsbVendorReq_semaphore), &pAd->RscSemMemList);
+	RTMP_SEM_EVENT_INIT(&(pAd->UsbVendorReq_semaphore2), &pAd->RscSemMemList);
 	os_alloc_mem(pAd, (PUCHAR *)&pAd->UsbVendorReqBuf, MAX_PARAM_BUFFER_SIZE - 1);
 	if (pAd->UsbVendorReqBuf == NULL)
 	{
@@ -3712,10 +3870,6 @@ INT RtmpRaDevCtrlInit(
 }
 #endif /* MULTIPLE_CARD_SUPPORT */
 
-#ifdef CREDENTIAL_STORE	
-	NdisAllocateSpinLock(pAd, &pAd->StaCtIf.Lock);
-#endif /* CREDENTIAL_STORE */
-
 	return 0;
 }
 
@@ -3734,6 +3888,7 @@ extern UINT8  MC_CardUsed[MAX_NUM_OF_MULTIPLE_CARD];
 
 #ifdef RTMP_MAC_USB
 	RTMP_SEM_EVENT_DESTORY(&(pAd->UsbVendorReq_semaphore));
+	RTMP_SEM_EVENT_DESTORY(&(pAd->UsbVendorReq_semaphore2));
 	if (pAd->UsbVendorReqBuf)
 		os_free_mem(pAd, pAd->UsbVendorReqBuf);
 #endif /* RTMP_MAC_USB */
@@ -3751,9 +3906,6 @@ extern UINT8  MC_CardUsed[MAX_NUM_OF_MULTIPLE_CARD];
 	RTMPFreeTxRxRingMemory(pAd);
 #endif /* RESOURCE_PRE_ALLOC */
 
-#ifdef CREDENTIAL_STORE	
-	NdisFreeSpinLock(&pAd->StaCtIf.Lock);
-#endif /* CREDENTIAL_STORE */
 
 	RTMPFreeAdapter(pAd);
 
@@ -3808,4 +3960,53 @@ VOID RTMP_BBP_IO_WRITE8(
 #endif /* VENDOR_FEATURE3_SUPPORT */
 
 
+
+VOID AntCfgInit(
+IN  PRTMP_ADAPTER   pAd)
+{
+
+#ifdef ANT_DIVERSITY_SUPPORT
+	if (pAd->CommonCfg.bRxAntDiversity == ANT_DIVERSITY_DEFAULT)
+#endif
+	{
+		if (pAd->NicConfig2.field.AntOpt== 1) //ant selected by efuse
+		{	
+			if (pAd->NicConfig2.field.AntDiversity == 0) //main
+			{
+				pAd->RxAnt.Pair1PrimaryRxAnt = 0;
+				pAd->RxAnt.Pair1SecondaryRxAnt = 1;
+			}
+			else//aux
+			{
+				pAd->RxAnt.Pair1PrimaryRxAnt = 1;
+				pAd->RxAnt.Pair1SecondaryRxAnt = 0;
+			}
+		}
+		else if (pAd->NicConfig2.field.AntDiversity == 0) //Ant div off: default ant is main
+		{
+			pAd->RxAnt.Pair1PrimaryRxAnt = 0;
+			pAd->RxAnt.Pair1SecondaryRxAnt = 1;
+		}
+		else if (pAd->NicConfig2.field.AntDiversity == 1)//Ant div on
+#ifdef ANT_DIVERSITY_SUPPORT
+			if (pAd->chipCap.FlgIsHwAntennaDiversitySup)
+				pAd->CommonCfg.bRxAntDiversity = ANT_HW_DIVERSITY_ENABLE; //filter by PPAD_Init() --> MAC Address
+#else
+		{//eeprom on, but ant div support is not enabled: default ant is man
+			pAd->RxAnt.Pair1PrimaryRxAnt = 0;
+			pAd->RxAnt.Pair1SecondaryRxAnt = 1;
+		}
+#endif
+	}
+
+	DBGPRINT(RT_DEBUG_OFF, ("\x1b[m%s: primary/secondary ant %d/%d\n\x1b[m", 
+					__FUNCTION__,
+					pAd->RxAnt.Pair1PrimaryRxAnt,
+					pAd->RxAnt.Pair1SecondaryRxAnt));
+#ifdef ANT_DIVERSITY_SUPPORT
+	DBGPRINT(RT_DEBUG_OFF, ("\x1b[m%s: AntDiv %d\n\x1b[m", 
+					__FUNCTION__,
+					pAd->CommonCfg.bRxAntDiversity));
+#endif
+}
 

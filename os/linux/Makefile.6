@@ -105,6 +105,28 @@ endif
 
 
 
+#ifdef RT5350
+ifeq ($(CHIPSET),5350)
+rt$(CHIPSET)sta-objs += \
+	../../common/cmm_mac_pci.o\
+	../../common/cmm_data_pci.o\
+	../../common/ee_flash.o\
+	../../common/rtmp_swmcu.o\
+	../../common/rt_rf.o\
+	../../chips/rt305x.o\
+	../../chips/rt5350.o
+
+ifeq ($(OSABL),NO)
+rt$(CHIPSET)sta-objs += \
+	../../os/linux/rt_pci_rbus.o\
+	../../os/linux/rt_proc.o\
+	../../os/linux/rt_rbus_pci_util.o\
+	../../os/linux/rt_rbus_pci_drv.o\
+	../../os/linux/rbus_main_dev.o
+endif
+endif
+#endif // RT5350 //
+
 
 
 #ifdef RT3070
@@ -158,6 +180,62 @@ endif
 
 
 
+#ifdef RT3370
+ifeq ($(CHIPSET),3370)
+rt$(CHIPSET)sta-objs += \
+	../../common/cmm_mac_usb.o\
+	../../common/rtusb_io.o\
+	../../common/rtusb_data.o\
+	../../common/cmm_data_usb.o\
+	../../common/rtusb_bulk.o\
+	../../common/ee_prom.o\
+	../../common/ee_efuse.o\
+	../../common/rtmp_mcu.o\
+	../../common/rt_rf.o\
+	../../chips/rt3070.o\
+	../../chips/rt30xx.o\
+	../../chips/rt33xx.o\
+	../../chips/rt3370.o
+
+ifeq ($(OSABL),NO)
+rt$(CHIPSET)sta-objs += \
+	../../common/rtusb_dev_id.o\
+	../../os/linux/rt_usb.o\
+	../../os/linux/rt_usb_util.o\
+	../../os/linux/usb_main_dev.o
+endif
+endif
+#endif // RT3370 //
+
+
+#ifdef RT5370
+ifeq ($(CHIPSET),5370)
+rt$(CHIPSET)sta-objs += \
+        ../../common/cmm_mac_usb.o\
+        ../../common/rtusb_io.o\
+        ../../common/rtusb_data.o\
+        ../../common/cmm_data_usb.o\
+        ../../common/rtusb_bulk.o\
+        ../../common/ee_prom.o\
+        ../../common/ee_efuse.o\
+        ../../common/rtmp_mcu.o\
+        ../../common/rt_rf.o\
+	../../os/linux/rt_usb.o\
+	../../common/frq_cal.o\
+        ../../chips/rt3070.o\
+        ../../chips/rt30xx.o\
+        ../../chips/rt33xx.o\
+        ../../chips/rt3370.o\
+	../../chips/rt5390.o
+
+ifeq ($(OSABL),NO)
+rt$(CHIPSET)sta-objs += \
+        ../../common/rtusb_dev_id.o\
+        ../../os/linux/rt_usb_util.o\
+        ../../os/linux/usb_main_dev.o
+endif
+endif
+#endif // RT5370 //
 
 ifeq ($(CHIPSET),PCI)
 rt$(CHIPSET)sta-objs += \
@@ -173,7 +251,8 @@ rt$(CHIPSET)sta-objs += \
 	../../chips/rt35xx.o\
 	../../chips/rt3090.o\
 	../../chips/rt33xx.o\
-	../../chips/rt3390.o
+	../../chips/rt3390.o\
+	../../chips/rt5390.o
 
 ifeq ($(OSABL),NO)
 rt$(CHIPSET)sta-objs += \
@@ -200,7 +279,8 @@ rt$(CHIPSET)sta-objs += \
 	../../chips/rt30xx.o\
 	../../chips/rt33xx.o\
 	../../chips/rt35xx.o\
-	../../chips/rt3370.o
+	../../chips/rt3370.o\
+	../../chips/rt5390.o
 
 ifeq ($(OSABL),NO)
 rt$(CHIPSET)sta-objs += \
